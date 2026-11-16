@@ -6,6 +6,11 @@
     "emitDeclarationOnly": true,
     "allowImportingTsExtensions": true,
     "composite": false,
-    "incremental": false
+    "incremental": false,
+    "lib": [
+      "esnext",
+      "dom",
+      "dom.iterable"
+    ]
   }
 }

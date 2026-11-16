@@ -31,6 +31,7 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
     "./sample": "./src/sample.ts",
+    "./three": "./src/three.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -47,11 +48,21 @@
     "@mark1russell7/quantity": "^0.4.1",
     "zod": "^4.6.7"
   },
+  "peerDependencies": {
+    "three": ">=0.187.0"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@mark1russell7/cue": "^2.0.0",
     "@types/node": "^26.6.5",
+    "@types/three": "^0.187.0",
     "@vitest/coverage-v8": "^5.0.3",
     "fast-check": "^4.10.2",
+    "three": "^0.187.0",
     "tsdown": "^0.23.1",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
@@ -78,6 +89,11 @@
         "types": "./build/sample.d.ts",
         "import": "./build/sample.js",
         "default": "./build/sample.js"
+      },
+      "./three": {
+        "types": "./build/three.d.ts",
+        "import": "./build/three.js",
+        "default": "./build/three.js"
       },
       "./package.json": "./package.json"
     }

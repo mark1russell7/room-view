@@ -2,7 +2,7 @@
 
 The room format, the scene format and the 3D model of a room. A room is measurements, and the code makes the model from them.
 
-This package is not on npm yet. The three.js viewer is the next step of [the roadmap](../../docs/ROADMAP.md).
+The entry `/three` shows the model in a page with three.js. This package is not on npm yet: [the roadmap](../../docs/ROADMAP.md) has the next steps.
 
 ## A room is measurements
 
@@ -77,13 +77,49 @@ The model has a range of lengths. A size of 0.001 mm or less is 0 for the checks
 
 `circuitStates` gives the load of each circuit against its limit, with a level: `ok`, `near`, `over` or `unknown`. The loads are input data of the scene. This package does not calculate the power of a computer.
 
+## The viewer
+
+The entry `@mark1russell7/room-view/three` shows a scene in a page with three.js. Install `three` 0.187 or later with this package. For the types, install `@types/three` too.
+
+```ts
+import { SAMPLE_SCENE } from "@mark1russell7/room-view/sample";
+import { createRoomViewer, DARK_THEME } from "@mark1russell7/room-view/three";
+
+const viewer = createRoomViewer(container, {
+  scene: SAMPLE_SCENE,
+  onSelect: (pick) => console.log(pick?.kind, pick?.source),
+});
+
+viewer?.setTheme(DARK_THEME);
+viewer?.highlight([{ kind: "outlet", source: "nook-1" }]);
+viewer?.setView("top");
+```
+
+- The viewer fills its container, so give the container a size.
+- A drag turns the model. The wheel changes the distance only after a click in the picture, so the picture does not stop a page that scrolls.
+- The walls between the camera and the room become almost clear.
+- A click selects the record of a solid. `onSelect` gets the kind and the `id` of the record.
+- With the keyboard, the arrow keys turn the model, and `+` and `-` change the distance. `Home` shows the first view, and `T` shows the plan.
+- `highlight` and `select` mark records from your page: the outlets of a circuit, or the row of a table.
+- The viewer draws a frame only after a change.
+- `createRoomViewer` gives `undefined` in a browser with no WebGL 2. It does not throw.
+
+`LIGHT_THEME` and `DARK_THEME` are the colors, and a theme is plain data. `solidGeometry` gives the three.js geometry of one solid, for your own three.js scene.
+
+## The plan
+
+`planShapes` gives the outline of each solid, as a camera above the room sees it. The list goes from the lowest top to the highest top, so a drawing in this sequence is correct.
+
+The option `cut` gives a floor plan: the plan keeps only the solids that start below the height of the cut. Thus a door becomes a gap in its wall. Use the plan for a drawing in SVG, or for a browser with no WebGL 2.
+
 ## The entries
 
 | Entry | What it has |
 | --- | --- |
-| `@mark1russell7/room-view` | The record types, the model, the checks and the loads. It has no schema library. |
+| `@mark1russell7/room-view` | The record types, the model, the plan, the checks and the loads. It has no schema library. |
 | `@mark1russell7/room-view/schema` | `roomSchema` and `sceneSchema`: the zod schemas that examine the form of a JSON record. |
 | `@mark1russell7/room-view/sample` | `SAMPLE_ROOM` and `SAMPLE_SCENE`: a small apartment with a rack, for demos and tests. |
+| `@mark1russell7/room-view/three` | `createRoomViewer`, the themes and `solidGeometry`: the viewer in a page. It needs the package `three`. |
 
 The schemas examine the form of a record: the fields and their types. The checks examine its meaning. Use the two for a record from a file:
 
