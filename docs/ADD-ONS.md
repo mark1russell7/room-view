@@ -130,25 +130,54 @@ A mark is a record that a viewer draws. A mark has no topic. The marks are in `@
 
 The first add-on is a package in this repository: `@mark1russell7/electrical`, in `packages/electrical`.
 
-- The root entry is the model, with no browser part: circuits, breakers, outlets, loads, the continuous-load check and the formulas. The amounts have units from `@mark1russell7/quantity`.
+- The root entry is the model, with no browser part: the records of the layer, its checks and the formulas. It imports no zod.
+- The entry `/schema` has the zod schema of the layer. The entry `/add-on` has the add-on value for the contract of the core.
 - The entry `/marks` maps the records to the marks of `@mark1russell7/visuals`.
-- `@mark1russell7/cluster-design` imports the root entry for the load of each circuit. It does not keep a copy.
+- `@mark1russell7/cluster-design` imports the formulas of the root entry. It does not keep a copy.
 
 ```ts
 interface ElectricalLayer {
   readonly schema: "electrical/1";
   readonly outlets?: readonly { readonly id: string; readonly anchor: Anchor; readonly circuit?: string }[];
-  readonly circuits?: readonly { readonly id: string; readonly name?: string; readonly breaker?: number; readonly voltage?: number; readonly limit: number }[];
-  /** The power of each object, by the `id` of the object and of its outlet. */
-  readonly feeds?: readonly { readonly object: string; readonly outlet: string }[];
-  readonly loads?: readonly { readonly circuit: string; readonly watts: number }[];
+  readonly circuits?: readonly {
+    readonly id: string;
+    readonly name?: string;
+    readonly breaker?: number;
+    readonly voltage?: number;
+    readonly limit?: number;
+    readonly otherLoad?: number;
+  }[];
+  /** The power of a placed object from an outlet. */
+  readonly feeds?: readonly { readonly id: string; readonly object: string; readonly outlet: string; readonly watts?: number }[];
 }
 ```
 
-- The checks: an unknown circuit, an unknown outlet, an unknown object, a load that is not a positive number, and a circuit over its limit.
-- The formulas: the limit of a circuit and the load of each circuit are Vex programs of this package. They move here from `cluster-design`.
+- Each record of the layer has an `id`, and the ids of one layer are unique. Thus `recordName("electrical/1", id)` names one record.
+- An outlet can be on a wall, on a floor or on an object, for example a power strip on a desk.
+- The units are fixed: a breaker in amperes, a voltage in volts, and a limit and a load in watts.
+- `@mark1russell7/quantity` has no product of two amounts. Thus a formula cannot give watts from volts and amperes with units.
+
+The formulas are Vex programs of this package. They move here from `cluster-design`:
+
+- The limit of a circuit is its `limit`, or its voltage times its breaker times the continuous part, 80% by default.
+- A circuit with a `limit`, a breaker and a voltage gets a warning when the two limits are not equal.
+- The load of a circuit is the sum of the watts of the feeds from its outlets, plus its `otherLoad`.
+- The level of a circuit is the level of its known load: `over` above its limit, `near` from 80% of its limit, or `ok`.
+- The level is `unknown` when no load of the circuit has watts, or when the circuit has no limit above 0.
+- A feed with no watts adds nothing to the load. The state of the circuit names it in `missing`, because the true load can be above the known load.
+
+The programs evaluate over a tree, which `electricalSpace` makes from a layer. A circuit has its outlets and its other load, and an outlet has its feeds.
+
+- `ratedLimit`, `loadCurrent`, `loadRatio` and `ratioLevel` build general programs. They read no field, so `cluster-design` uses them with its own records.
+- `CIRCUIT_LIMIT`, `CIRCUIT_LOAD`, `CIRCUIT_RATIO` and `CIRCUIT_LEVEL` are programs of a circuit. They evaluate at the node of the circuit in the tree.
+- `circuitStates` gives the state of each circuit from these programs. It has no second copy of the math.
+
+The add-on also has these parts:
+
+- The checks find a duplicate `id`, an unknown circuit, outlet or object, and a number that is not valid. They also find a circuit with no limit or over its limit.
 - The marks: a point for each outlet, a link for each feed, and a meter for each circuit.
 - The form: the outlets of each wall and the list of circuits. The site gets them from the add-on, not from the core.
+- `fromSceneV1` moves the electrical records of a `scene/1` to a layer: the outlets, the circuits, the loads and the outlet of each object. The loads of a circuit become its `otherLoad`.
 
 ## The form of the site
 
@@ -178,7 +207,8 @@ The input names the add-ons in the field `addOns`, a list of schema names: `{ "s
 
 Step 2 adds to the public API, so it is a PATCH: before 1.0.0, a feature raises PATCH. Step 6 removes records from the public API, so `@mark1russell7/room-view` goes to 0.2.0: before 1.0.0, a break raises MINOR.
 
-- `room/1` and `scene/1` stay readable. `fromSceneV1` of the electrical add-on gives a `scene/2` and an electrical layer.
+- `room/1` and `scene/1` stay readable. `fromSceneV1` of the electrical add-on gives the electrical layer of a `scene/1`. Step 6 adds the move of the scene to `scene/2`.
+- `@mark1russell7/electrical` starts at 0.1.0. It depends on the core of this workspace, so a new version of the core gives a new version of the add-on.
 - The core rejects `outlets` in a `room/2` with a finding that names `fromSceneV1`.
 
 ## The steps

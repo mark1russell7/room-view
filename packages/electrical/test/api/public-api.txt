@@ -1,0 +1,266 @@
+# The public API of @mark1russell7/electrical
+#
+# The names of each entry of the exports field, and the declaration of each name, without comments
+# and private members. The command `api-report check` compares this file with the built .d.ts files.
+# To accept a change of the API, start the build, then `api-report update`, and review the diff.
+
+## . (build/index.d.ts): names
+
+CIRCUIT_CURRENT: build/states.chunk.d.ts#CIRCUIT_CURRENT
+CIRCUIT_LEVEL: build/states.chunk.d.ts#CIRCUIT_LEVEL
+CIRCUIT_LIMIT: build/states.chunk.d.ts#CIRCUIT_LIMIT
+CIRCUIT_LOAD: build/states.chunk.d.ts#CIRCUIT_LOAD
+CIRCUIT_LOADS: build/states.chunk.d.ts#CIRCUIT_LOADS
+CIRCUIT_RATIO: build/states.chunk.d.ts#CIRCUIT_RATIO
+CONTINUOUS_LOAD: build/states.chunk.d.ts#CONTINUOUS_LOAD
+Circuit: build/layer.chunk.d.ts#Circuit
+CircuitState: build/states.chunk.d.ts#CircuitState
+DEFAULT_CONTINUOUS_LOAD: build/states.chunk.d.ts#DEFAULT_CONTINUOUS_LOAD
+DEFAULT_NEAR_LOAD: build/states.chunk.d.ts#DEFAULT_NEAR_LOAD
+ELECTRICAL_CODES: build/index.d.ts#ELECTRICAL_CODES
+ELECTRICAL_SCHEMA: build/layer.chunk.d.ts#ELECTRICAL_SCHEMA
+ElectricalCode: build/index.d.ts#ElectricalCode
+ElectricalFault: build/index.d.ts#ElectricalFault
+ElectricalLayer: build/layer.chunk.d.ts#ElectricalLayer
+Feed: build/layer.chunk.d.ts#Feed
+KNOWN_LOADS: build/states.chunk.d.ts#KNOWN_LOADS
+LIMITS_DIFFER: build/states.chunk.d.ts#LIMITS_DIFFER
+LOAD_LEVELS: build/states.chunk.d.ts#LOAD_LEVELS
+LoadLevel: build/states.chunk.d.ts#LoadLevel
+LoadOptions: build/states.chunk.d.ts#LoadOptions
+MISSING_LOADS: build/states.chunk.d.ts#MISSING_LOADS
+NEAR_LOAD: build/states.chunk.d.ts#NEAR_LOAD
+NODE_KINDS: build/states.chunk.d.ts#NODE_KINDS
+NodeKind: build/states.chunk.d.ts#NodeKind
+Outlet: build/layer.chunk.d.ts#Outlet
+RATED_LIMIT: build/states.chunk.d.ts#RATED_LIMIT
+SceneV1: build/index.d.ts#SceneV1
+checkElectrical: build/index.d.ts#checkElectrical
+circuitStates: build/states.chunk.d.ts#circuitStates
+electricalSpace: build/states.chunk.d.ts#electricalSpace
+evaluateCircuit: build/states.chunk.d.ts#evaluateCircuit
+fromSceneV1: build/index.d.ts#fromSceneV1
+loadCurrent: build/states.chunk.d.ts#loadCurrent
+loadRatio: build/states.chunk.d.ts#loadRatio
+loadVars: build/states.chunk.d.ts#loadVars
+nodeKey: build/states.chunk.d.ts#nodeKey
+outletAnchors: build/index.d.ts#outletAnchors
+outletLevels: build/states.chunk.d.ts#outletLevels
+ratedLimit: build/states.chunk.d.ts#ratedLimit
+ratioLevel: build/states.chunk.d.ts#ratioLevel
+withOutletAnchors: build/index.d.ts#withOutletAnchors
+
+## ./schema (build/schema.d.ts): names
+
+electricalSchema: build/schema.d.ts#electricalSchema
+parseElectrical: build/schema.d.ts#parseElectrical
+
+## ./add-on (build/add-on.d.ts): names
+
+electrical: build/add-on.d.ts#electrical
+electricalAddOn: build/add-on.d.ts#electricalAddOn
+
+## Declarations
+
+### build/add-on.d.ts#electrical
+export declare const electrical: AddOn<ElectricalLayer>;
+
+### build/add-on.d.ts#electricalAddOn
+export declare function electricalAddOn(options?: LoadOptions): AddOn<ElectricalLayer>;
+
+### build/index.d.ts#ELECTRICAL_CODES
+export declare const ELECTRICAL_CODES: readonly ["id-duplicate", "outlet-circuit", "feed-outlet", "feed-object", "feed-watts", "circuit-number", "circuit-no-limit", "circuit-limits", "circuit-over"];
+
+### build/index.d.ts#ElectricalCode
+export type ElectricalCode = (typeof ELECTRICAL_CODES)[number];
+
+### build/index.d.ts#ElectricalFault
+export interface ElectricalFault extends AddOnFault {
+  readonly code: ElectricalCode;
+}
+
+### build/index.d.ts#SceneV1
+export interface SceneV1 {
+  readonly room: {
+    readonly outlets?: readonly {
+      readonly id: string;
+      readonly wall: string;
+      readonly face: WallFace;
+      readonly offset: number;
+      readonly height: number;
+      readonly circuit?: string | undefined;
+    }[] | undefined;
+    readonly circuits?: readonly {
+      readonly id: string;
+      readonly name?: string | undefined;
+      readonly breaker?: number | undefined;
+      readonly voltage?: number | undefined;
+      readonly limit: number;
+    }[] | undefined;
+  };
+  readonly objects?: readonly {
+    readonly id: string;
+    readonly outlet?: string | undefined;
+  }[] | undefined;
+  readonly loads?: readonly {
+    readonly circuit: string;
+    readonly watts: number;
+  }[] | undefined;
+}
+
+### build/index.d.ts#checkElectrical
+export declare function checkElectrical(layer: ElectricalLayer, space: SceneSpace, options?: LoadOptions): readonly ElectricalFault[];
+
+### build/index.d.ts#fromSceneV1
+export declare function fromSceneV1(scene: SceneV1): ElectricalLayer;
+
+### build/index.d.ts#outletAnchors
+export declare function outletAnchors(layer: ElectricalLayer): ReadonlyMap<string, Anchor>;
+
+### build/index.d.ts#withOutletAnchors
+export declare function withOutletAnchors(layer: ElectricalLayer, anchors: ReadonlyMap<string, Anchor>): ElectricalLayer;
+
+### build/layer.chunk.d.ts#Circuit
+interface Circuit {
+  readonly id: string;
+  readonly name?: string | undefined;
+  readonly breaker?: number | undefined;
+  readonly voltage?: number | undefined;
+  readonly limit?: number | undefined;
+  readonly otherLoad?: number | undefined;
+}
+
+### build/layer.chunk.d.ts#ELECTRICAL_SCHEMA
+declare const ELECTRICAL_SCHEMA = "electrical/1";
+
+### build/layer.chunk.d.ts#ElectricalLayer
+interface ElectricalLayer {
+  readonly schema: typeof ELECTRICAL_SCHEMA;
+  readonly outlets?: readonly Outlet[] | undefined;
+  readonly circuits?: readonly Circuit[] | undefined;
+  readonly feeds?: readonly Feed[] | undefined;
+}
+
+### build/layer.chunk.d.ts#Feed
+interface Feed {
+  readonly id: string;
+  readonly object: string;
+  readonly outlet: string;
+  readonly watts?: number | undefined;
+}
+
+### build/layer.chunk.d.ts#Outlet
+interface Outlet {
+  readonly id: string;
+  readonly anchor: Anchor;
+  readonly circuit?: string | undefined;
+}
+
+### build/schema.d.ts#electricalSchema
+export declare const electricalSchema: z.ZodType<ElectricalLayer>;
+
+### build/schema.d.ts#parseElectrical
+export declare function parseElectrical(value: unknown): LayerParse<ElectricalLayer>;
+
+### build/states.chunk.d.ts#CIRCUIT_CURRENT
+declare const CIRCUIT_CURRENT: Expr;
+
+### build/states.chunk.d.ts#CIRCUIT_LEVEL
+declare const CIRCUIT_LEVEL: Expr;
+
+### build/states.chunk.d.ts#CIRCUIT_LIMIT
+declare const CIRCUIT_LIMIT: Expr;
+
+### build/states.chunk.d.ts#CIRCUIT_LOAD
+declare const CIRCUIT_LOAD: Expr;
+
+### build/states.chunk.d.ts#CIRCUIT_LOADS
+declare const CIRCUIT_LOADS: Axis;
+
+### build/states.chunk.d.ts#CIRCUIT_RATIO
+declare const CIRCUIT_RATIO: Expr;
+
+### build/states.chunk.d.ts#CONTINUOUS_LOAD
+declare const CONTINUOUS_LOAD = "continuousLoad";
+
+### build/states.chunk.d.ts#CircuitState
+interface CircuitState {
+  readonly circuit: string;
+  readonly watts: number;
+  readonly limit?: number | undefined;
+  readonly ratio?: number | undefined;
+  readonly level: LoadLevel;
+  readonly missing: readonly string[];
+  readonly outlets: readonly string[];
+  readonly feeds: readonly string[];
+  readonly objects: readonly string[];
+}
+
+### build/states.chunk.d.ts#DEFAULT_CONTINUOUS_LOAD
+declare const DEFAULT_CONTINUOUS_LOAD = .8;
+
+### build/states.chunk.d.ts#DEFAULT_NEAR_LOAD
+declare const DEFAULT_NEAR_LOAD = .8;
+
+### build/states.chunk.d.ts#KNOWN_LOADS
+declare const KNOWN_LOADS: Expr;
+
+### build/states.chunk.d.ts#LIMITS_DIFFER
+declare const LIMITS_DIFFER: Expr;
+
+### build/states.chunk.d.ts#LOAD_LEVELS
+declare const LOAD_LEVELS: readonly ["unknown", "ok", "near", "over"];
+
+### build/states.chunk.d.ts#LoadLevel
+type LoadLevel = (typeof LOAD_LEVELS)[number];
+
+### build/states.chunk.d.ts#LoadOptions
+interface LoadOptions {
+  readonly continuousLoad?: number | undefined;
+  readonly near?: number | undefined;
+}
+
+### build/states.chunk.d.ts#MISSING_LOADS
+declare const MISSING_LOADS: Expr;
+
+### build/states.chunk.d.ts#NEAR_LOAD
+declare const NEAR_LOAD = "nearLoad";
+
+### build/states.chunk.d.ts#NODE_KINDS
+declare const NODE_KINDS: readonly ["circuit", "outlet", "feed", "other"];
+
+### build/states.chunk.d.ts#NodeKind
+type NodeKind = (typeof NODE_KINDS)[number];
+
+### build/states.chunk.d.ts#RATED_LIMIT
+declare const RATED_LIMIT: Expr;
+
+### build/states.chunk.d.ts#circuitStates
+declare function circuitStates(layer: ElectricalLayer, options?: LoadOptions): readonly CircuitState[];
+
+### build/states.chunk.d.ts#electricalSpace
+declare function electricalSpace(layer: ElectricalLayer): Space;
+
+### build/states.chunk.d.ts#evaluateCircuit
+declare function evaluateCircuit(program: Expr, tree: Space, circuit: string, options?: LoadOptions): Result<unknown>;
+
+### build/states.chunk.d.ts#loadCurrent
+declare function loadCurrent(load: Expr, voltage: Expr): Expr;
+
+### build/states.chunk.d.ts#loadRatio
+declare function loadRatio(load: Expr, limit: Expr): Expr;
+
+### build/states.chunk.d.ts#loadVars
+declare function loadVars(options?: LoadOptions): Readonly<Record<string, number>>;
+
+### build/states.chunk.d.ts#nodeKey
+declare function nodeKey(kind: NodeKind, id: string): string;
+
+### build/states.chunk.d.ts#outletLevels
+declare function outletLevels(layer: ElectricalLayer, options?: LoadOptions): ReadonlyMap<string, LoadLevel>;
+
+### build/states.chunk.d.ts#ratedLimit
+declare function ratedLimit(voltage: Expr, breaker: Expr, part?: Expr): Expr;
+
+### build/states.chunk.d.ts#ratioLevel
+declare function ratioLevel(ratio: Expr, near?: Expr): Expr;
