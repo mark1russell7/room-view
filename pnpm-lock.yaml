@@ -212,6 +212,40 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  packages/electrical:
+    dependencies:
+      '@mark1russell7/room-view':
+        specifier: workspace:*
+        version: link:../room-view
+      '@mark1russell7/vex':
+        specifier: ^0.19.1
+        version: 0.19.1(zod@4.6.7)
+      '@mark1russell7/vex-domains':
+        specifier: ^0.19.1
+        version: 0.19.1(zod@4.6.7)
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
+      tsdown:
+        specifier: ^0.23.1
+        version: 0.23.7(publint@0.3.25)(tsx@4.23.15)(typescript@7.0.2)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/room-view:
     dependencies:
       '@mark1russell7/layout-contract':
@@ -548,6 +582,9 @@ packages:
   '@mark1russell7/coeval@0.21.0':
     resolution: {integrity: sha512-eEotEeFBHfPtrLabaYq/f+C38VAjY5bH4T+1mNqT3kHReIAZlgK1/wHhqkAphy6XCzURx8qNnq274WNNNLkkAQ==}
 
+  '@mark1russell7/coeval@0.34.0':
+    resolution: {integrity: sha512-RBffEYCcXuHYuEWUzQw6ebrT86aCsfp3SGvUiKlZ/cfZE7RVNbWLITtUtnPDorD+radOYxDZNSo3kS1LsqBfkg==}
+
   '@mark1russell7/collections@0.10.2':
     resolution: {integrity: sha512-uOqrK6ZYqgbG8DLchTU2FO8DcNeeeLbNAqR8E3YTe/HKK3rk4ZpR0M0GlYG/7ApiWfrFkVhW1rCF6opaeiL16g==}
     engines: {node: '>=22.12'}
@@ -633,8 +670,14 @@ packages:
   '@mark1russell7/vex-domains@0.18.0':
     resolution: {integrity: sha512-2mzUiJ5LRvGRoZEbsc2FTvAkVyD/hfv+blpb4fALAera5mSQzcWjk1ig8uskZc5WxfLaNFoALrZ7vnYnN2TrLw==}
 
+  '@mark1russell7/vex-domains@0.19.1':
+    resolution: {integrity: sha512-mfOTq9GUER3gh4i7ayzuIsVGMT9OtwYwQo4Pzzcu6IR2NY4WaZiA5sdwhOL0LmRVDyPvlL/vjC4a0+c4XwD2NQ==}
+
   '@mark1russell7/vex@0.18.0':
     resolution: {integrity: sha512-DAhTkMfdt1t64BvTDnUQ+Ta/zxBCZBNCqRvl6vijUtO2rSU6iqcki2NwAMLy/oC+u014bGC9vA7soIiiPa+6DQ==}
+
+  '@mark1russell7/vex@0.19.1':
+    resolution: {integrity: sha512-Hl8IVbyNmhJ7xV2nyTyOgiqANGWSWhmZSdnuucSRnmBj/KSnp0kvSz7MNzcWcI+tV34wfXmTNp6Y3ewDATbXjg==}
 
   '@napi-rs/wasm-runtime@1.2.6':
     resolution: {integrity: sha512-mRyDmEw9/fCDXCGfL1sbgIw/GUK0PVxRW4YwgPN61F3LQ+fSyoBFarJVzgGyhF6kRzEQZ0FejDqm4WLXSeqQmw==}
@@ -1945,6 +1988,13 @@ snapshots:
 
   '@mark1russell7/coeval@0.21.0': {}
 
+  '@mark1russell7/coeval@0.34.0(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/collections': 0.10.2(zod@4.6.7)
+      '@mark1russell7/rigor-generators': 0.1.16
+    transitivePeerDependencies:
+      - zod
+
   '@mark1russell7/collections@0.10.2(zod@4.6.7)':
     dependencies:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
@@ -2029,9 +2079,22 @@ snapshots:
     dependencies:
       '@mark1russell7/vex': 0.18.0
 
+  '@mark1russell7/vex-domains@0.19.1(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/quantity': 0.4.1(zod@4.6.7)
+      '@mark1russell7/vex': 0.19.1(zod@4.6.7)
+    transitivePeerDependencies:
+      - zod
+
   '@mark1russell7/vex@0.18.0':
     dependencies:
       '@mark1russell7/coeval': 0.21.0
+
+  '@mark1russell7/vex@0.19.1(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
+    transitivePeerDependencies:
+      - zod
 
   '@napi-rs/wasm-runtime@1.2.6(@emnapi/core@2.0.0-beta.2)(@emnapi/runtime@2.0.0-beta.2)':
     dependencies:
