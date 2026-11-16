@@ -238,6 +238,13 @@ describe("checkRoom", () => {
   it("tells a circuit with a limit that is not above 0", () => {
     expect(found(checkRoom(room({ circuits: [{ id: "c", limit: 0 }] })))).toEqual(["error/circuit-limit/circuit/c"]);
   });
+
+  it("tells a circuit with a breaker or a voltage that is not above 0", () => {
+    expect(checkRoom(room({ circuits: [{ id: "c", breaker: 15, voltage: 120, limit: 1440 }] }))).toEqual([]);
+    expect(found(checkRoom(room({ circuits: [{ id: "c", breaker: 0, limit: 1440 }] })))).toEqual(["error/circuit-limit/circuit/c"]);
+    expect(found(checkRoom(room({ circuits: [{ id: "c", voltage: -120, limit: 1440 }] })))).toEqual(["error/circuit-limit/circuit/c"]);
+    expect(found(checkRoom(room({ circuits: [{ id: "c", breaker: Infinity, limit: 1440 }] })))).toEqual(["error/number-not-finite/circuit/c"]);
+  });
 });
 
 describe("checkScene", () => {

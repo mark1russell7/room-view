@@ -95,6 +95,10 @@ export interface Outlet {
 export interface Circuit {
   readonly id: string;
   readonly name?: string | undefined;
+  /** The rating of the breaker of the circuit, in amperes, for example 15. The record keeps it as a fact. The limit does not change with it. */
+  readonly breaker?: number | undefined;
+  /** The voltage of the circuit, in volts, for example 120. The record keeps it as a fact. The limit does not change with it. */
+  readonly voltage?: number | undefined;
   /**
    * The largest continuous load, in watts.
    * For example, a breaker of 15 A at 120 V carries 1800 W, and 80% of that for a continuous load is 1440 W.

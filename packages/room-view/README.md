@@ -51,7 +51,7 @@ roomSolids(room); // => the floor, and the parts of each wall around the door
 - A **wall** is a straight line in the plan, with a thickness and a height. The field `side` tells which side of the line has the wall.
 - An **opening** is a door, a window or a gap in a wall.
 - A **floor** is one area of the plan.
-- An **outlet** is a point on a face of a wall. A **circuit** gives power to outlets, and it has a limit in watts.
+- An **outlet** is a point on a face of a wall. A **circuit** gives power to outlets, and it has a limit in watts. A circuit can also keep the rating of its breaker in amperes and its voltage. The limit does not change with them.
 
 A scene is one room with its placed objects and the loads of its circuits. A placed object is a box: a desk, a rack, a computer. An object can have a parent, and then its position is relative to the parent.
 

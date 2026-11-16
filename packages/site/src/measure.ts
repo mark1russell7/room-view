@@ -2,12 +2,13 @@ import { rectInRegion, regionArea, regionHitsRect, type Region } from "@mark1rus
 import { expandLevel, expandSurvey, SCENE_SCHEMA, type LevelResult, type Room, type Scene, type SurveyResult } from "@mark1russell7/room-view";
 import type { RoomViewer, ViewerTheme } from "@mark1russell7/room-view/three";
 import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome";
+import { circuitName, circuitRecords, readCircuit, usualCircuit, type CircuitField } from "./circuits.ts";
 import { isDark, onThemeChange } from "./dark.ts";
 import {
   areaText,
+  circuitUse,
   defaultMode,
   dimensionText,
-  draftOf,
   emptyDraft,
   exampleDraft,
   FEATURE_FIELDS,
@@ -18,15 +19,16 @@ import {
   featureSpans,
   fieldsOf,
   fileName,
-  hasMore,
   isExample,
   LENGTH_MODES,
   lengthText,
   listedObjects,
   MODE_NAMES,
+  MOST_CIRCUITS,
   MOST_LEVELS,
   MOST_OBJECTS,
   MOST_ROOMS,
+  MOST_TEXT,
   OBJECT_FIELDS,
   OBJECT_KINDS,
   OBJECT_NAMES,
@@ -50,17 +52,21 @@ import {
   usualOf,
   usualSize,
   withActive,
+  withCircuit,
   withConnection,
   withExample,
   withFeature,
   withMode,
+  withNewCircuit,
   withNewFeature,
   withNewObject,
   withNewRoom,
   withNewRooms,
   withNewSide,
   withObject,
+  withoutCircuit,
   withoutFeature,
+  withOutletCircuit,
   withoutObject,
   withoutRoom,
   withoutSide,
@@ -68,12 +74,14 @@ import {
   withSide,
   type Corner,
   type Draft,
+  type DraftCircuit,
   type DraftEnd,
   type DraftSide,
   type FeatureEnd,
   type FeatureFault,
   type FeatureField,
   type FeatureKind,
+  type LengthMode,
   type ListedObject,
   type ObjectFault,
   type ObjectField,
@@ -86,7 +94,7 @@ import {
   type TypedLength,
 } from "./draft.ts";
 import { drawLevel, type PlanInput } from "./floorplan.ts";
-import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, shownLevel, shownLevelObjects, type Joint, type JointState, type LevelDrafts } from "./level.ts";
+import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, shownLevel, shownLevelObjects, surveyDrafts, type Joint, type JointState, type LevelDrafts } from "./level.ts";
 import { svg } from "./plan.ts";
 import { drawWalk, pathOf, type PictureSize, type Pixel, type WalkFeature, type WalkObject } from "./walk.ts";
 
@@ -94,6 +102,7 @@ import { drawWalk, pathOf, type PictureSize, type Pixel, type WalkFeature, type 
 // The page keeps the text of each field in a draft, makes the survey record from it, and draws the result.
 // Each wall has its doors, its windows, its outlets and its furniture. A piece of furniture can hold a different object, for example a display on a desk.
 // With two rooms or more, a door of one room goes to a door of a different room, and the page draws the rooms together.
+// The circuits are the breakers of the electrical panel. An outlet of any room can be on a circuit.
 
 /** The key of the rooms in the storage of the browser. */
 const STORE_KEY = "room-view:measure";
@@ -181,6 +190,8 @@ const modeField = byId<HTMLSelectElement>("mode");
 const keepNote = byId("keep-note");
 const roomList = byId("room-list");
 const addRoom = byId<HTMLButtonElement>("add-room");
+const circuitList = byId("circuit-list");
+const addCircuit = byId<HTMLButtonElement>("add-circuit");
 
 const SIGNS: Readonly<Record<StatusLevel, string>> = { typing: "…", open: "!", closed: "✓" };
 
@@ -316,6 +327,7 @@ function featureItem(item: PlacedFeature): HTMLLIElement {
     rows,
     note,
     joinRows(item, title),
+    circuitRows(item, title),
   );
 }
 
@@ -344,6 +356,25 @@ function joinRows(item: PlacedFeature, title: string): readonly (HTMLElement | n
   const note = h("p", { class: "join-note" });
   note.hidden = true;
   return [h("div", { class: "field" }, h("span", { class: "field-name" }, "Goes to"), select), aid, note];
+}
+
+/** The text of the choice of an outlet with a circuit that the visitor does not know yet. */
+const NO_CIRCUIT = "Not known yet";
+
+/**
+ * This function gives the field that tells the circuit of an outlet: the breaker of the panel that gives it power.
+ * A store with no circuit shows an aid in place of the field. A door, a window and an opening have no circuit.
+ */
+function circuitRows(item: PlacedFeature, title: string): readonly HTMLElement[] {
+  if (item.feature.kind !== "outlet") return [];
+  if (store.circuits.length === 0) return [h("p", { class: "join-aid" }, "To tell the breaker of this outlet, add the breaker in Circuits, below the walls.")];
+  const options = store.circuits.map((circuit, index) => {
+    const option = h("option", { value: circuit.key }, circuitName(circuit, index));
+    option.selected = circuit.key === item.feature.circuit;
+    return option;
+  });
+  const select = h("select", { class: "text-field", "data-part": "circuit", "aria-label": `Circuit of ${title.toLowerCase()}` }, h("option", { value: "" }, NO_CIRCUIT), options);
+  return [h("div", { class: "field" }, h("span", { class: "field-name" }, "Circuit"), select)];
 }
 
 /** This function gives the control that adds a feature to a wall: one button that shows a button for each kind. */
@@ -602,6 +633,7 @@ function renderForm(): void {
   lengthFields(byId("thickness"), draft.thickness, "Thickness of a wall");
   byId("fractions").hidden = draft.mode !== "ft-in" && draft.mode !== "in";
   renderSides();
+  renderCircuits();
 }
 
 /** This function gives the first field of the length of a wall. */
@@ -650,6 +682,8 @@ function roomFacts(): readonly Fact[] {
     const count = kinds.filter((item) => item === kind).length;
     if (count > 0) rows.push([COUNT_NAMES[kind], String(count)]);
   }
+  const circuits = new Set(draft.sides.flatMap((side) => side.features.flatMap((feature) => (feature.circuit === undefined ? [] : [feature.circuit]))));
+  if (circuits.size > 0) rows.push(["Circuits", String(circuits.size)]);
   const objects = listedObjects(draft).length;
   if (objects > 0) rows.push(["Furniture and equipment", String(objects)]);
   return rows;
@@ -665,6 +699,7 @@ function levelFacts(level: Whole): readonly Fact[] {
     rows.push(["Floor area", areaText(area, store.rooms[0]?.mode ?? "m")]);
   }
   rows.push(["Doors between rooms", String(level.joints.length)]);
+  if (store.circuits.length > 0) rows.push(["Circuits", String(store.circuits.length)]);
   const objects = store.rooms.reduce((sum, room) => sum + listedObjects(room).length, 0);
   if (objects > 0) rows.push(["Furniture and equipment", String(objects)]);
   return rows;
@@ -933,11 +968,14 @@ planBox.addEventListener("click", (event) => {
 
 /**
  * This function gives the room record that the page shows and saves. It has no feature that has an error.
- * For the rooms together, it has each room that closes.
+ * For the rooms together, it has each room that closes. The record has the circuits of the store, and each outlet names its circuit.
  */
 function roomOf(): Room {
   const level = shownWhole();
-  return level === undefined ? shownRoom(result.room, faults) : shownLevel(level.result);
+  if (level !== undefined) return shownLevel(level.result);
+  // The checks of the room run with no circuit, so the record gets the circuits only here.
+  const circuits = circuitRecords(store.circuits, circuitMode());
+  return shownRoom(circuits.records.length === 0 ? result.room : expandSurvey(surveyOf(draft, circuits)).room, faults);
 }
 
 /**
@@ -1092,6 +1130,7 @@ function refresh(): void {
   showFacts();
   showFaults();
   showJoins();
+  showCircuits();
   showView();
   if (view === "room") viewer?.setScene(sceneOf());
   showDrawing();
@@ -1278,6 +1317,11 @@ form.addEventListener("change", (event) => {
   if (target instanceof HTMLSelectElement && target.dataset["part"] === "outlet") {
     const object = target.closest<HTMLElement>("li.object")?.dataset["key"];
     if (object !== undefined) change(withObject(draft, object, { outlet: target.value }));
+    return;
+  }
+  if (target instanceof HTMLSelectElement && target.dataset["part"] === "circuit") {
+    const feature = target.closest<HTMLElement>("li.feature")?.dataset["key"];
+    if (feature !== undefined) change(withOutletCircuit(draft, feature, target.value));
     return;
   }
   if (!(target instanceof HTMLInputElement) || target.type !== "radio") return;
@@ -1467,11 +1511,150 @@ levelPanel.addEventListener("click", (event) => {
   if (target !== null) openRoom(Number(target.dataset["open"]), target.dataset["feature"]);
 });
 
+/**
+ * This function gives the units of the circuits: the units of the first room. The units tell the usual breaker and voltage of the home.
+ * The level record uses the same units.
+ */
+function circuitMode(): LengthMode {
+  return store.rooms[0]?.mode ?? draft.mode;
+}
+
+/** This function gives the sign of a circuit: a breaker of the panel, with its handle. */
+function breakerSign(): SVGSVGElement {
+  const sign = svg("svg", { class: "sign", viewBox: "0 0 30 16", width: "30", height: "16", "aria-hidden": "true" });
+  sign.append(svg("rect", { class: "sign-outlet", x: "9", y: "1", width: "12", height: "14", rx: "1.5" }), svg("line", { class: "sign-wall", x1: "15", y1: "4", x2: "15", y2: "9" }));
+  return sign;
+}
+
+/** This function gives the field of a number of a circuit, with its unit. An empty field shows the usual value. */
+function circuitNumber(circuit: DraftCircuit, field: CircuitField, words: string, unit: string, label: string): HTMLElement {
+  const input = h("input", { class: "number-field", type: "text", inputmode: "decimal", enterkeyhint: "next", "data-part": field, "aria-label": `${words} of ${label}`, autocomplete: "off" });
+  input.value = circuit[field];
+  input.placeholder = String(usualCircuit(field, circuitMode()));
+  return h("div", { class: "field" }, h("span", { class: "field-name" }, words), h("label", { class: "number" }, input, h("span", { class: "unit", "aria-hidden": "true" }, unit)));
+}
+
+/**
+ * This function gives the fields of a circuit: its name, the rating of its breaker and its voltage.
+ * The labels of the fields name the circuit by its position, so they do not change while a person types its name.
+ */
+function circuitItem(circuit: DraftCircuit, index: number): HTMLLIElement {
+  const label = `circuit ${String(index + 1)}`;
+  const remove = h("button", { class: "remove", type: "button", "data-action": "remove-circuit", "aria-label": `Remove ${label}`, title: `Remove ${label}` }, "×");
+  const name = h("input", { class: "text-field", type: "text", maxlength: String(MOST_TEXT), "data-part": "name", "aria-label": `Name of ${label}`, placeholder: `Circuit ${String(index + 1)}`, autocomplete: "off" });
+  name.value = circuit.name;
+  return h(
+    "li",
+    { class: "feature circuit", "data-key": circuit.key },
+    h("div", { class: "feature-head" }, breakerSign(), name, remove),
+    circuitNumber(circuit, "breaker", "Breaker", "A", label),
+    circuitNumber(circuit, "voltage", "Voltage", "V", label),
+    h("p", { class: "circuit-note" }),
+  );
+}
+
+/** This function shows the fields of each circuit of the store. */
+function renderCircuits(): void {
+  circuitList.replaceChildren(...store.circuits.map(circuitItem));
+  showCircuits();
+}
+
+/** This function gives a number of watts as text, with no part of a watt above 100 W. */
+function wattText(watts: number): string {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: watts < 100 ? 1 : 0 }).format(watts);
+}
+
+/** This function gives the text under a circuit: its limit and its outlets, or the field that needs a number. */
+function circuitNote(circuit: DraftCircuit): readonly [text: string, bad: CircuitField | undefined] {
+  const reading = readCircuit(circuit, circuitMode());
+  if (reading.state === "bad") return [reading.field === "breaker" ? "Type the rating of the breaker in amperes, as a number above 0." : "Type the voltage as a number above 0.", reading.field];
+  const use = circuitUse(store, circuit.key);
+  const outlets =
+    use.outlets === 0
+      ? "No outlet is on this circuit yet."
+      : `${String(use.outlets)} ${use.outlets === 1 ? "outlet" : "outlets"} in ${String(use.rooms)} ${use.rooms === 1 ? "room" : "rooms"} ${use.outlets === 1 ? "is" : "are"} on this circuit.`;
+  return [`The limit for a continuous load is ${wattText(reading.limit)} W. ${outlets}`, undefined];
+}
+
+/** This function shows, under each circuit, its limit and its outlets, or the field that needs a number. The fields do not change, so a field keeps the focus. */
+function showCircuits(): void {
+  for (const circuit of store.circuits) {
+    const item = circuitList.querySelector<HTMLElement>(`li.circuit[data-key="${CSS.escape(circuit.key)}"]`);
+    const note = item?.querySelector<HTMLElement>(".circuit-note");
+    if (item === null || item === undefined || note === null || note === undefined) continue;
+    const [text, bad] = circuitNote(circuit);
+    note.textContent = text;
+    if (bad === undefined) delete item.dataset["fault"];
+    else item.dataset["fault"] = "error";
+    for (const input of item.querySelectorAll<HTMLInputElement>(".number-field")) input.setAttribute("aria-invalid", String(input.dataset["part"] === bad));
+  }
+  addCircuit.disabled = store.circuits.length >= MOST_CIRCUITS;
+}
+
+/** This function gives the new names of the circuits to the fields of the outlets. */
+function showCircuitNames(): void {
+  store.circuits.forEach((circuit, index) => {
+    for (const option of sidesList.querySelectorAll<HTMLOptionElement>(`select[data-part="circuit"] option[value="${CSS.escape(circuit.key)}"]`)) option.textContent = circuitName(circuit, index);
+  });
+}
+
+/**
+ * This function makes a change of the circuits. The page keeps it in the browser and shows it.
+ * The removal of a circuit changes the outlets of the rooms, so the draft follows the store.
+ */
+function changeCircuits(next: Store): void {
+  const room = next.rooms[next.active];
+  if (room !== undefined && room !== draft) {
+    draft = room;
+    typed = room;
+  }
+  store = next;
+  keep();
+  refresh();
+}
+
+circuitList.addEventListener("input", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  const key = target.closest<HTMLElement>("li.circuit")?.dataset["key"];
+  const part = target.dataset["part"];
+  if (key === undefined) return;
+  if (part === "name") {
+    changeCircuits(withCircuit(store, key, { name: target.value }));
+    showCircuitNames();
+  } else if (part === "breaker") changeCircuits(withCircuit(store, key, { breaker: target.value }));
+  else if (part === "voltage") changeCircuits(withCircuit(store, key, { voltage: target.value }));
+});
+
+circuitList.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('button[data-action="remove-circuit"]') : null;
+  const key = target?.closest<HTMLElement>("li.circuit")?.dataset["key"];
+  if (key === undefined) return;
+  const index = store.circuits.findIndex((circuit) => circuit.key === key);
+  changeCircuits(withoutCircuit(store, key));
+  renderCircuits();
+  // The outlets of the circuit have no circuit now.
+  renderSides();
+  // The focus goes to the circuit that takes the place of the removed circuit, or to the button that adds a circuit.
+  const names = [...circuitList.querySelectorAll<HTMLInputElement>('input[data-part="name"]')];
+  (names[Math.min(index, names.length - 1)] ?? addCircuit).focus();
+});
+
+addCircuit.addEventListener("click", () => {
+  const next = withNewCircuit(store);
+  if (next === store) return;
+  changeCircuits(next);
+  renderCircuits();
+  // Each outlet can select the new circuit.
+  renderSides();
+  circuitList.querySelector<HTMLInputElement>('li.circuit:last-child input[data-part="name"]')?.focus();
+});
+
 /** The name of the files of the rooms together. */
 const LEVEL_FILE = "rooms";
 
-/** This function gives the measurements as text: the survey record of the room, or the level record of the rooms together. */
-const surveyText = (): string => JSON.stringify(shownWhole() === undefined ? surveyOf(draft) : levelOf(store), null, 2);
+/** This function gives the measurements as text: the survey record of the room with the circuits, or the level record of the rooms together. */
+const surveyText = (): string => JSON.stringify(shownWhole() === undefined ? surveyOf(draft, circuitRecords(store.circuits, circuitMode())) : levelOf(store), null, 2);
 
 /** This function gives a text to the visitor as a file. */
 function download(name: string, text: string): void {
@@ -1561,12 +1744,16 @@ byId("open-survey").addEventListener("click", () => {
 /**
  * This function adds rooms to the rooms of the page, with the doors between them. No room of the visitor goes away.
  * The page then shows the new room, or the rooms together when there are two new rooms or more.
- * When the page cannot keep each new room, the function tells it with the instruction `again`, and it gives `false`.
+ * The circuits of the new rooms go at the end of the circuits of the page.
+ * When the page cannot keep each new room and each new circuit, the function tells it with the instruction `again`, and it gives `false`.
  */
 function addRooms(drafts: LevelDrafts, again: string): boolean {
-  const next = withNewRooms(store, drafts.rooms, drafts.connections, true);
+  const next = withNewRooms(store, drafts.rooms, drafts.connections, true, drafts.circuits);
   if (next === store) {
-    keepNote.textContent = `The page keeps ${String(MOST_ROOMS)} rooms at most. ${again}`;
+    keepNote.textContent =
+      store.circuits.length + drafts.circuits.length > MOST_CIRCUITS
+        ? `The page keeps ${String(MOST_CIRCUITS)} circuits at most. Remove a circuit, then try again.`
+        : `The page keeps ${String(MOST_ROOMS)} rooms at most. ${again}`;
     return false;
   }
   closeConfirm();
@@ -1594,9 +1781,11 @@ async function openFile(file: File): Promise<void> {
   const { levelSchema, surveySchema } = await import("@mark1russell7/room-view/schema");
   const survey = surveySchema.safeParse(value);
   if (survey.success) {
-    const more = hasMore(survey.data);
-    if (!addRooms({ rooms: [draftOf(survey.data)], connections: [], more }, FULL_FOR_FILE)) return;
-    keepNote.textContent = more ? "The page shows the walls, the doors, the windows, the outlets and the furniture of the file. It does not keep the other data of the file yet." : "The page shows the room of the file.";
+    const drafts = surveyDrafts(survey.data);
+    if (!addRooms(drafts, FULL_FOR_FILE)) return;
+    keepNote.textContent = drafts.more
+      ? "The page shows the walls, the doors, the windows, the outlets, the circuits and the furniture of the file. It does not keep the other data of the file yet."
+      : "The page shows the room of the file.";
     return;
   }
   // A file from the rooms together has each room and the doors between them.

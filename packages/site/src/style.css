@@ -775,6 +775,11 @@ a.tool {
   min-width: 0;
 }
 
+/* The fields of the room, the doors between the rooms and the circuits are one column. On a small screen, each one is below the drawing. */
+.entry-column {
+  display: contents;
+}
+
 .stage {
   position: relative;
   height: clamp(170px, 30svh, 280px);
@@ -1009,6 +1014,31 @@ a.tool {
 
 .level .entry-note {
   margin: 12px 0 0;
+}
+
+/* The circuits of the home: one item for each breaker of the electrical panel, with its limit under it. */
+.circuit-list {
+  margin-top: 14px;
+}
+
+.circuit-list:empty {
+  display: none;
+}
+
+.circuit .feature-head .text-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.circuit-note {
+  margin: 0;
+  color: var(--quiet);
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+
+.circuit[data-fault="error"] .circuit-note {
+  color: inherit;
 }
 
 .joints {
@@ -1319,7 +1349,8 @@ a.tool {
 /* The shape of the sign tells the fault, so the color is not the only sign. */
 .feature-note,
 .object-note,
-.join-note {
+.join-note,
+.circuit[data-fault="error"] .circuit-note {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -1329,7 +1360,8 @@ a.tool {
 
 .feature-note::before,
 .object-note::before,
-.join-note::before {
+.join-note::before,
+.circuit[data-fault="error"] .circuit-note::before {
   content: "!";
   display: grid;
   flex: none;
@@ -1881,6 +1913,13 @@ a.tool {
     top: 16px;
     display: grid;
     gap: 16px;
+  }
+
+  .entry-column {
+    display: grid;
+    align-content: start;
+    gap: 20px;
+    min-width: 0;
   }
 
   .sheet.board {

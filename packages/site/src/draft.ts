@@ -4,6 +4,7 @@ import {
   metersPer,
   SCENE_SCHEMA,
   SURVEY_SCHEMA,
+  type Circuit,
   type Finding,
   type LengthUnit,
   type Opening,
@@ -140,6 +141,8 @@ export interface DraftFeature {
   readonly width: TypedLength;
   readonly height: TypedLength;
   readonly sill: TypedLength;
+  /** The key of the circuit of an outlet in the circuits of the store. An outlet with no known circuit has no key, and the other kinds have none. */
+  readonly circuit?: string | undefined;
 }
 
 /** This function gives the lengths that a kind of feature has, in the sequence of the form. */
@@ -320,9 +323,11 @@ export function wallId(index: number): string {
 }
 
 /** The two groups of the ways to type a length. Each group has its own round numbers. */
-type System = "imperial" | "metric";
+/** A system of units: feet and inches, or meters and centimeters. */
+export type System = "imperial" | "metric";
 
-function systemOf(mode: LengthMode): System {
+/** This function gives the system of the units of a mode. */
+export function systemOf(mode: LengthMode): System {
   return mode === "ft-in" || mode === "in" ? "imperial" : "metric";
 }
 
@@ -557,13 +562,25 @@ export function listedObjects(draft: Draft): readonly ListedObject[] {
   return list;
 }
 
+/** The circuits of a survey record or of a level record, from the circuits of a store. */
+export interface CircuitRecords {
+  /** The `id` of the record of each circuit, by the key of the circuit in the store. */
+  readonly ids: ReadonlyMap<string, string>;
+  /** The records of the circuits that the record lists. */
+  readonly records: readonly Circuit[];
+}
+
+/** No circuits: an outlet names no circuit, and the record lists no circuit. */
+const NO_CIRCUITS: CircuitRecords = { ids: new Map(), records: [] };
+
 /**
  * This function makes the survey record of a draft. It is total: a length with no valid number counts as 0.
  * A height or a thickness with no valid number gets a usual value.
  * The record has each feature that has its numbers, on a wall that has a length.
  * It has each object that has its numbers, against such a wall or on an object of the record.
+ * With `circuits`, each outlet of a circuit in `circuits.ids` names the `id` of its circuit, and the record lists `circuits.records`.
  */
-export function surveyOf(draft: Draft): Survey {
+export function surveyOf(draft: Draft, circuits: CircuitRecords = NO_CIRCUITS): Survey {
   const name = draft.name.trim();
   const toRight = walksRight(draft.sides);
   const openings: Opening[] = [];
@@ -575,7 +592,8 @@ export function surveyOf(draft: Draft): Survey {
     const { start, width, height, sill } = item.reading.numbers;
     const wall = wallId(item.side);
     if (item.feature.kind === "outlet") {
-      outlets.push({ id: item.id, wall, offset: start, height });
+      const circuit = item.feature.circuit === undefined ? undefined : circuits.ids.get(item.feature.circuit);
+      outlets.push({ id: item.id, wall, offset: start, height, ...(circuit === undefined ? {} : { circuit }) });
       outletIds.set(item.feature.key, item.id);
     } else openings.push({ id: item.id, wall, kind: item.feature.kind, offset: start, width, ...(sill > 0 ? { sill } : {}), height });
   }
@@ -611,12 +629,13 @@ export function surveyOf(draft: Draft): Survey {
     }),
     ...(openings.length === 0 ? {} : { openings }),
     ...(outlets.length === 0 ? {} : { outlets }),
+    ...(circuits.records.length === 0 ? {} : { circuits: circuits.records }),
     ...(objects.length === 0 ? {} : { objects }),
   };
 }
 
 /** This function gives the way to type a length that fits the unit of a survey record. */
-function modeOf(unit: LengthUnit): LengthMode {
+export function modeOf(unit: LengthUnit): LengthMode {
   if (unit === "ft" || unit === "in") return "ft-in";
   return unit === "mm" ? "cm" : unit;
 }
@@ -638,7 +657,8 @@ const NO_TEXT: TypedLength = { value: "", inches: "" };
 /**
  * This function makes the draft of a survey record.
  * It reads the name, the height, the thickness, the sides, the openings, the outlets and the objects.
- * The features and the objects of a wall are in the sequence of their distances from its start. The draft has no circuits and no checks.
+ * The features and the objects of a wall are in the sequence of their distances from its start.
+ * The outlets of the draft have no circuits, and the draft has no checks. `draftKeys` can give the outlets their circuits.
  */
 export function draftOf(survey: Survey): Draft {
   return draftKeys(survey).draft;
@@ -695,8 +715,11 @@ export interface DraftKeys {
   readonly keys: ReadonlyMap<string, string>;
 }
 
-/** This function makes the draft of a survey record, as `draftOf` does. It also tells which feature of the draft is each opening of the record. */
-export function draftKeys(survey: Survey): DraftKeys {
+/**
+ * This function makes the draft of a survey record, as `draftOf` does. It also tells which feature of the draft is each opening of the record.
+ * `circuits` gives the key of the circuit of the store for the `id` of a circuit. An outlet of such a circuit gets its key.
+ */
+export function draftKeys(survey: Survey, circuits: ReadonlyMap<string, string> = new Map()): DraftKeys {
   const keys = new Map<string, string>();
   const mode = modeOf(survey.unit);
   const factor = metersPer(survey.unit) / metersPer(unitOf(mode));
@@ -715,7 +738,7 @@ export function draftKeys(survey: Survey): DraftKeys {
     seen.add(side.id);
     const openings = first ? (survey.openings ?? []).filter((item) => item.wall === side.id) : [];
     const outlets = first ? (survey.outlets ?? []).filter((item) => item.wall === side.id) : [];
-    const features: readonly { readonly at: number; readonly id: string; readonly kind: FeatureKind; readonly offset: TypedLength; readonly width: TypedLength; readonly height: TypedLength; readonly sill: TypedLength }[] = [
+    const features: readonly { readonly at: number; readonly id: string; readonly kind: FeatureKind; readonly offset: TypedLength; readonly width: TypedLength; readonly height: TypedLength; readonly sill: TypedLength; readonly circuit?: string | undefined }[] = [
       ...openings.map((item) => ({
         at: item.offset,
         id: item.id,
@@ -725,19 +748,28 @@ export function draftKeys(survey: Survey): DraftKeys {
         height: typed(item.height),
         sill: item.kind === "window" ? typedFrom0(item.sill ?? 0) : NO_TEXT,
       })),
-      ...outlets.map((item) => ({ at: item.offset, id: item.id, kind: "outlet" as const, offset: typedFrom0(item.offset), width: NO_TEXT, height: typedFrom0(item.height), sill: NO_TEXT })),
+      ...outlets.map((item) => ({
+        at: item.offset,
+        id: item.id,
+        kind: "outlet" as const,
+        offset: typedFrom0(item.offset),
+        width: NO_TEXT,
+        height: typedFrom0(item.height),
+        sill: NO_TEXT,
+        circuit: item.circuit === undefined ? undefined : circuits.get(item.circuit),
+      })),
     ].sort((a, b) => a.at - b.at);
     return {
       key: `s${String(index + 1)}`,
       length: typed(side.length),
       corner: typeof side.turn === "number" ? "angle" : side.turn,
       angle: typeof side.turn === "number" && Number.isFinite(side.turn) ? angleText(side.turn, toRight) : "",
-      features: features.map(({ id, kind, offset, width, height, sill }): DraftFeature => {
+      features: features.map(({ id, kind, offset, width, height, sill, circuit }): DraftFeature => {
         count += 1;
         const key = `f${String(count)}`;
         const known = kind === "outlet" ? outletKeys : keys;
         if (!known.has(id)) known.set(id, key);
-        return { key, kind, from: "start", offset, width, height, sill };
+        return { key, kind, from: "start", offset, width, height, sill, ...(circuit === undefined ? {} : { circuit }) };
       }),
       objects: [],
     };
@@ -783,20 +815,20 @@ export function draftKeys(survey: Survey): DraftKeys {
 
 /**
  * This function tells if a survey record has data that a draft does not keep.
- * This data is the circuits, the checks, the circuit of an outlet, and the height or the thickness of one side.
+ * This data is the checks, the circuit of an outlet that is not in `circuits`, and the height or the thickness of one side.
  * It is also the bottom of a door above the floor, and a feature on a wall that the survey does not have.
  * For the objects, it is an object that the draft does not keep. It is also an outlet that the draft does not have, or a distance below 0.
+ * `circuits` has the `id` of each circuit that the store keeps. By default, it has the circuits of the survey. `circuitDrafts` tells the data of the circuits that a store does not keep.
  */
-export function hasMore(survey: Survey): boolean {
+export function hasMore(survey: Survey, circuits: ReadonlySet<string> = new Set((survey.circuits ?? []).map((item) => item.id))): boolean {
   const walls = new Set(survey.sides.map((side) => side.id));
   const outlets = new Set((survey.outlets ?? []).filter((item) => walls.has(item.wall)).map((item) => item.id));
   const objects = survey.objects ?? [];
   return (
-    (survey.circuits ?? []).length > 0 ||
     (survey.checks ?? []).length > 0 ||
     survey.sides.some((side) => side.thickness !== undefined || side.height !== undefined) ||
     (survey.openings ?? []).some((item) => !walls.has(item.wall) || (item.kind !== "window" && (item.sill ?? 0) !== 0)) ||
-    (survey.outlets ?? []).some((item) => !walls.has(item.wall) || item.circuit !== undefined) ||
+    (survey.outlets ?? []).some((item) => !walls.has(item.wall) || (item.circuit !== undefined && !circuits.has(item.circuit))) ||
     (objects.length > 0 && keptObjects(survey).count !== objects.length) ||
     objects.some((item) => (item.outlet !== undefined && !outlets.has(item.outlet)) || (item.gap ?? 0) < 0 || (item.lift ?? 0) < 0)
   );
@@ -1477,22 +1509,36 @@ export interface Store {
   readonly rooms: readonly Draft[];
   /** The connections between the rooms. A feature is an end of one connection at most. */
   readonly connections: readonly DraftConnection[];
+  /** The circuits of the rooms. One breaker can give power to outlets of different rooms, so the circuits are not in a room. */
+  readonly circuits: readonly DraftCircuit[];
   /** The position of the room that the page shows. */
   readonly active: number;
 }
 
-/** This function gives a store with rooms and with no connection. */
+/**
+ * A circuit of the store: one breaker of the electrical panel. It gives power to outlets.
+ * `breaker` is the rating of the breaker in amperes, and `voltage` is its voltage in volts, as a person typed them.
+ */
+export interface DraftCircuit {
+  /** The key of the circuit in the page. Each circuit of a store has its own key. */
+  readonly key: string;
+  readonly name: string;
+  readonly breaker: string;
+  readonly voltage: string;
+}
+
+/** This function gives a store with rooms, with no connection and with no circuit. */
 export function storeOf(rooms: readonly Draft[], active = 0): Store {
-  return { version: 1, rooms, connections: [], active };
+  return { version: 1, rooms, connections: [], circuits: [], active };
 }
 
 /**
  * The largest number of each part of a store.
  * The parts are the characters of a text, the walls, the features of a wall and the objects of a room.
- * The other parts are the levels of objects on objects, the rooms and the connections.
+ * The other parts are the levels of objects on objects, the rooms, the connections and the circuits.
  * A larger store is not a store of this page.
  */
-const LIMITS = { text: 80, sides: 200, features: 100, objects: 200, nesting: 4, rooms: 100, connections: 2000 };
+const LIMITS = { text: 80, sides: 200, features: 100, objects: 200, nesting: 4, rooms: 100, connections: 2000, circuits: 200 };
 
 const isObject = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === "object" && value !== null && !Array.isArray(value);
 const isText = (value: unknown): value is string => typeof value === "string" && value.length <= LIMITS.text;
@@ -1504,14 +1550,22 @@ function typedFrom(value: unknown): TypedLength | undefined {
 
 function featureFrom(value: unknown): DraftFeature | undefined {
   if (!isObject(value)) return undefined;
-  const { key, kind, from } = value;
+  const { key, kind, from, circuit } = value;
   const offset = typedFrom(value["offset"]);
   const width = typedFrom(value["width"]);
   const height = typedFrom(value["height"]);
   const sill = typedFrom(value["sill"]);
   if (!isText(key) || !isOneOf(FEATURE_KINDS, kind) || !isOneOf(FEATURE_ENDS, from)) return undefined;
   if (offset === undefined || width === undefined || height === undefined || sill === undefined) return undefined;
-  return { key, kind, from, offset, width, height, sill };
+  // A feature from before the circuits has no circuit. Only an outlet has a circuit.
+  if (circuit !== undefined && !isText(circuit)) return undefined;
+  return { key, kind, from, offset, width, height, sill, ...(kind === "outlet" && circuit !== undefined && circuit !== "" ? { circuit } : {}) };
+}
+
+function circuitFrom(value: unknown): DraftCircuit | undefined {
+  if (!isObject(value)) return undefined;
+  const { key, name, breaker, voltage } = value;
+  return isText(key) && key !== "" && isText(name) && isText(breaker) && isText(voltage) ? { key, name, breaker, voltage } : undefined;
 }
 
 function objectFrom(value: unknown, level: number): DraftObject | undefined {
@@ -1584,6 +1638,15 @@ export function parseStore(text: string | null): Store | undefined {
   if (list.some((room) => room === undefined)) return undefined;
   if (typeof active !== "number" || !Number.isInteger(active) || active < 0 || active >= list.length) return undefined;
   const drafts = list.filter((room) => room !== undefined);
+  // A store from before the circuits has no list of them. A circuit that is not a circuit of this page goes away, and the second circuit of a key goes away too.
+  const listed: readonly unknown[] = Array.isArray(value["circuits"]) ? value["circuits"].slice(0, LIMITS.circuits) : [];
+  const circuits: DraftCircuit[] = [];
+  for (const item of listed) {
+    const circuit = circuitFrom(item);
+    if (circuit !== undefined && !circuits.some((other) => other.key === circuit.key)) circuits.push(circuit);
+  }
+  // An outlet keeps only a circuit of the store.
+  const rooms = drafts.map((room) => withCircuitKeys(room, sameKeys(circuits)));
   // A store from before the connections has no list of them. A connection that the rooms cannot have goes away, and the rooms stay.
   const given: readonly unknown[] = Array.isArray(value["connections"]) ? value["connections"].slice(0, LIMITS.connections) : [];
   const connections = given.flatMap((item): DraftConnection[] => {
@@ -1591,7 +1654,7 @@ export function parseStore(text: string | null): Store | undefined {
     const to = isObject(item) ? endFrom(item["to"]) : undefined;
     return from === undefined || to === undefined ? [] : [{ from, to }];
   });
-  return { version: 1, rooms: drafts, connections: validConnections(drafts, connections), active };
+  return { version: 1, rooms, connections: validConnections(rooms, connections), circuits, active };
 }
 
 function endFrom(value: unknown): DraftEnd | undefined {
@@ -1677,6 +1740,22 @@ export function nameWords(name: string): readonly string[] {
   return name.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
+/**
+ * This function gives an `id` for each name: the words of the name with a hyphen between them.
+ * A name with no words gets the kind and its number, for example `room-3`. A second name with the same words gets a number at the end.
+ */
+export function idsOf(names: readonly string[], kind: string): readonly string[] {
+  const taken = new Set<string>();
+  return names.map((name, index) => {
+    const words = nameWords(name);
+    const base = words.length === 0 ? `${kind}-${String(index + 1)}` : words.join("-");
+    let id = base;
+    for (let count = 2; taken.has(id); count += 1) id = `${base}-${String(count)}`;
+    taken.add(id);
+    return id;
+  });
+}
+
 /** The largest number of rooms of a store. */
 export const MOST_ROOMS: number = LIMITS.rooms;
 
@@ -1685,6 +1764,12 @@ export const MOST_LEVELS: number = LIMITS.nesting;
 
 /** The largest number of objects of a room, with the objects that other objects hold. */
 export const MOST_OBJECTS: number = LIMITS.objects;
+
+/** The largest number of circuits of a store. */
+export const MOST_CIRCUITS: number = LIMITS.circuits;
+
+/** The largest number of characters of a text of a store, for example of a name. */
+export const MOST_TEXT: number = LIMITS.text;
 
 /** This function gives the name of a room in the list of the rooms: its name, or its number when it has no name. */
 export function roomName(draft: Draft, index: number): string {
@@ -1718,16 +1803,27 @@ export function withNewRoom(store: Store, room: Draft, overEmpty = false): Store
  * This function adds rooms at the end of the rooms of a store, with the connections between them. The store shows the first new room.
  * The position of a room in an end of `connections` is its position in `rooms`.
  * The rules of `withNewRoom` apply. A store that cannot keep each new room does not change.
+ * The new circuits go at the end of the circuits of the store with new keys, and the outlets of the new rooms keep them.
+ * A store that cannot keep each new circuit does not change.
  */
-export function withNewRooms(store: Store, rooms: readonly Draft[], connections: readonly DraftConnection[], overEmpty = false): Store {
+export function withNewRooms(store: Store, rooms: readonly Draft[], connections: readonly DraftConnection[], overEmpty = false, circuits: readonly DraftCircuit[] = []): Store {
   if (rooms.length === 0) return store;
   const only = store.rooms.length === 1 ? store.rooms[0] : undefined;
   const fresh = only !== undefined && (isExample(only) || (overEmpty && sameDraft(only, emptyDraft(only.mode))));
   const before = fresh ? [] : store.rooms;
-  if (before.length + rooms.length > LIMITS.rooms) return store;
-  const all = [...before, ...rooms];
+  if (before.length + rooms.length > LIMITS.rooms || store.circuits.length + circuits.length > LIMITS.circuits) return store;
+  // Each new circuit gets a key that no circuit of the store has.
+  let last = lastNumber(store.circuits);
+  const keys = new Map<string, string>();
+  const added = circuits.map((circuit): DraftCircuit => {
+    last += 1;
+    const key = `c${String(last)}`;
+    keys.set(circuit.key, key);
+    return { ...circuit, key };
+  });
+  const all = [...before, ...rooms.map((room) => withCircuitKeys(room, keys))];
   const moved = connections.map(({ from, to }): DraftConnection => ({ from: { ...from, room: from.room + before.length }, to: { ...to, room: to.room + before.length } }));
-  return { ...store, rooms: all, connections: validConnections(all, [...(fresh ? [] : store.connections), ...moved]), active: before.length };
+  return { ...store, rooms: all, connections: validConnections(all, [...(fresh ? [] : store.connections), ...moved]), circuits: [...store.circuits, ...added], active: before.length };
 }
 
 /**
@@ -1761,4 +1857,85 @@ export function withoutRoom(store: Store, index: number): Store {
 /** This function shows the room at a position. A position with no room gives the same store. */
 export function withActive(store: Store, index: number): Store {
   return store.rooms[index] === undefined || index === store.active ? store : { ...store, active: index };
+}
+
+/** This function gives the largest number in the keys of a list, for example 3 for the keys `c1` and `c3`. A list with no number gives 0. */
+function lastNumber(list: readonly { readonly key: string }[]): number {
+  return Math.max(0, ...list.map((item) => Number(item.key.slice(1))).filter((value) => Number.isInteger(value)));
+}
+
+/** This function gives each key of a list of circuits for itself. With this map, `withCircuitKeys` removes each circuit that is not in the list. */
+function sameKeys(circuits: readonly DraftCircuit[]): ReadonlyMap<string, string> {
+  return new Map(circuits.map((circuit): [string, string] => [circuit.key, circuit.key]));
+}
+
+/** This function gives a feature with a circuit, or with no circuit when `circuit` is `undefined` or empty. */
+function featureWith(feature: DraftFeature, circuit: string | undefined): DraftFeature {
+  // The fields are in a list, so a feature with no circuit has no field `circuit`.
+  const { key, kind, from, offset, width, height, sill } = feature;
+  return circuit === undefined || circuit === "" ? { key, kind, from, offset, width, height, sill } : { key, kind, from, offset, width, height, sill, circuit };
+}
+
+/**
+ * This function gives each outlet of a draft the circuit that `keys` gives for the key of its circuit.
+ * An outlet with a circuit that is not a key of `keys` gets no circuit. A draft with no change stays the same draft.
+ */
+function withCircuitKeys(draft: Draft, keys: ReadonlyMap<string, string>): Draft {
+  let same = true;
+  const sides = draft.sides.map((side) => {
+    let changed = false;
+    const features = side.features.map((feature) => {
+      if (feature.circuit === undefined) return feature;
+      const circuit = keys.get(feature.circuit);
+      if (circuit === feature.circuit) return feature;
+      changed = true;
+      return featureWith(feature, circuit);
+    });
+    if (!changed) return side;
+    same = false;
+    return { ...side, features };
+  });
+  return same ? draft : { ...draft, sides };
+}
+
+/** This function gives the outlet with a key the circuit with the key `circuit`. The empty key is a circuit that is not known. */
+export function withOutletCircuit(draft: Draft, key: string, circuit: string): Draft {
+  const isOutlet = (feature: DraftFeature): boolean => feature.key === key && feature.kind === "outlet";
+  return {
+    ...draft,
+    sides: draft.sides.map((side) => (side.features.some(isOutlet) ? { ...side, features: side.features.map((feature) => (isOutlet(feature) ? featureWith(feature, circuit) : feature)) } : side)),
+  };
+}
+
+/** This function adds a circuit with no name and no numbers at the end of the circuits of a store. A store with the largest number of circuits does not change. */
+export function withNewCircuit(store: Store): Store {
+  if (store.circuits.length >= LIMITS.circuits) return store;
+  return { ...store, circuits: [...store.circuits, { key: `c${String(lastNumber(store.circuits) + 1)}`, name: "", breaker: "", voltage: "" }] };
+}
+
+/** This function changes the fields of the circuit with a key. */
+export function withCircuit(store: Store, key: string, change: Partial<Omit<DraftCircuit, "key">>): Store {
+  return { ...store, circuits: store.circuits.map((circuit) => (circuit.key === key ? { ...circuit, ...change } : circuit)) };
+}
+
+/** This function removes the circuit with a key. No outlet of a room keeps it. */
+export function withoutCircuit(store: Store, key: string): Store {
+  const circuits = store.circuits.filter((circuit) => circuit.key !== key);
+  if (circuits.length === store.circuits.length) return store;
+  const keys = sameKeys(circuits);
+  return { ...store, circuits, rooms: store.rooms.map((room) => withCircuitKeys(room, keys)) };
+}
+
+/** The outlets of one circuit in the rooms of a store. */
+export interface CircuitUse {
+  /** The number of the outlets of the circuit. */
+  readonly outlets: number;
+  /** The number of the rooms with one or more outlets of the circuit. */
+  readonly rooms: number;
+}
+
+/** This function counts the outlets of the circuit with a key, and the rooms that have them. */
+export function circuitUse(store: Store, key: string): CircuitUse {
+  const counts = store.rooms.map((room) => room.sides.reduce((sum, side) => sum + side.features.filter((feature) => feature.kind === "outlet" && feature.circuit === key).length, 0));
+  return { outlets: counts.reduce((sum, count) => sum + count, 0), rooms: counts.filter((count) => count > 0).length };
 }
