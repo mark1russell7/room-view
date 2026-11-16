@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { OPENING_KINDS, ROOM_SCHEMA, SCENE_SCHEMA, WALL_FACES, WALL_SIDES, type Room, type Scene } from "./room.ts";
+import { SQUARE_TURNS, SURVEY_SCHEMA, type Survey } from "./survey.ts";
 import { LENGTH_UNITS } from "./units.ts";
 
 const id = z.string().min(1);
@@ -89,4 +90,46 @@ export const sceneSchema: z.ZodType<Scene> = z.strictObject({
   room: roomSchema,
   objects: z.array(placedObject).readonly().optional(),
   loads: z.array(circuitLoad).readonly().optional(),
+});
+
+const surveySide = z.strictObject({
+  id,
+  length: z.number(),
+  turn: z.union([z.enum(SQUARE_TURNS), z.number()]),
+  thickness: z.number().optional(),
+  height: z.number().optional(),
+});
+
+const surveyCheck = z.strictObject({
+  id,
+  from: id,
+  to: id,
+  length: z.number(),
+});
+
+const surveyOutlet = z.strictObject({
+  id,
+  wall: id,
+  offset: z.number(),
+  height: z.number(),
+  circuit: id.optional(),
+});
+
+/**
+ * The schema of a survey record. It examines the form of the record, and it refuses a field that the format does not have.
+ * `expandSurvey` makes the room record of a survey with a correct form, and `checkRoom` examines that room record.
+ */
+export const surveySchema: z.ZodType<Survey> = z.strictObject({
+  schema: z.literal(SURVEY_SCHEMA),
+  name: z.string().optional(),
+  unit: z.enum(LENGTH_UNITS),
+  height: z.number(),
+  wallThickness: z.number(),
+  sides: z.array(surveySide).readonly(),
+  start: planPoint.optional(),
+  heading: z.number().optional(),
+  checks: z.array(surveyCheck).readonly().optional(),
+  openings: z.array(opening).readonly().optional(),
+  outlets: z.array(surveyOutlet).readonly().optional(),
+  circuits: z.array(circuit).readonly().optional(),
 });

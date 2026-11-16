@@ -1,4 +1,5 @@
 import type { Room, Scene } from "./room.ts";
+import type { Survey } from "./survey.ts";
 
 /**
  * A sample room in meters. It is not a real room.
@@ -78,5 +79,44 @@ export const SAMPLE_SCENE: Scene = {
   loads: [
     { circuit: "a", watts: 420 },
     { circuit: "b", watts: 1260 },
+  ],
+};
+
+/**
+ * The survey of the sample room: its six outer walls as a walk along their inner faces. The diagonal of the large part is a check.
+ * It does not have the short wall of the nook, because that wall is not a side of the walk.
+ */
+export const SAMPLE_SURVEY: Survey = {
+  schema: "survey/1",
+  name: "Sample room",
+  unit: "m",
+  height: 2.5,
+  wallThickness: 0.15,
+  sides: [
+    { id: "south", length: 6, turn: "left" },
+    { id: "east", length: 3, turn: "left" },
+    { id: "inset-north", length: 2, turn: "right" },
+    { id: "inset-east", length: 2, turn: "left" },
+    { id: "north", length: 4, turn: "left" },
+    { id: "west", length: 5, turn: "left" },
+  ],
+  checks: [{ id: "diagonal", from: "south", to: "inset-east", length: 5 }],
+  openings: [
+    { id: "door", wall: "south", kind: "door", offset: 0.6, width: 0.9, height: 2.05 },
+    { id: "window-east", wall: "east", kind: "window", offset: 0.8, width: 1.4, sill: 0.9, height: 1.2 },
+    { id: "window-west", wall: "west", kind: "window", offset: 1.5, width: 1.6, sill: 0.9, height: 1.2 },
+  ],
+  outlets: [
+    { id: "south-1", wall: "south", offset: 2.4, height: 0.3, circuit: "a" },
+    { id: "south-2", wall: "south", offset: 4.6, height: 0.3, circuit: "a" },
+    { id: "east-1", wall: "east", offset: 0.4, height: 0.3, circuit: "a" },
+    { id: "west-1", wall: "west", offset: 4.2, height: 0.3, circuit: "a" },
+    { id: "north-1", wall: "north", offset: 2.8, height: 0.3, circuit: "a" },
+    { id: "nook-1", wall: "north", offset: 0.7, height: 0.3, circuit: "b" },
+    { id: "nook-2", wall: "inset-east", offset: 1.2, height: 0.3, circuit: "b" },
+  ],
+  circuits: [
+    { id: "a", name: "Circuit A", limit: 1440 },
+    { id: "b", name: "Circuit B", limit: 1440 },
   ],
 };

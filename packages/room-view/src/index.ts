@@ -6,3 +6,4 @@ export * from "./solids.ts";
 export * from "./loads.ts";
 export * from "./plan.ts";
 export * from "./check.ts";
+export * from "./survey.ts";
