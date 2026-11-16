@@ -1,11 +1,9 @@
-import { CIRCUIT_LIMIT, CONTINUOUS_LOAD, DEFAULT_CONTINUOUS_LOAD } from "@mark1russell7/cluster-design";
+import { ELECTRICAL_SCHEMA, electricalSpace, evaluateCircuit, RATED_LIMIT } from "@mark1russell7/electrical";
 import type { Circuit } from "@mark1russell7/room-view";
-import { evaluate, space } from "@mark1russell7/vex";
-import { NumDomain } from "@mark1russell7/vex-domains";
 import { idsOf, MOST_CIRCUITS, MOST_TEXT, numberOf, systemOf, type CircuitRecords, type DraftCircuit, type LengthMode, type System } from "./draft.ts";
 
 // The circuits of the page "Measure a room": the breakers of the electrical panel, and the limit of each one.
-// The limit is the program `CIRCUIT_LIMIT` of `@mark1russell7/cluster-design`, so this page and the cluster design use one formula.
+// The limit is the program `RATED_LIMIT` of `@mark1russell7/electrical`, so this page and each other user of the add-on have one formula.
 // Each function of this file is pure, so the tests need no browser.
 
 /** One numeric fact of a circuit: the rating of its breaker in amperes, or its voltage in volts. */
@@ -29,16 +27,12 @@ export function usualCircuit(field: CircuitField, mode: LengthMode): number {
 
 /**
  * This function gives the continuous load limit of a circuit in watts, from the rating of its breaker and its voltage.
- * The program `CIRCUIT_LIMIT` multiplies the voltage, the rating and the part for a continuous load: 80%, the default of the cluster design.
+ * The program `RATED_LIMIT` multiplies the voltage, the rating and the part for a continuous load: 80%, the default of the add-on.
  * Thus 15 A at 120 V gives 1440 W. A value that is not a finite number gives `undefined`.
  */
 export function circuitLimit(breaker: number, voltage: number): number | undefined {
-  const result = evaluate(CIRCUIT_LIMIT, {
-    space: space.record({ circuit: { breaker, voltage } }),
-    origin: "circuit",
-    domains: [NumDomain],
-    vars: { [CONTINUOUS_LOAD]: DEFAULT_CONTINUOUS_LOAD },
-  });
+  const id = "circuit";
+  const result = evaluateCircuit(RATED_LIMIT, electricalSpace({ schema: ELECTRICAL_SCHEMA, circuits: [{ id, breaker, voltage }] }), id);
   // The limit is in watts, and a part of a milliwatt is noise of the floating point.
   return result.ok && typeof result.value === "number" && Number.isFinite(result.value) ? Math.round(result.value * 1000) / 1000 : undefined;
 }

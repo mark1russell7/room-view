@@ -219,7 +219,8 @@ The first steps add, and the last step removes. Thus each step keeps the page an
 2. The core adds anchors, layers and the add-on contract. `Scene.layers` is a new optional field, so `scene/1` stays valid. This step is a feature, and it removes nothing.
 3. The electrical add-on, with `fromSceneV1` and the circuit math. The electrical checks have their tests in the add-on, and the core checks of outlets stay until step 6.
 4. `cluster-design` imports the circuit math from `@mark1russell7/electrical`, and it removes its copy.
-5. The site: the form and the store get the topic fields from the add-ons. The viewer draws marks from `@mark1russell7/visuals`, in the move of the viewer to that package.
+5. The site, in two parts. First, the site reads the limit of a circuit and the levels from `@mark1russell7/electrical`, and it does not import `cluster-design`.
+   Then the form and the store get the topic fields from the add-ons. The viewer draws marks from `@mark1russell7/visuals`, in the move of the viewer to that package.
 6. The core removes `outlets`, `circuits`, `loads` and `PlacedObject.outlet`, and it gives `room/2` and `scene/2`. This step is the break of the version.
 7. The procedures packages.
 
