@@ -731,6 +731,13 @@ a.tool {
   text-overflow: ellipsis;
 }
 
+/* The button of the rooms together comes first, with a rule between it and the rooms. */
+.room-first {
+  margin-right: 4px;
+  border-right: 1px solid var(--line);
+  padding-right: 10px;
+}
+
 .room-add {
   flex: none;
   min-height: 36px;
@@ -776,8 +783,9 @@ a.tool {
   background-position: -1px -1px;
 }
 
-/* The 3D room gets more of a small screen: a person looks at it, and does not type. */
-.stage[data-view="room"] {
+/* The 3D room and the rooms together get more of a small screen: a person looks at them, and does not type. */
+.stage[data-view="room"],
+.stage[data-scope="all"] {
   height: clamp(260px, 52svh, 460px);
 }
 
@@ -994,6 +1002,79 @@ a.tool {
   font-size: 1.375rem;
 }
 
+/* The rooms together: one row for each door between two rooms, with the sign of its state. */
+.level .entry-title {
+  margin-top: 0;
+}
+
+.level .entry-note {
+  margin: 12px 0 0;
+}
+
+.joints {
+  margin: 12px 0 0;
+  border-top: 1px solid var(--ink);
+  padding: 0;
+  list-style: none;
+}
+
+.joints:empty {
+  display: none;
+}
+
+.joint {
+  --level: var(--quiet);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0 12px 12px;
+}
+
+.joint[data-state="fits"] {
+  --level: var(--level-ok);
+}
+
+.joint[data-state="near"] {
+  --level: var(--level-near);
+}
+
+.joint[data-state="off"] {
+  --level: var(--level-over);
+}
+
+.joint-sign {
+  display: grid;
+  flex: none;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: var(--level);
+  color: var(--panel);
+  font-family: var(--display);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.joint-words {
+  min-width: 0;
+}
+
+.joint-title {
+  font-family: var(--display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.joint-text {
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .sides {
   margin: 12px 0 0;
   border-top: 1px solid var(--ink);
@@ -1187,7 +1268,9 @@ a.tool {
 }
 
 .swap,
-.feature-open {
+.feature-open,
+.open-room,
+.see-example {
   border: 0;
   background: none;
   color: var(--link);
@@ -1206,8 +1289,20 @@ a.tool {
   font-size: 0.875rem;
 }
 
+/* The name of a room in a row of the doors between rooms opens that room. */
+.open-room {
+  min-height: 32px;
+  padding: 4px 0;
+}
+
+.see-example {
+  padding: 4px 0;
+}
+
 .swap:hover,
-.feature-open:hover {
+.feature-open:hover,
+.open-room:hover,
+.see-example:hover {
   text-decoration-thickness: 2px;
 }
 
@@ -1222,7 +1317,8 @@ a.tool {
 }
 
 /* The shape of the sign tells the fault, so the color is not the only sign. */
-.feature-note {
+.feature-note,
+.join-note {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -1230,7 +1326,8 @@ a.tool {
   line-height: 1.35;
 }
 
-.feature-note::before {
+.feature-note::before,
+.join-note::before {
   content: "!";
   display: grid;
   flex: none;
@@ -1249,6 +1346,26 @@ a.tool {
 
 .feature[data-fault="warning"] .feature-note::before {
   background: var(--level-near);
+}
+
+/* The note of a door that goes to a different room tells if the two rooms fit at the door. */
+.join-note[data-state="fits"]::before {
+  content: "✓";
+  background: var(--level-ok);
+}
+
+.join-note[data-state="near"]::before {
+  background: var(--level-near);
+}
+
+.join-note[data-state="typing"]::before {
+  content: "…";
+  background: var(--quiet);
+}
+
+.join-aid {
+  color: var(--quiet);
+  font-size: 0.9375rem;
 }
 
 .feature-add {
@@ -1456,7 +1573,8 @@ a.tool {
 
 /* A line in the color of the sheet around each letter keeps a label clear above a wall or the grid. */
 .walk-label,
-.walk-gap-label {
+.walk-gap-label,
+.plan-name {
   fill: var(--ink);
   stroke: var(--sheet);
   stroke-width: 4px;
@@ -1474,6 +1592,73 @@ a.tool {
 
 .walk-label.walk-on {
   font-weight: 600;
+}
+
+/* The drawing of the rooms together. A room is one target: a click on its floor or on a wall opens the room. */
+.plan-room {
+  cursor: pointer;
+}
+
+.plan-room:hover .walk-floor {
+  fill: color-mix(in oklab, var(--level-ok) 26%, transparent);
+}
+
+/* The walls of two rooms are near, so the area of a wall is narrow here. */
+.plan-room .walk-hit {
+  stroke-width: 14;
+}
+
+/* The page does not know the place of a room with no door to the other rooms, so its walls are broken lines. */
+.plan-room[data-apart] .walk-floor {
+  fill: color-mix(in oklab, var(--quiet) 12%, transparent);
+}
+
+.plan-room[data-apart]:hover .walk-floor {
+  fill: color-mix(in oklab, var(--quiet) 24%, transparent);
+}
+
+.plan-room[data-apart] .walk-wall {
+  stroke-dasharray: 2 6;
+}
+
+.plan-name {
+  font-size: 13px;
+  pointer-events: none;
+}
+
+/* A door between two rooms: a dot for a door that fits, a ring for a door with two widths, and a broken line between the two places of a door that does not fit. */
+.plan-tie {
+  --tie: var(--level-ok);
+  pointer-events: none;
+}
+
+.plan-tie[data-state="near"] {
+  --tie: var(--level-near);
+}
+
+.plan-tie[data-state="off"] {
+  --tie: var(--level-over);
+}
+
+.plan-tie[data-state="typing"] {
+  --tie: var(--quiet);
+}
+
+.plan-tie circle {
+  fill: var(--tie);
+  stroke: var(--sheet);
+  stroke-width: 2;
+}
+
+.plan-tie:not([data-state="fits"]) circle {
+  fill: var(--sheet);
+  stroke: var(--tie);
+}
+
+.plan-tie-line {
+  stroke: var(--tie);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
 }
 
 @media (max-width: 899px) {
@@ -1521,7 +1706,8 @@ a.tool {
   }
 
   .stage,
-  .stage[data-view="room"] {
+  .stage[data-view="room"],
+  .stage[data-scope="all"] {
     height: clamp(340px, 56svh, 600px);
   }
 

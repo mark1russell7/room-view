@@ -77,28 +77,56 @@ const SHORTEST_LABEL = 26;
 /** The gap of a walk below this number of pixels has no line. */
 const SMALLEST_GAP = 3;
 
+/** The space between a drawing and the edge of its picture, in pixels. */
+export interface PictureMargin {
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * This function gives the function that puts a point of a plan at a position of the picture.
+ * The points fill the picture, with the margin at each edge. They keep their shape, and their center is the center of the picture.
+ */
+export function fitOf(points: readonly PlanPoint[], size: PictureSize, margin: PictureMargin): (point: PlanPoint) => Pixel {
+  if (points.length === 0) return () => [size.width / 2, size.height / 2];
+  let left = Infinity;
+  let bottom = Infinity;
+  let right = -Infinity;
+  let top = -Infinity;
+  for (const [x, y] of points) {
+    left = Math.min(left, x);
+    bottom = Math.min(bottom, y);
+    right = Math.max(right, x);
+    top = Math.max(top, y);
+  }
+  const wide = right - left;
+  const high = top - bottom;
+  const roomX = Math.max(size.width - 2 * margin.x, 1);
+  const roomY = Math.max(size.height - 2 * margin.y, 1);
+  // Points with no size get a scale of 1: each of them is the center of the picture.
+  const scales = [wide > 0 ? roomX / wide : Infinity, high > 0 ? roomY / high : Infinity];
+  const scale = Number.isFinite(Math.min(...scales)) ? Math.min(...scales) : 1;
+  const offsetX = (size.width - wide * scale) / 2;
+  const offsetY = (size.height - high * scale) / 2;
+  return ([x, y]) => [offsetX + (x - left) * scale, size.height - offsetY - (y - bottom) * scale];
+}
+
 /**
  * This function gives the drawing of the result of a survey in a picture. `texts` has the label of each wall, and a wall with `undefined` has none.
  * `spans` has the place of each feature along its wall.
  */
 export function drawWalk(result: SurveyResult, size: PictureSize, texts: readonly (string | undefined)[], spans: readonly FeatureSpan[] = []): WalkDrawing {
+  return drawWalkAt(result, fitOf(result.closure.closed ? result.corners : result.walk, size, PICTURE_MARGIN), texts, spans);
+}
+
+/**
+ * This function gives the drawing of the result of a survey, as `drawWalk` does. `pixel` gives the position of each point of the plan in the picture.
+ * Thus the drawings of two or more rooms can have one scale.
+ */
+export function drawWalkAt(result: SurveyResult, pixel: (point: PlanPoint) => Pixel, texts: readonly (string | undefined)[], spans: readonly FeatureSpan[] = []): WalkDrawing {
   const closed = result.closure.closed;
   const count = result.room.walls.length;
   const points: readonly PlanPoint[] = closed ? result.corners : result.walk;
-  const xs = points.map(([x]) => x);
-  const ys = points.map(([, y]) => y);
-  const left = Math.min(...xs);
-  const bottom = Math.min(...ys);
-  const wide = Math.max(...xs) - left;
-  const high = Math.max(...ys) - bottom;
-  const roomX = Math.max(size.width - 2 * PICTURE_MARGIN.x, 1);
-  const roomY = Math.max(size.height - 2 * PICTURE_MARGIN.y, 1);
-  // A walk with no size gets a scale of 1: each of its points is the center of the picture.
-  const scales = [wide > 0 ? roomX / wide : Infinity, high > 0 ? roomY / high : Infinity];
-  const scale = Number.isFinite(Math.min(...scales)) ? Math.min(...scales) : 1;
-  const offsetX = (size.width - wide * scale) / 2;
-  const offsetY = (size.height - high * scale) / 2;
-  const pixel = ([x, y]: PlanPoint): Pixel => [offsetX + (x - left) * scale, size.height - offsetY - (y - bottom) * scale];
 
   const first = points[0] ?? [0, 0];
   const ends = (index: number): readonly [PlanPoint, PlanPoint] => [points[index] ?? first, points[closed ? (index + 1) % count : index + 1] ?? first];

@@ -1,5 +1,6 @@
 // The probe of the page "Measure a room" for the command `site-pages check`. The check runs this code in the page, at each width.
 // It tests the interactive core: a person types the walls of a room with six corners, and the page draws the room and tells if the walk closes.
+// Then a person joins two rooms by a door, and the page shows the rooms together and tells if they fit at the door.
 declare const check: (name: string, ok: unknown, detail?: unknown) => boolean;
 declare const $: (selector: string) => HTMLElement | null;
 declare const $$: (selector: string) => HTMLElement[];
@@ -69,6 +70,7 @@ check("the page draws a room at its start", drawing, "The box of the drawing has
 const height = (drawing as Element | null)?.getBoundingClientRect().height ?? 0;
 check("the drawing has a height of 160 pixels or more", height >= 160, height);
 check("a first visit shows the example room, and its walk closes", $("#example-note")?.hidden === false && level() === "closed", status());
+check("a first visit offers the example apartment", text("#example-note #see-example") === "See an example apartment", text("#example-note"));
 check(
   "the example room has a door, a window and an outlet",
   features() === 3 && $$("#plan-box .walk-feature").length === 3 && fact("Doors") === "1" && fact("Windows") === "1" && fact("Outlets") === "1",
@@ -306,6 +308,243 @@ check(
   $("#confirm")?.hidden === true && roomNames() === "Room 1:typing*" && walls() === 4 && features() === 0 && lengthField(0)?.value === "" && level() === "typing",
   [roomNames(), walls(), features(), status()],
 );
+
+// The rooms together. Two rooms of 4 m by 3 m have one wall between them: wall 2 of the first room and wall 4 of the second room.
+/** The doors of the form, in the sequence of the walk. */
+const doors = (): HTMLElement[] => $$('#sides li.feature[data-kind="door"]');
+/** This function gives the first field of a length of a door of the form. */
+const doorField = (at: number, of: string): HTMLInputElement | null => doors()[at]?.querySelector<HTMLInputElement>(`.length[data-of="${of}"] input`) ?? null;
+/** This function gives the field Goes to of a door of the form. */
+const goesTo = (at: number): HTMLSelectElement | null => doors()[at]?.querySelector<HTMLSelectElement>('select[data-part="join"]') ?? null;
+/** This function gives the choices of the field Goes to of a door. */
+const choices = (at: number): string => {
+  const field = goesTo(at);
+  return field === null ? "" : Array.from(field.options, (option) => option.textContent ?? "").join(" | ");
+};
+/** This function gives the state and the text of the note of a door about the room that it goes to. A door with no note gives an empty text. */
+const joinNote = (at: number): string => {
+  const note = doors()[at]?.querySelector<HTMLElement>(".join-note") ?? null;
+  return note === null || note.hidden ? "" : `${note.dataset["state"] ?? ""}: ${note.textContent ?? ""}`;
+};
+/** The button that shows the rooms together. */
+const allRooms = (): HTMLElement | null => $('#room-list button[data-scope="all"]');
+/** This function gives the state and the label of the button All rooms. */
+const allState = (): string => `${allRooms()?.dataset["state"] ?? ""}: ${allRooms()?.getAttribute("aria-label") ?? ""}`;
+/** The rooms of the drawing of the rooms together. */
+const planRooms = (): HTMLElement[] => $$("#plan-box g.plan-room");
+/** This function gives the number of rooms that the drawing shows apart. */
+const apartRooms = (): number => $$('#plan-box g.plan-room[data-apart="true"]').length;
+/** This function gives the names of the rooms in the drawing of the rooms together. */
+const planNames = (): string =>
+  $$("#plan-box .plan-name")
+    .map((name) => name.textContent ?? "")
+    .join(",");
+/** This function gives the number of doors between rooms that the drawing shows in a state. */
+const ties = (state: string): number => $$(`#plan-box g.plan-tie[data-state="${state}"]`).length;
+/** This function gives the state of each item of the list of the doors between rooms. */
+const jointStates = (): string =>
+  $$("#joints li.joint")
+    .map((joint) => joint.dataset["state"] ?? "")
+    .join(",");
+/** This function gives the width of the page that is outside the screen, in pixels. */
+const overflow = (): number => document.documentElement.scrollWidth - document.documentElement.clientWidth;
+/** This function gives the number of doors between rooms that the browser keeps. */
+const keptJoins = (): number => {
+  try {
+    return (JSON.parse(localStorage.getItem(STORE_KEY) ?? "null") as { readonly connections?: readonly unknown[] } | null)?.connections?.length ?? 0;
+  } catch {
+    return 0;
+  }
+};
+
+/** This function types the length of each wall of a room. */
+const typeWalls = (lengths: readonly string[]): void => {
+  lengths.forEach((length, side) => {
+    enter(lengthField(side), length);
+  });
+};
+
+/** This function adds a door of 0.9 m to a wall, at a distance from the first corner of the wall. The new door is the last door of the form. */
+const addDoor = (side: number, offset: string): void => {
+  const wall = `#sides li[data-side="${String(side)}"]`;
+  if ($(`${wall} .feature-kinds`)?.hidden !== false) press(`${wall} [data-action="features"]`);
+  press(`${wall} [data-action="add-feature"][data-kind="door"]`);
+  enter(doorField(doors().length - 1, "offset"), offset);
+  enter(doorField(doors().length - 1, "width"), "0.9");
+};
+
+/** This function selects a choice of the field Goes to of a door, as a person does. */
+const choose = (at: number, choice: number): void => {
+  const field = goesTo(at);
+  const value = field?.options[choice]?.value;
+  if (field === null || value === undefined) {
+    check(`door ${String(at + 1)} has the choice ${String(choice)} of the field Goes to`, false);
+    return;
+  }
+  field.value = value;
+  field.dispatchEvent(new Event("change", { bubbles: true }));
+};
+
+const outside = "Outside, or a room that is not here";
+const fitTogether = "closed: All rooms: The rooms fit together.";
+
+typeWalls(["4", "3", "4", "3"]);
+addDoor(1, "0.2");
+check("a room of 4 m by 3 m with a door closes", roomNames() === "Room 1:closed*" && text("#status-text") === exact && fact("Floor area") === "12 m²" && marks("door").length === 1, [roomNames(), status(), text("#facts")]);
+check(
+  "a page with one room has no button All rooms and no field Goes to",
+  allRooms() === null && goesTo(0) === null && $("#level")?.hidden === true && $("#stage")?.dataset["scope"] === "room",
+  [allRooms() === null, goesTo(0) === null, $("#stage")?.dataset["scope"]],
+);
+
+press("#add-room");
+typeWalls(["4", "3", "4", "3"]);
+addDoor(3, "1.9");
+check(
+  "a second room gives the button All rooms, and the button tells the room with no door to the first room",
+  roomNames() === "Room 1:closed,Room 2:closed*" && allState() === "typing: All rooms: Room 2 has no door to the other rooms yet.",
+  [roomNames(), allState()],
+);
+check(
+  "a door of a page with two rooms has the field Goes to, with the door of the other room",
+  choices(0) === `${outside} | Room 1: door 1 on wall 2` && goesTo(0)?.value === "" && joinNote(0) === "",
+  [choices(0), goesTo(0)?.value, joinNote(0)],
+);
+choose(0, 1);
+check(
+  "a door that goes to a door of the other room tells that the two rooms fit there",
+  joinNote(0) === "fits: Door 1 of Room 2 is door 1 of Room 1." && goesTo(0)?.selectedIndex === 1 && keptJoins() === 1,
+  [joinNote(0), goesTo(0)?.selectedIndex, keptJoins()],
+);
+check("the button All rooms tells that the rooms fit together", allState() === fitTogether, allState());
+
+// The view of the rooms together has the drawing of each room at its place, and the list of the doors between rooms.
+press('#room-list button[data-scope="all"]');
+check(
+  "the button All rooms shows the rooms together in place of the fields of a room",
+  $("#form")?.hidden === true && $("#level")?.hidden === false && $("#clear")?.hidden === true && $("#stage")?.dataset["scope"] === "all" && allRooms()?.getAttribute("aria-current") === "true" && roomNames() === "Room 1:closed,Room 2:closed",
+  [$("#form")?.hidden, $("#level")?.hidden, $("#clear")?.hidden, $("#stage")?.dataset["scope"], roomNames()],
+);
+check("the status tells that the rooms fit together", level() === "closed" && title() === "The rooms fit together.", status());
+check(
+  "the drawing shows each room with its floor and its name, and one dot at the door between the rooms",
+  planRooms().length === 2 && $$("#plan-box g.plan-room .walk-floor").length === 2 && planNames() === "Room 1,Room 2" && ties("fits") === 1 && $$("#plan-box g.plan-tie circle").length === 1 && apartRooms() === 0,
+  [planRooms().length, planNames(), ties("fits"), apartRooms()],
+);
+check("the page tells the numbers of the rooms together", fact("Rooms") === "2" && fact("Floor area") === "24 m²" && fact("Doors between rooms") === "1", text("#facts"));
+check(
+  "the list of the doors between rooms has the door with its two rooms",
+  jointStates() === "fits" && text("#joints .joint-title") === "Room 2 and Room 1" && text("#joints .joint-text") === "Door 1 of Room 2 is door 1 of Room 1." && $("#no-joints")?.hidden === true,
+  text("#joints"),
+);
+check("the rooms together do not make the page wider than the screen", overflow() <= 0, overflow());
+
+// The 3D model of the rooms together, in a browser with WebGL 2.
+const noWebGl = text("#hint").includes("no WebGL 2");
+check("the rooms together have a 3D model", text("#view-room") === "3D model" && (noWebGl || !disabled("#view-room")), [text("#view-room"), disabled("#view-room")]);
+if (!noWebGl) {
+  press("#view-room");
+  check("the page shows the rooms together in 3D", await until(() => $("#room-box canvas"), 20000), text("#hint"));
+  press("#view-plan");
+  check("the button Drawing shows the drawing of the rooms again", $("#stage")?.dataset["view"] === "plan" && planRooms().length === 2 && $("#room-box")?.hidden === true, [$("#stage")?.dataset["view"], planRooms().length]);
+}
+
+// A click on a room of the drawing opens the room. An element of a drawing has no function `click`.
+$('#plan-box g.plan-room[data-open="0"] .walk-floor')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+check(
+  "a click on a room of the drawing opens the room with its numbers",
+  roomNames() === "Room 1:closed*,Room 2:closed" && $("#form")?.hidden === false && $("#level")?.hidden === true && $("#clear")?.hidden === false && $("#stage")?.dataset["scope"] === "room" && lengthField(0)?.value === "4" && doors().length === 1,
+  [roomNames(), $("#form")?.hidden, $("#stage")?.dataset["scope"], lengthField(0)?.value],
+);
+check(
+  "the door of the first room shows the door that it goes to",
+  choices(0) === `${outside} | Room 2: door 1 on wall 4` && goesTo(0)?.selectedIndex === 1 && joinNote(0) === "fits: Door 1 of Room 2 is door 1 of Room 1.",
+  [choices(0), goesTo(0)?.selectedIndex, joinNote(0)],
+);
+
+// A second door between the two rooms. The first door gives the place of the second room, so the second door examines the measurements.
+addDoor(1, "1.9");
+check(
+  "a door with no free door in the other rooms tells how to join two rooms",
+  choices(1) === outside && text("#sides .join-aid").startsWith("To join two rooms, add this door to the other room too."),
+  [choices(1), text("#sides .join-aid")],
+);
+press('#room-list button[data-room="1"]');
+addDoor(3, "0.2");
+check("a door that goes to a room is not a choice of a different door", choices(1) === `${outside} | Room 1: door 2 on wall 2`, choices(1));
+choose(1, 1);
+check("a second door at the same place from its two sides fits", joinNote(1) === "fits: Door 2 of Room 2 is door 2 of Room 1." && allState() === fitTogether, [joinNote(1), allState()]);
+enter(doorField(1, "offset"), "0.7");
+check(
+  "a door at a different place from its two sides tells the distance between the two places",
+  joinNote(1).startsWith("off: Door 2 of Room 2 and door 2 of Room 1 are 0.5 m apart.") && allState() === "open: All rooms: Room 2 and Room 1 do not fit at a door." && roomNames() === "Room 1:closed,Room 2:closed*",
+  [joinNote(1), allState(), roomNames()],
+);
+press('#room-list button[data-scope="all"]');
+check(
+  "the rooms together tell the door that does not fit",
+  level() === "open" && title() === "Room 2 and Room 1 do not fit at a door." && text("#status-text").includes("are 0.5 m apart") && ties("fits") === 1 && ties("off") === 1 && $$("#plan-box g.plan-tie .plan-tie-line").length === 1,
+  [status(), ties("fits"), ties("off")],
+);
+check("the list of the doors tells the door that does not fit", jointStates() === "fits,off" && fact("Doors between rooms") === "2", [jointStates(), text("#facts")]);
+press('#joints li.joint[data-state="off"] button.open-room[data-open="1"]');
+check(
+  "the name of a room in the list of the doors opens the room at its door",
+  roomNames() === "Room 1:closed,Room 2:closed*" && $("#form")?.hidden === false && document.activeElement !== null && document.activeElement === doorField(1, "offset"),
+  [roomNames(), document.activeElement?.getAttribute("aria-label")],
+);
+enter(doorField(1, "offset"), "0.2");
+check("the correct distance makes the rooms fit again", joinNote(1) === "fits: Door 2 of Room 2 is door 2 of Room 1." && allState() === fitTogether, [joinNote(1), allState()]);
+
+// The example apartment comes after the rooms of the visitor. No door joins it to the first room, so the drawing shows its rooms apart.
+press("#open-example");
+check("the example apartment adds its four rooms to the rooms of the visitor", await until(() => rooms().length === 6, 15000), roomNames());
+check(
+  "the page shows the rooms together, and it tells the rooms that no door joins to the first room",
+  $("#stage")?.dataset["scope"] === "all" && roomNames() === "Room 1:closed,Room 2:closed,Living room:closed,Hall:closed,Bathroom:closed,Bedroom:closed" && level() === "typing" && title() === "No door joins 4 rooms to Room 1 yet.",
+  [$("#stage")?.dataset["scope"], roomNames(), status()],
+);
+check(
+  "the drawing shows the rooms of the example apart, with a dot at each door between rooms",
+  planRooms().length === 6 && apartRooms() === 4 && ties("fits") === 5 && fact("Rooms") === "6" && fact("Doors between rooms") === "5",
+  [planRooms().length, apartRooms(), ties("fits"), text("#facts")],
+);
+check(
+  "the list of the doors tells each room that is apart",
+  jointStates() === "fits,fits,fits,fits,fits,apart,apart,apart,apart" && text('#joints li.joint[data-state="apart"] .joint-text').startsWith("No door joins this room and its group to Room 1 yet"),
+  text("#joints"),
+);
+check("the page tells that it shows the example apartment", text("#keep-note").startsWith("The page shows the example apartment."), text("#keep-note"));
+check("six rooms do not make the page wider than the screen", overflow() <= 0, overflow());
+
+// The removal of each room gives one empty room again. A room goes away with its doors to the other rooms.
+for (let left = rooms().length; left > 0; left--) {
+  press('#room-list button[data-room="0"]');
+  press("#clear");
+  if ($("#confirm")?.hidden === false) press("#confirm-yes");
+}
+check(
+  "the removal of each room gives one empty room, and the page keeps no door between rooms",
+  roomNames() === "Room 1:typing*" && allRooms() === null && keptRooms() === 1 && keptJoins() === 0 && $("#stage")?.dataset["scope"] === "room",
+  [roomNames(), keptRooms(), keptJoins()],
+);
+
+// The example apartment in place of an empty room: its four rooms fit together.
+press("#open-example");
+check("the example apartment replaces an empty room", await until(() => rooms().length === 4, 15000), roomNames());
+check(
+  "the rooms of the example apartment fit together",
+  $("#stage")?.dataset["scope"] === "all" && roomNames() === "Living room:closed,Hall:closed,Bathroom:closed,Bedroom:closed" && level() === "closed" && title() === "The rooms fit together." && jointStates() === "fits,fits,fits",
+  [roomNames(), status(), jointStates()],
+);
+check(
+  "the drawing shows the four rooms together, with a dot at each door between rooms",
+  planRooms().length === 4 && apartRooms() === 0 && ties("fits") === 3 && fact("Rooms") === "4" && fact("Floor area") !== "" && fact("Doors between rooms") === "3",
+  [planRooms().length, apartRooms(), ties("fits"), text("#facts")],
+);
+const planHeight = $("#plan-box svg.walk")?.getBoundingClientRect().height ?? 0;
+check("the drawing of the rooms together has a height of 200 pixels or more", planHeight >= 200, planHeight);
+check("the example apartment does not make the page wider than the screen", overflow() <= 0, overflow());
 
 // The next view of the check starts as a first visit, with the example room.
 localStorage.removeItem(STORE_KEY);
