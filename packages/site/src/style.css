@@ -1043,6 +1043,170 @@ a.tool {
   outline-offset: 2px;
 }
 
+/* The doors, the windows and the outlets of a wall. A rule at the left joins the fields of one feature, as a dimension line joins two marks. */
+.features {
+  display: grid;
+  gap: 12px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feature {
+  display: grid;
+  gap: 8px;
+  border-left: 2px solid var(--line);
+  padding: 0 0 2px 12px;
+  scroll-margin-top: calc(var(--board, 0px) + 28px);
+  scroll-margin-bottom: 16px;
+}
+
+.feature:focus-within {
+  border-left-color: var(--ink);
+}
+
+.feature[data-fault="warning"] {
+  border-left-color: var(--level-near);
+}
+
+.feature[data-fault="error"] {
+  border-left-color: var(--level-over);
+}
+
+.feature-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.feature-name {
+  font-family: var(--display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+/* The sign of a feature is its symbol in the drawing, on a short part of a wall. */
+.sign {
+  flex: none;
+  overflow: visible;
+}
+
+.sign-wall {
+  stroke: currentColor;
+  stroke-width: 3;
+}
+
+.sign-thin {
+  stroke: currentColor;
+  stroke-width: 1.25;
+}
+
+.sign-outlet {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.swap,
+.feature-open {
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
+  cursor: pointer;
+}
+
+.swap {
+  display: block;
+  min-height: 32px;
+  padding: 4px 0;
+  font-size: 0.875rem;
+}
+
+.swap:hover,
+.feature-open:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* The usual value of an empty field is quiet. It goes when one field of the length has a number, so 7 ft is not read as 7 ft 8 in. */
+.number-field::placeholder {
+  color: var(--quiet);
+  opacity: 0.7;
+}
+
+.length:has(.number-field:not(:placeholder-shown)) .number-field::placeholder {
+  color: transparent;
+}
+
+/* The shape of the sign tells the fault, so the color is not the only sign. */
+.feature-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+
+.feature-note::before {
+  content: "!";
+  display: grid;
+  flex: none;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--level-over);
+  color: var(--panel);
+  font-family: var(--display);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.feature[data-fault="warning"] .feature-note::before {
+  background: var(--level-near);
+}
+
+.feature-add {
+  display: grid;
+  gap: 8px;
+}
+
+.feature-open {
+  justify-self: start;
+  min-height: 40px;
+  padding: 6px 0;
+  font-size: 0.9375rem;
+}
+
+.feature-open::before {
+  content: "+";
+  display: inline-block;
+  margin-right: 0.4em;
+  font-weight: 600;
+}
+
+.feature-kinds {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.feature-kinds .tool {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 6px 10px;
+  text-align: left;
+  line-height: 1.2;
+}
+
 .add {
   width: 100%;
   min-height: 46px;
@@ -1126,11 +1290,66 @@ a.tool {
   stroke-linecap: round;
 }
 
+/* An opening is a break in the line of its wall: a line in the color of the sheet removes the ink. */
+.walk-feature {
+  --mark: var(--ink);
+}
+
+.walk-feature[data-fault="warning"] {
+  --mark: var(--level-near);
+}
+
+.walk-feature[data-fault="error"] {
+  --mark: var(--level-over);
+}
+
+.walk-hole {
+  stroke: var(--sheet);
+  stroke-width: 6;
+}
+
+.walk-thin {
+  stroke: var(--mark);
+  stroke-width: 1.25;
+}
+
+.walk-feature[data-fault="error"] .walk-thin {
+  stroke-dasharray: 3 2;
+}
+
+.walk-outlet {
+  fill: var(--sheet);
+  stroke: var(--mark);
+  stroke-width: 1.5;
+}
+
+/* The measured distance of the feature whose field has the focus: a dimension line from the corner to the near edge. */
+.walk-reach {
+  stroke: var(--link);
+  stroke-width: 1.5;
+  opacity: 0;
+}
+
+.walk-feature.walk-on .walk-reach {
+  opacity: 1;
+}
+
+.walk-feature.walk-on .walk-thin,
+.walk-feature.walk-on .walk-outlet {
+  stroke-width: 2;
+}
+
 /* A wide line with no color makes a wall easy to touch. */
 .walk-hit {
   stroke: transparent;
   stroke-width: 28;
   pointer-events: stroke;
+  cursor: pointer;
+}
+
+.walk-touch {
+  fill: transparent;
+  pointer-events: fill;
   cursor: pointer;
 }
 
@@ -1248,7 +1467,8 @@ a.tool {
       background-color 120ms;
   }
 
-  .walk-mark {
+  .walk-mark,
+  .walk-reach {
     transition: opacity 120ms;
   }
 

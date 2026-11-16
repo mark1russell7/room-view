@@ -1,6 +1,7 @@
 import { expandSurvey, SURVEY_SCHEMA, type PlanPoint, type SurveyResult, type SurveyTurn } from "@mark1russell7/room-view";
 import { describe, expect, it } from "vitest";
-import { drawWalk, pathOf, PICTURE_MARGIN, type Pixel, type WalkDrawing } from "./walk.ts";
+import type { FeatureEnd, FeatureKind, FeatureSpan } from "./draft.ts";
+import { drawWalk, pathOf, PICTURE_MARGIN, type Pixel, type WalkDrawing, type WalkFeature } from "./walk.ts";
 
 // A picture whose room for the drawing is 600 by 300 pixels. A room of 6 by 3 thus gets 100 pixels for each unit.
 const SIZE = { width: 600 + 2 * PICTURE_MARGIN.x, height: 300 + 2 * PICTURE_MARGIN.y };
@@ -238,6 +239,78 @@ describe("drawWalk, an open walk", () => {
     near(drawing.walls[0]?.to, [RIGHT, SIZE.height / 2]);
     near(drawing.heading, [1, 0]);
     near(drawing.gap?.from, [RIGHT, SIZE.height / 2]);
+  });
+});
+
+describe("drawWalk, the features of the walls", () => {
+  function span(side: number, key: string, kind: FeatureKind, from: number, to: number, corner: FeatureEnd = "start", fault?: "error" | "warning"): FeatureSpan {
+    return { side, key, kind, from, to, corner, fault };
+  }
+
+  function featuresOf(result: SurveyResult, spans: readonly FeatureSpan[]): readonly WalkFeature[] {
+    return drawWalk(result, SIZE, textsOf(result), spans).features;
+  }
+
+  it("has no feature when it gets no place", () => {
+    expect(draw(ROOM).features).toEqual([]);
+  });
+
+  it("puts a door on its wall, and measures from the start of the wall", () => {
+    const [door] = featuresOf(ROOM, [span(0, "f1", "door", 0.25, 0.5)]);
+    expect(door).toMatchObject({ side: 0, key: "f1", kind: "door" });
+    expect(door?.fault).toBeUndefined();
+    near(door?.from, [LEFT + 150, BOTTOM]);
+    near(door?.to, [LEFT + 300, BOTTOM]);
+    // The room is above its first wall.
+    near(door?.inner, [0, -1]);
+    near(door?.reach[0], [LEFT, BOTTOM]);
+    near(door?.reach[1], [LEFT + 150, BOTTOM]);
+  });
+
+  it("measures from the end of the wall for a distance from that corner", () => {
+    const [window] = featuresOf(ROOM, [span(1, "f2", "window", 0.5, 0.75, "end")]);
+    near(window?.from, [RIGHT, BOTTOM - 150]);
+    near(window?.to, [RIGHT, BOTTOM - 225]);
+    near(window?.inner, [-1, 0]);
+    near(window?.reach[0], [RIGHT, TOP]);
+    near(window?.reach[1], [RIGHT, BOTTOM - 225]);
+  });
+
+  it("puts an outlet at one position, and keeps the level of its fault", () => {
+    const [outlet] = featuresOf(ROOM, [span(2, "f3", "outlet", 0.5, 0.5, "start", "warning")]);
+    near(outlet?.from, [SIZE.width / 2, TOP]);
+    near(outlet?.to, [SIZE.width / 2, TOP]);
+    near(outlet?.inner, [0, 1]);
+    expect(outlet?.fault).toBe("warning");
+  });
+
+  it("gives the inner side of a walk to the right", () => {
+    const [door] = featuresOf(ROOM_TO_RIGHT, [span(0, "f1", "door", 0, 0.5)]);
+    // The room is below its first wall.
+    near(door?.from, [LEFT, TOP]);
+    near(door?.to, [SIZE.width / 2, TOP]);
+    near(door?.inner, [0, 1]);
+  });
+
+  it("gives no feature on a wall that the walk does not have, and none on a wall with no length", () => {
+    expect(featuresOf(ROOM, [span(7, "f1", "door", 0, 0.5)])).toEqual([]);
+    const flat = openWalk(OPEN, [
+      [0, 0],
+      [0, 0],
+      [6, 0],
+      [6, 3],
+    ]);
+    const drawn = featuresOf(flat, [span(0, "f1", "door", 0, 0.5), span(1, "f2", "outlet", 0.5, 0.5)]);
+    expect(drawn.map((item) => item.key)).toEqual(["f2"]);
+    near(drawn[0]?.from, [SIZE.width / 2, BOTTOM]);
+  });
+
+  it("keeps the sequence of the places", () => {
+    const drawn = featuresOf(ROOM, [span(3, "f2", "outlet", 0.5, 0.5), span(0, "f1", "door", 0, 0.1, "start", "error")]);
+    expect(drawn.map((item) => [item.key, item.side, item.fault])).toEqual([
+      ["f2", 3, undefined],
+      ["f1", 0, "error"],
+    ]);
   });
 });
 

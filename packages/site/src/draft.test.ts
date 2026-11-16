@@ -1,4 +1,4 @@
-import { expandSurvey, type Survey } from "@mark1russell7/room-view";
+import { checkRoom, expandSurvey, type Survey } from "@mark1russell7/room-view";
 import { SAMPLE_SURVEY } from "@mark1russell7/room-view/sample";
 import { describe, expect, it } from "vitest";
 import {
@@ -10,37 +10,56 @@ import {
   draftOf,
   emptyDraft,
   exampleDraft,
+  featureFaults,
+  featureOf,
+  featureSpans,
+  fieldsOf,
   fileName,
-  hasMoreThanWalls,
+  hasMore,
   LENGTH_MODES,
   lengthText,
   numberOf,
   parseStore,
+  placedFeatures,
+  readFeature,
   readLength,
   sameDraft,
+  shownRoom,
   statusOf,
   storeText,
   surveyOf,
   turnOf,
   typedOf,
+  usualOf,
   walksRight,
+  withFeature,
   withMode,
+  withNewFeature,
   withNewSide,
+  withoutFeature,
   withoutSide,
   withSide,
   type Corner,
   type Draft,
+  type DraftFeature,
   type DraftSide,
+  type FeatureEnd,
+  type FeatureFault,
+  type FeatureField,
+  type FeatureKind,
   type LengthMode,
   type Status,
   type Store,
+  type TypedLength,
 } from "./draft.ts";
 
 type Wall = Omit<DraftSide, "key">;
 
-/** This function gives a wall with one number for its length. */
+const NO_TEXT: TypedLength = { value: "", inches: "" };
+
+/** This function gives a wall with one number for its length, and with no features. */
 function wall(length: string, corner: Corner = "left", angle = ""): Wall {
-  return { length: { value: length, inches: "" }, corner, angle };
+  return { length: { value: length, inches: "" }, corner, angle, features: [] };
 }
 
 /** This function gives a draft with the walls of a list. */
@@ -48,12 +67,33 @@ function room(mode: LengthMode, walls: readonly Wall[]): Draft {
   return { ...emptyDraft(mode), sides: walls.map((item, index) => ({ key: `s${String(index + 1)}`, ...item })) };
 }
 
+/** This function gives a feature with one number for each length of a list. Each other length has no text. */
+function feature(key: string, kind: FeatureKind, lengths: Partial<Readonly<Record<FeatureField, string>>> = {}, from: FeatureEnd = "start"): DraftFeature {
+  const typed = (text: string | undefined): TypedLength => ({ value: text ?? "", inches: "" });
+  return { key, kind, from, offset: typed(lengths.offset), width: typed(lengths.width), height: typed(lengths.height), sill: typed(lengths.sill) };
+}
+
+/** This function gives a draft with the features of a list on the wall at a position, from 0. */
+function onWall(draft: Draft, index: number, features: readonly DraftFeature[]): Draft {
+  return { ...draft, sides: draft.sides.map((side, at) => (at === index ? { ...side, features } : side)) };
+}
+
 function statusFor(draft: Draft): Status {
   return statusOf(draft, expandSurvey(surveyOf(draft)));
 }
 
+function faultsFor(draft: Draft): readonly FeatureFault[] {
+  return featureFaults(draft, expandSurvey(surveyOf(draft)));
+}
+
 /** A triangle with the sides 4, 3 and 5: its corners have 90 degrees, 53.13 degrees and 36.87 degrees. */
 const TRIANGLE = [wall("4"), wall("3", "angle", "53.13"), wall("5", "angle", "36.87")];
+
+/** A room of 4 m by 3 m. Its walls are 2.4 m high and 0.11 m thick. */
+const BOX = room("m", [wall("4"), wall("3"), wall("4"), wall("3")]);
+
+/** The sample room: wall 3 ends at a corner that points into the room, and wall 4 starts there. */
+const NOOK = room("m", [wall("6"), wall("3"), wall("2", "right"), wall("2"), wall("4"), wall("5")]);
 
 describe("numberOf", () => {
   it("gives no number for no text", () => {
@@ -139,6 +179,11 @@ describe("surveyOf", () => {
         { id: "wall-3", length: 3.6, turn: "left" },
         { id: "wall-4", length: 3, turn: "left" },
       ],
+      openings: [
+        { id: "door-1", wall: "wall-1", kind: "door", offset: 0.15, width: 0.8, height: 2.03 },
+        { id: "window-1", wall: "wall-3", kind: "window", offset: 1.2, width: 1.2, sill: 0.9, height: 1.2 },
+      ],
+      outlets: [{ id: "outlet-1", wall: "wall-2", offset: 1.5, height: 0.3 }],
     });
   });
 
@@ -148,6 +193,8 @@ describe("surveyOf", () => {
     expect(survey.height).toBe(96);
     expect(survey.wallThickness).toBe(4.5);
     expect(survey.sides.map((side) => side.length)).toEqual([144, 120, 144, 120]);
+    expect(survey.openings?.[0]).toEqual({ id: "door-1", wall: "wall-1", kind: "door", offset: 6, width: 32, height: 80 });
+    expect(survey.outlets).toEqual([{ id: "outlet-1", wall: "wall-2", offset: 60, height: 12 }]);
   });
 
   it("gives a closed room for the example of each mode", () => {
@@ -275,21 +322,90 @@ describe("draftOf", () => {
     expect(corners(draftOf(survey(["right", -126.87, -143.13])))).toEqual([["right", ""], ["angle", "53.13"], ["angle", "36.87"]]);
   });
 
-  it("reads the walls of the sample survey, and tells that the survey has more than walls", () => {
+  it("reads the walls of the sample survey, and tells that the survey has more data than the draft keeps", () => {
     const draft = draftOf(SAMPLE_SURVEY);
     expect(draft.name).toBe("Sample room");
     expect(draft.sides.map((side) => side.length.value)).toEqual(["6", "3", "2", "2", "4", "5"]);
     expect(draft.sides.map((side) => side.corner)).toEqual(["left", "left", "right", "left", "left", "left"]);
-    expect(hasMoreThanWalls(SAMPLE_SURVEY)).toBe(true);
-    expect(hasMoreThanWalls(surveyOf(draft))).toBe(false);
-    expect(statusFor(draft).level).toBe("closed");
+    expect(hasMore(SAMPLE_SURVEY)).toBe(true);
+    expect(hasMore(surveyOf(draft))).toBe(false);
+    expect(statusFor(draft)).toEqual({ level: "closed", title: "The room closes.", text: "The walk ends exactly at its start." });
+  });
+
+  it("reads the features of each wall of the sample survey, in the sequence of their distances", () => {
+    const draft = draftOf(SAMPLE_SURVEY);
+    expect(draft.sides.map((side) => side.features.map((item) => item.kind))).toEqual([
+      ["door", "outlet", "outlet"],
+      ["outlet", "window"],
+      [],
+      ["outlet"],
+      ["outlet", "outlet"],
+      ["window", "outlet"],
+    ]);
+    expect(draft.sides.flatMap((side) => side.features.map((item) => item.key))).toEqual(["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10"]);
+    expect(draft.sides[0]?.features[0]).toEqual({
+      key: "f1",
+      kind: "door",
+      from: "start",
+      offset: { value: "0.6", inches: "" },
+      width: { value: "0.9", inches: "" },
+      height: { value: "2.05", inches: "" },
+      sill: NO_TEXT,
+    });
+    expect(draft.sides[1]?.features).toEqual([
+      { key: "f4", kind: "outlet", from: "start", offset: { value: "0.4", inches: "" }, width: NO_TEXT, height: { value: "0.3", inches: "" }, sill: NO_TEXT },
+      { key: "f5", kind: "window", from: "start", offset: { value: "0.8", inches: "" }, width: { value: "1.4", inches: "" }, height: { value: "1.2", inches: "" }, sill: { value: "0.9", inches: "" } },
+    ]);
+    expect(faultsFor(draft)).toEqual([]);
+  });
+
+  it("gives the features of an id to the first side with that id", () => {
+    const survey: Survey = {
+      schema: "survey/1",
+      unit: "m",
+      height: 2.4,
+      wallThickness: 0.1,
+      sides: [
+        { id: "a", length: 4, turn: "left" },
+        { id: "a", length: 3, turn: "left" },
+      ],
+      openings: [{ id: "door", wall: "a", kind: "gap", offset: 0, width: 1, height: 2 }],
+      outlets: [{ id: "outlet", wall: "b", offset: 1, height: 0.3 }],
+    };
+    const draft = draftOf(survey);
+    expect(draft.sides.map((side) => side.features.map((item) => item.kind))).toEqual([["gap"], []]);
+    expect(draft.sides[0]?.features[0]?.offset).toEqual({ value: "0", inches: "" });
+    expect(hasMore(survey)).toBe(true);
   });
 
   it("gives an empty field for a number that is not a length", () => {
     const draft = draftOf({ schema: "survey/1", unit: "m", height: Number.NaN, wallThickness: -1, sides: [{ id: "a", length: 0, turn: Number.POSITIVE_INFINITY }] });
     expect(draft.height).toEqual({ value: "", inches: "" });
     expect(draft.thickness).toEqual({ value: "", inches: "" });
-    expect(draft.sides[0]).toEqual({ key: "s1", length: { value: "", inches: "" }, corner: "angle", angle: "" });
+    expect(draft.sides[0]).toEqual({ key: "s1", length: { value: "", inches: "" }, corner: "angle", angle: "", features: [] });
+  });
+});
+
+describe("hasMore", () => {
+  const survey = surveyOf(exampleDraft("m"));
+
+  it("is false for the record of a draft", () => {
+    expect(hasMore(survey)).toBe(false);
+    expect(hasMore(surveyOf(BOX))).toBe(false);
+  });
+
+  it("tells each kind of data that a draft does not keep", () => {
+    const more: readonly Survey[] = [
+      { ...survey, circuits: [{ id: "a", name: "Circuit A", limit: 1440 }] },
+      { ...survey, checks: [{ id: "diagonal", from: "wall-1", to: "wall-3", length: 4.7 }] },
+      { ...survey, sides: survey.sides.map((side) => ({ ...side, height: 2 })) },
+      { ...survey, sides: survey.sides.map((side) => ({ ...side, thickness: 0.2 })) },
+      { ...survey, openings: [{ id: "door-1", wall: "wall-1", kind: "door", offset: 1, width: 0.8, sill: 0.1, height: 2 }] },
+      { ...survey, openings: [{ id: "door-1", wall: "hall", kind: "door", offset: 1, width: 0.8, height: 2 }] },
+      { ...survey, outlets: [{ id: "outlet-1", wall: "wall-2", offset: 1, height: 0.3, circuit: "a" }] },
+      { ...survey, outlets: [{ id: "outlet-1", wall: "hall", offset: 1, height: 0.3 }] },
+    ];
+    for (const [index, item] of more.entries()) expect(hasMore(item), String(index)).toBe(true);
   });
 });
 
@@ -312,6 +428,256 @@ describe("the example room and the empty room", () => {
     expect(sameDraft(exampleDraft("m"), exampleDraft("m"))).toBe(true);
     expect(sameDraft(exampleDraft("m"), emptyDraft("m"))).toBe(false);
     expect(sameDraft(exampleDraft("m"), { ...exampleDraft("m"), name: "Bedroom" })).toBe(false);
+    expect(sameDraft(exampleDraft("m"), withFeature(exampleDraft("m"), "f1", { from: "end" }))).toBe(false);
+  });
+
+  it("have a door, an outlet and a window in the example, and no feature in the empty room", () => {
+    for (const mode of LENGTH_MODES) {
+      expect(exampleDraft(mode).sides.map((side) => side.features.map((item) => `${item.key} ${item.kind}`)), mode).toEqual([["f1 door"], ["f2 outlet"], ["f3 window"], []]);
+      expect(emptyDraft(mode).sides.map((side) => side.features), mode).toEqual([[], [], [], []]);
+    }
+    expect(featureOf(exampleDraft("ft-in"), "f1")).toEqual({
+      key: "f1",
+      kind: "door",
+      from: "start",
+      offset: { value: "0", inches: "6" },
+      width: { value: "2", inches: "8" },
+      height: { value: "6", inches: "8" },
+      sill: NO_TEXT,
+    });
+  });
+});
+
+describe("fieldsOf", () => {
+  it("gives the lengths of each kind in the sequence of the form", () => {
+    expect(fieldsOf("door")).toEqual(["offset", "width", "height"]);
+    expect(fieldsOf("gap")).toEqual(["offset", "width", "height"]);
+    expect(fieldsOf("window")).toEqual(["offset", "width", "sill", "height"]);
+    expect(fieldsOf("outlet")).toEqual(["offset", "height"]);
+  });
+});
+
+describe("usualOf", () => {
+  it("gives a round number in each mode", () => {
+    expect(usualOf("door", "height", "ft-in")).toBe(80);
+    expect(usualOf("gap", "height", "in")).toBe(80);
+    expect(usualOf("window", "height", "in")).toBe(48);
+    expect(usualOf("window", "sill", "ft-in")).toBe(36);
+    expect(usualOf("outlet", "height", "in")).toBe(12);
+    expect(usualOf("door", "height", "m")).toBe(2.03);
+    expect(usualOf("window", "height", "cm")).toBe(120);
+    expect(usualOf("window", "sill", "cm")).toBe(90);
+    expect(usualOf("outlet", "height", "m")).toBe(0.3);
+  });
+
+  it("gives no usual value for a distance, for a width, and for the bottom of a kind that is not a window", () => {
+    expect(usualOf("door", "offset", "m")).toBeUndefined();
+    expect(usualOf("window", "width", "m")).toBeUndefined();
+    expect(usualOf("door", "sill", "m")).toBeUndefined();
+    expect(usualOf("outlet", "sill", "ft-in")).toBeUndefined();
+  });
+});
+
+describe("readFeature", () => {
+  it("gives the numbers of a door, with the usual height for a height with no text", () => {
+    expect(readFeature(feature("f1", "door", { offset: "0.5", width: "0.9" }), 4, "m")).toEqual({ state: "ok", numbers: { start: 0.5, width: 0.9, height: 2.03, sill: 0 } });
+    expect(readFeature(feature("f1", "gap", { offset: "0", width: "0.9", height: "2.1" }), 4, "m")).toEqual({ state: "ok", numbers: { start: 0, width: 0.9, height: 2.1, sill: 0 } });
+  });
+
+  it("gives the numbers of a window and of an outlet", () => {
+    expect(readFeature(feature("f1", "window", { offset: "1", width: "1.2" }), 4, "m")).toEqual({ state: "ok", numbers: { start: 1, width: 1.2, height: 1.2, sill: 0.9 } });
+    expect(readFeature(feature("f1", "window", { offset: "1", width: "1.2", sill: "0", height: "2" }), 4, "m")).toEqual({ state: "ok", numbers: { start: 1, width: 1.2, height: 2, sill: 0 } });
+    expect(readFeature(feature("f1", "outlet", { offset: "2" }), 4, "m")).toEqual({ state: "ok", numbers: { start: 2, width: 0, height: 0.3, sill: 0 } });
+    // An outlet can be at the floor, and it has no width.
+    expect(readFeature(feature("f1", "outlet", { offset: "0", width: "wide", height: "0" }), 4, "m")).toEqual({ state: "ok", numbers: { start: 0, width: 0, height: 0, sill: 0 } });
+  });
+
+  it("reads feet and inches", () => {
+    const door: DraftFeature = { ...feature("f1", "door"), offset: { value: "1", inches: "6" }, width: { value: "2", inches: "8" } };
+    expect(readFeature(door, 144, "ft-in")).toEqual({ state: "ok", numbers: { start: 18, width: 32, height: 80, sill: 0 } });
+  });
+
+  it("changes a distance from the end of the wall into a distance from its start", () => {
+    expect(readFeature(feature("f1", "door", { offset: "0.5", width: "0.9" }, "end"), 4, "m")).toMatchObject({ state: "ok", numbers: { start: 2.6, width: 0.9 } });
+    expect(readFeature(feature("f1", "outlet", { offset: "0.5" }, "end"), 4, "m")).toMatchObject({ state: "ok", numbers: { start: 3.5, width: 0 } });
+  });
+
+  it("tells the first field that needs a value", () => {
+    expect(readFeature(feature("f1", "door"), 4, "m")).toEqual({ state: "empty", field: "offset" });
+    expect(readFeature(feature("f1", "door", { offset: "1" }), 4, "m")).toEqual({ state: "empty", field: "width" });
+    expect(readFeature(feature("f1", "door", { offset: "1", width: "wide" }), 4, "m")).toEqual({ state: "bad", field: "width" });
+    expect(readFeature(feature("f1", "door", { offset: "1", width: "0" }), 4, "m")).toEqual({ state: "zero", field: "width" });
+    expect(readFeature(feature("f1", "window", { offset: "1", width: "1", height: "0" }), 4, "m")).toEqual({ state: "zero", field: "height" });
+    expect(readFeature(feature("f1", "window", { offset: "1", width: "1", sill: "low" }), 4, "m")).toEqual({ state: "bad", field: "sill" });
+    expect(readFeature(feature("f1", "outlet"), 4, "m")).toEqual({ state: "empty", field: "offset" });
+  });
+});
+
+describe("the features of a survey record", () => {
+  it("names each feature by its kind and its number in the walk", () => {
+    const first = [feature("f1", "door", { offset: "0.5", width: "0.9" }), feature("f2", "outlet", { offset: "2" })];
+    const third = [feature("f3", "gap", { offset: "0.5", width: "1" }), feature("f4", "door", { offset: "2", width: "0.8" }), feature("f5", "window", { offset: "3", width: "0.5" })];
+    const draft = onWall(onWall(BOX, 0, first), 2, third);
+    expect(placedFeatures(draft).map((item) => [item.side, item.id, item.number, item.wall])).toEqual([
+      [0, "door-1", 1, 4],
+      [0, "outlet-1", 1, 4],
+      [2, "opening-1", 1, 4],
+      [2, "door-2", 2, 4],
+      [2, "window-1", 1, 4],
+    ]);
+  });
+
+  it("has the openings and the outlets of the walls, each with its distance from the start of its wall", () => {
+    const first = [feature("f1", "door", { offset: "0.5", width: "0.9" }), feature("f2", "outlet", { offset: "2", height: "1.1" })];
+    const second = [feature("f3", "window", { offset: "1", width: "1.2", sill: "0.8", height: "1" }, "end")];
+    const survey = surveyOf(onWall(onWall(BOX, 0, first), 1, second));
+    expect(survey.openings).toEqual([
+      { id: "door-1", wall: "wall-1", kind: "door", offset: 0.5, width: 0.9, height: 2.03 },
+      { id: "window-1", wall: "wall-2", kind: "window", offset: 0.8, width: 1.2, sill: 0.8, height: 1 },
+    ]);
+    expect(survey.outlets).toEqual([{ id: "outlet-1", wall: "wall-1", offset: 2, height: 1.1 }]);
+  });
+
+  it("has no record of a feature that needs a value, and no record of a feature on a wall with no length", () => {
+    const typing = surveyOf(onWall(BOX, 0, [feature("f1", "door", { offset: "0.5" }), feature("f2", "outlet", { offset: "far" })]));
+    expect(typing).not.toHaveProperty("openings");
+    expect(typing).not.toHaveProperty("outlets");
+    const noWall = withSide(onWall(BOX, 0, [feature("f1", "door", { offset: "0.5", width: "0.9" })]), "s1", { length: NO_TEXT });
+    expect(surveyOf(noWall)).not.toHaveProperty("openings");
+  });
+
+  it("keeps the number of a feature when a feature before it needs a value", () => {
+    const draft = onWall(BOX, 0, [feature("f1", "door"), feature("f2", "door", { offset: "2", width: "0.9" })]);
+    expect(surveyOf(draft).openings?.map((item) => item.id)).toEqual(["door-2"]);
+  });
+});
+
+describe("featureFaults", () => {
+  it("gives no fault for the example room, in each mode", () => {
+    for (const mode of LENGTH_MODES) expect(faultsFor(exampleDraft(mode)), mode).toEqual([]);
+  });
+
+  it("asks for the first field of a feature that needs a value", () => {
+    expect(faultsFor(onWall(BOX, 0, [feature("f1", "door")]))).toEqual([
+      { side: 0, key: "f1", id: "door-1", level: "typing", field: "offset", text: "Type the distance from the corner of door 1 on wall 1.", note: "Type its distance from the corner." },
+    ]);
+    expect(faultsFor(onWall(BOX, 1, [feature("f1", "window", { offset: "1", width: "wide" })]))[0]).toMatchObject({
+      side: 1,
+      level: "typing",
+      field: "width",
+      text: "The width of window 1 on wall 2 is not a number.",
+      note: "Its width is not a number.",
+    });
+    expect(faultsFor(onWall(BOX, 0, [feature("f1", "gap", { offset: "1", width: "1", height: "0" })]))[0]).toMatchObject({
+      field: "height",
+      text: "The height of opening 1 on wall 1 is 0.",
+      note: "Its height is 0.",
+    });
+    expect(faultsFor(onWall(BOX, 0, [feature("f1", "outlet", { offset: "1", height: "low" })]))[0]).toMatchObject({
+      field: "height",
+      text: "The height above the floor of outlet 1 on wall 1 is not a number.",
+    });
+    expect(faultsFor(onWall(BOX, 0, [feature("f1", "window", { offset: "1", width: "1", sill: "low" })]))[0]).toMatchObject({
+      field: "sill",
+      text: "The height of the bottom of window 1 on wall 1 is not a number.",
+    });
+  });
+
+  it("tells a door that does not fit in its wall", () => {
+    expect(faultsFor(onWall(BOX, 0, [feature("f1", "door", { offset: "3.5", width: "0.9" })]))).toEqual([
+      { side: 0, key: "f1", id: "door-1", level: "error", text: "Door 1 does not fit in wall 1.", note: "It does not fit in the wall." },
+    ]);
+    // The distance of this door starts at the end of the wall, so the door starts before the start of the wall.
+    expect(faultsFor(onWall(BOX, 0, [feature("f1", "door", { offset: "3.5", width: "0.9" }, "end")]))[0]?.text).toBe("Door 1 does not fit in wall 1.");
+  });
+
+  it("tells a door that is too near a corner that points into the room", () => {
+    // The walls are 0.11 m thick. At this corner, wall 3 covers the first 0.11 m of wall 4.
+    expect(faultsFor(onWall(NOOK, 3, [feature("f1", "door", { offset: "0.05", width: "0.8" })]))).toEqual([
+      { side: 3, key: "f1", id: "door-1", level: "error", text: "Door 1 on wall 4 is too near a corner.", note: "It is too near a corner: the other wall of the corner covers a part of it." },
+    ]);
+    expect(faultsFor(onWall(NOOK, 3, [feature("f1", "door", { offset: "0.2", width: "0.8" })]))).toEqual([]);
+    // A corner of a room that does not point into the room covers no part of a wall.
+    expect(faultsFor(onWall(BOX, 0, [feature("f1", "door", { offset: "0", width: "0.8" })]))).toEqual([]);
+  });
+
+  it("tells an opening that is higher than the wall", () => {
+    expect(faultsFor(onWall(BOX, 0, [feature("f1", "window", { offset: "1", width: "1", sill: "1.5", height: "1" })]))[0]).toMatchObject({
+      level: "error",
+      text: "Window 1 on wall 1 is higher than the wall.",
+      note: "It is higher than the wall.",
+    });
+  });
+
+  it("tells the later of two openings that share a part of a wall", () => {
+    const faults = faultsFor(onWall(BOX, 0, [feature("f1", "door", { offset: "1", width: "1" }), feature("f2", "window", { offset: "1.5", width: "1" })]));
+    expect(faults).toEqual([
+      { side: 0, key: "f2", id: "window-1", level: "error", text: "Window 1 on wall 1 is in the space of a different opening.", note: "It is in the space of a different opening of this wall." },
+    ]);
+  });
+
+  it("tells an outlet that is not on its wall, and an outlet in an opening", () => {
+    expect(faultsFor(onWall(BOX, 0, [feature("f1", "outlet", { offset: "5" })]))[0]).toMatchObject({ level: "error", text: "Outlet 1 is not on wall 1.", note: "It is not on the wall." });
+    expect(faultsFor(onWall(BOX, 0, [feature("f1", "outlet", { offset: "1", height: "3" })]))[0]).toMatchObject({ level: "error", text: "Outlet 1 is not on wall 1." });
+    expect(faultsFor(onWall(BOX, 0, [feature("f1", "door", { offset: "1", width: "1" }), feature("f2", "outlet", { offset: "1.5" })]))).toEqual([
+      { side: 0, key: "f2", id: "outlet-1", level: "warning", text: "Outlet 1 on wall 1 is in an opening.", note: "It is in an opening of this wall." },
+    ]);
+  });
+
+  it("gives no fault of its place to a feature on a wall with no length", () => {
+    const draft = withSide(onWall(BOX, 0, [feature("f1", "door", { offset: "3.5", width: "0.9" })]), "s1", { length: NO_TEXT });
+    expect(faultsFor(draft)).toEqual([]);
+  });
+});
+
+describe("shownRoom", () => {
+  it("gives the same room when no feature has an error", () => {
+    const draft = exampleDraft("m");
+    const result = expandSurvey(surveyOf(draft));
+    expect(shownRoom(result.room, featureFaults(draft, result))).toBe(result.room);
+  });
+
+  it("removes each opening and each outlet with an error, and keeps a feature with a warning", () => {
+    const draft = onWall(BOX, 0, [
+      feature("f1", "door", { offset: "1", width: "1" }),
+      feature("f2", "outlet", { offset: "1.5" }),
+      feature("f3", "window", { offset: "3.5", width: "1" }),
+      feature("f4", "outlet", { offset: "9" }),
+    ]);
+    const result = expandSurvey(surveyOf(draft));
+    expect(result.room.openings?.map((item) => item.id)).toEqual(["door-1", "window-1"]);
+    const shown = shownRoom(result.room, featureFaults(draft, result));
+    expect(shown.openings?.map((item) => item.id)).toEqual(["door-1"]);
+    expect(shown.outlets?.map((item) => item.id)).toEqual(["outlet-1"]);
+    expect(checkRoom(shown).filter((finding) => finding.level === "error")).toEqual([]);
+    expect(shown.walls).toBe(result.room.walls);
+  });
+});
+
+describe("featureSpans", () => {
+  it("gives the place of each feature as a part of the length of its wall", () => {
+    const first = [feature("f1", "door", { offset: "1", width: "1" }), feature("f2", "outlet", { offset: "3" })];
+    const second = [feature("f3", "window", { offset: "0.75", width: "1.5" }, "end")];
+    expect(featureSpans(onWall(onWall(BOX, 0, first), 1, second), [])).toEqual([
+      { side: 0, key: "f1", kind: "door", from: 0.25, to: 0.5, corner: "start", fault: undefined },
+      { side: 0, key: "f2", kind: "outlet", from: 0.75, to: 0.75, corner: "start", fault: undefined },
+      { side: 1, key: "f3", kind: "window", from: 0.25, to: 0.75, corner: "end", fault: undefined },
+    ]);
+  });
+
+  it("keeps each place in its wall, and tells the level of a fault of the place", () => {
+    const draft = onWall(BOX, 0, [feature("f1", "door", { offset: "3.5", width: "1" }), feature("f2", "door", { offset: "1", width: "1" }), feature("f3", "outlet", { offset: "1.5" })]);
+    expect(featureSpans(draft, faultsFor(draft)).map((span) => [span.key, span.from, span.to, span.fault])).toEqual([
+      ["f1", 0.875, 1, "error"],
+      ["f2", 0.25, 0.5, undefined],
+      ["f3", 0.375, 0.375, "warning"],
+    ]);
+  });
+
+  it("gives no place to a feature that needs a value, and no place on a wall with no length", () => {
+    expect(featureSpans(onWall(BOX, 0, [feature("f1", "door", { offset: "1" })]), [])).toEqual([]);
+    const noWall = withSide(onWall(BOX, 0, [feature("f1", "door", { offset: "1", width: "1" })]), "s1", { length: NO_TEXT });
+    expect(featureSpans(noWall, [])).toEqual([]);
   });
 });
 
@@ -341,7 +707,7 @@ describe("the changes of a draft", () => {
 
   it("adds a wall with no length and the corner of the wall before it", () => {
     const right = withSide(exampleDraft("m"), "s4", { corner: "right" });
-    expect(withNewSide(right).sides.at(-1)).toEqual({ key: "s5", length: { value: "", inches: "" }, corner: "right", angle: "" });
+    expect(withNewSide(right).sides.at(-1)).toEqual({ key: "s5", length: { value: "", inches: "" }, corner: "right", angle: "", features: [] });
     const angle = withSide(exampleDraft("m"), "s4", { corner: "angle", angle: "135" });
     expect(withNewSide(angle).sides.at(-1)?.corner).toBe("left");
   });
@@ -356,6 +722,42 @@ describe("the changes of a draft", () => {
     const draft = withSide(exampleDraft("m"), "s3", { length: { value: "4", inches: "" } });
     expect(draft.sides.map((side) => side.length.value)).toEqual(["3.6", "3", "4", "3"]);
     expect(withSide(draft, "s9", { angle: "1" })).toEqual(draft);
+  });
+
+  it("changes the units of each feature, and keeps a length with no text", () => {
+    const door = featureOf(withMode(exampleDraft("ft-in"), "m"), "f1");
+    expect(door).toEqual({
+      key: "f1",
+      kind: "door",
+      from: "start",
+      offset: { value: "0.152", inches: "" },
+      width: { value: "0.813", inches: "" },
+      height: { value: "2.032", inches: "" },
+      sill: NO_TEXT,
+    });
+  });
+
+  it("adds a feature with no lengths at the end of the features of a wall, with a key that no feature has", () => {
+    const draft = withNewFeature(exampleDraft("m"), "s1", "window");
+    expect(draft.sides[0]?.features.map((item) => item.key)).toEqual(["f1", "f4"]);
+    expect(featureOf(draft, "f4")).toEqual({ key: "f4", kind: "window", from: "start", offset: NO_TEXT, width: NO_TEXT, height: NO_TEXT, sill: NO_TEXT });
+    expect(withNewFeature(emptyDraft("m"), "s2", "outlet").sides.map((side) => side.features.map((item) => item.key))).toEqual([[], ["f1"], [], []]);
+    expect(withNewFeature(draft, "s9", "door")).toEqual(draft);
+  });
+
+  it("removes only the feature with the key, and changes only the feature with the key", () => {
+    const draft = exampleDraft("m");
+    expect(withoutFeature(draft, "f2").sides.map((side) => side.features.map((item) => item.key))).toEqual([["f1"], [], ["f3"], []]);
+    expect(withoutFeature(draft, "f9")).toEqual(draft);
+    const changed = withFeature(draft, "f3", { from: "end", width: { value: "1.5", inches: "" } });
+    expect(featureOf(changed, "f3")).toMatchObject({ key: "f3", kind: "window", from: "end", width: { value: "1.5", inches: "" }, sill: { value: "0.9", inches: "" } });
+    expect(featureOf(changed, "f1")).toEqual(featureOf(draft, "f1"));
+    expect(featureOf(draft, "f9")).toBeUndefined();
+    expect(withFeature(draft, "f9", { from: "end" })).toEqual(draft);
+  });
+
+  it("removes the features of a wall with the wall", () => {
+    expect(withoutSide(exampleDraft("m"), "s1").sides.flatMap((side) => side.features.map((item) => item.key))).toEqual(["f2", "f3"]);
   });
 });
 
@@ -461,6 +863,26 @@ describe("statusOf", () => {
     const status = statusFor(room("m", [wall("4"), wall("3", "angle", "53.63"), wall("5", "angle", "37.37")]));
     expect(status.level).toBe("closed");
   });
+
+  it("tells the first fault of the features of a closed room", () => {
+    const typing = onWall(BOX, 1, [feature("f1", "door")]);
+    expect(statusFor(typing)).toEqual({ level: "closed", title: "The room closes.", text: "Type the distance from the corner of door 1 on wall 2.", side: 1, feature: "f1" });
+    const place = onWall(onWall(BOX, 0, [feature("f7", "door", { offset: "3.5", width: "0.9" })]), 2, [feature("f8", "outlet")]);
+    expect(statusFor(place)).toEqual({ level: "closed", title: "The room closes.", text: "Door 1 does not fit in wall 1.", side: 0, feature: "f7" });
+  });
+
+  it("uses the faults that it gets", () => {
+    const draft = onWall(BOX, 0, [feature("f1", "door")]);
+    expect(statusOf(draft, expandSurvey(surveyOf(draft)), [])).toEqual({ level: "closed", title: "The room closes.", text: "The walk ends exactly at its start." });
+  });
+
+  it("tells a wall that needs a value, and an open walk, before a fault of a feature", () => {
+    const door = [feature("f1", "door")];
+    expect(statusFor(withSide(onWall(BOX, 0, door), "s3", { length: NO_TEXT }))).toMatchObject({ level: "typing", title: "Type the length of wall 3.", side: 2 });
+    const open = statusFor(withSide(onWall(BOX, 0, door), "s3", { length: { value: "6", inches: "" } }));
+    expect(open.level).toBe("open");
+    expect(open.feature).toBeUndefined();
+  });
 });
 
 describe("the store", () => {
@@ -497,6 +919,38 @@ describe("the store", () => {
   it("keeps only the fields of a draft", () => {
     const text = JSON.stringify({ ...store, rooms: [{ ...exampleDraft("m"), more: true }], active: 0, other: 1 });
     expect(parseStore(text)).toEqual({ version: 1, rooms: [exampleDraft("m")], active: 0 });
+  });
+
+  it("keeps the features of each wall", () => {
+    const draft = onWall(BOX, 0, [feature("f1", "door", { offset: "1", width: "1" }, "end"), feature("f2", "outlet", { offset: "3" })]);
+    const withFeatures: Store = { version: 1, rooms: [draft], active: 0 };
+    expect(parseStore(storeText(withFeatures))).toEqual(withFeatures);
+  });
+
+  it("reads a room from before the features: each of its walls has no feature", () => {
+    const sides = BOX.sides.map((side) => ({ key: side.key, length: side.length, corner: side.corner, angle: side.angle }));
+    expect(parseStore(JSON.stringify({ version: 1, rooms: [{ ...BOX, sides }], active: 0 }))).toEqual({ version: 1, rooms: [BOX], active: 0 });
+  });
+
+  it("refuses a feature that is not a feature of the page, and two features with one key", () => {
+    const door = feature("f1", "door", { offset: "1", width: "1" });
+    const [first, second, ...others] = BOX.sides;
+    /** This function gives a room whose first wall has a list of features. */
+    const withFirst = (features: unknown): unknown => ({ ...BOX, sides: [{ ...first, features }, second, ...others] });
+    const rooms: readonly unknown[] = [
+      withFirst("none"),
+      withFirst([null]),
+      withFirst([{ ...door, kind: "stairs" }]),
+      withFirst([{ ...door, from: "middle" }]),
+      withFirst([{ ...door, width: "1" }]),
+      withFirst([{ ...door, key: 1 }]),
+      withFirst([door, door]),
+      // Two walls have a feature with the same key.
+      { ...BOX, sides: [{ ...first, features: [door] }, { ...second, features: [door] }, ...others] },
+      withFirst(Array.from({ length: 101 }, (_, index) => ({ ...door, key: `f${String(index)}` }))),
+    ];
+    for (const [index, item] of rooms.entries()) expect(parseStore(JSON.stringify({ version: 1, rooms: [item], active: 0 })), String(index)).toBeUndefined();
+    expect(parseStore(JSON.stringify({ version: 1, rooms: [withFirst([door])], active: 0 }))).toEqual({ version: 1, rooms: [onWall(BOX, 0, [door])], active: 0 });
   });
 });
 

@@ -1,5 +1,5 @@
 import { regionArea } from "@mark1russell7/layout-contract";
-import { expandSurvey, SCENE_SCHEMA, type Scene, type SurveyResult } from "@mark1russell7/room-view";
+import { expandSurvey, SCENE_SCHEMA, type Room, type Scene, type SurveyResult } from "@mark1russell7/room-view";
 import type { RoomViewer, ViewerTheme } from "@mark1russell7/room-view/three";
 import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome";
 import { isDark, onThemeChange } from "./dark.ts";
@@ -10,31 +10,50 @@ import {
   draftOf,
   emptyDraft,
   exampleDraft,
+  FEATURE_FIELDS,
+  FEATURE_KINDS,
+  FEATURE_NAMES,
+  featureFaults,
+  featureOf,
+  featureSpans,
+  fieldsOf,
   fileName,
-  hasMoreThanWalls,
+  hasMore,
   LENGTH_MODES,
   lengthText,
   MODE_NAMES,
   parseStore,
+  placedFeatures,
   readLength,
   sameDraft,
+  shownRoom,
   statusOf,
   storeText,
   surveyOf,
+  typedOf,
+  usualOf,
+  withFeature,
   withMode,
+  withNewFeature,
   withNewSide,
+  withoutFeature,
   withoutSide,
   withSide,
   type Corner,
   type Draft,
   type DraftSide,
+  type FeatureEnd,
+  type FeatureFault,
+  type FeatureField,
+  type FeatureKind,
+  type PlacedFeature,
   type Status,
   type StatusLevel,
   type Store,
   type TypedLength,
 } from "./draft.ts";
 import { svg } from "./plan.ts";
-import { drawWalk, pathOf, type Pixel } from "./walk.ts";
+import { drawWalk, pathOf, type Pixel, type WalkFeature } from "./walk.ts";
 
 // The page "Measure a room". A person types the length of each wall and the turn at each corner.
 // The page keeps the text of each field in a draft, makes the survey record from it, and draws the result.
@@ -61,9 +80,13 @@ let draft: Draft = store.rooms[store.active] ?? exampleDraft("m");
  */
 let typed: Draft = draft;
 let result: SurveyResult = expandSurvey(surveyOf(draft));
-let status: Status = statusOf(draft, result);
+/** The faults of the doors, the windows, the openings and the outlets. */
+let faults: readonly FeatureFault[] = featureFaults(draft, result);
+let status: Status = statusOf(draft, result, faults);
 /** The position of the wall whose field has the focus. */
 let activeSide: number | undefined;
+/** The key of the feature whose field has the focus. */
+let activeFeature: string | undefined;
 let view: "plan" | "room" = "plan";
 let viewer: RoomViewer | undefined;
 let themes: { readonly light: ViewerTheme; readonly dark: ViewerTheme } | undefined;
@@ -84,11 +107,15 @@ const keepNote = byId("keep-note");
 
 const SIGNS: Readonly<Record<StatusLevel, string>> = { typing: "…", open: "!", closed: "✓" };
 
-/** This function gives the fields of a length to a box: feet and inches, or one number with its unit. */
-function lengthFields(box: HTMLElement, typed: TypedLength, label: string): void {
+/**
+ * This function gives the fields of a length to a box: feet and inches, or one number with its unit.
+ * An empty field shows the usual value, which the page uses when a person types no number.
+ */
+function lengthFields(box: HTMLElement, typed: TypedLength, label: string, usual?: TypedLength): void {
   const field = (part: "value" | "inches", text: string, unit: string, name: string): HTMLElement => {
     const input = h("input", { class: "number-field", type: "text", inputmode: "decimal", enterkeyhint: "next", "data-part": part, "aria-label": name });
     input.value = text;
+    if (usual !== undefined) input.placeholder = usual[part];
     return h("label", { class: "number" }, input, h("span", { class: "unit", "aria-hidden": "true" }, unit));
   };
   const fields =
@@ -99,8 +126,75 @@ function lengthFields(box: HTMLElement, typed: TypedLength, label: string): void
   box.replaceChildren(...fields);
 }
 
-function sideItem(side: DraftSide, index: number): HTMLLIElement {
+/** The name of each button that adds a feature to a wall. */
+const ADD_NAMES: Readonly<Record<FeatureKind, string>> = { door: "Door", window: "Window", gap: "Opening with no door", outlet: "Outlet" };
+
+/** The name of the number of the features of each kind, in the numbers of the room. */
+const COUNT_NAMES: Readonly<Record<FeatureKind, string>> = { door: "Doors", window: "Windows", gap: "Openings", outlet: "Outlets" };
+
+/** This function gives the sign of a kind of feature: its symbol in the drawing, on a short part of a wall. */
+function featureSign(kind: FeatureKind): SVGSVGElement {
+  const sign = svg("svg", { class: "sign", viewBox: "0 0 30 16", width: "30", height: "16", "aria-hidden": "true" });
+  const stroke = (className: string, x1: number, y1: number, x2: number, y2: number): SVGLineElement =>
+    svg("line", { class: className, x1: String(x1), y1: String(y1), x2: String(x2), y2: String(y2) });
+  if (kind === "outlet") {
+    sign.append(stroke("sign-wall", 1, 4, 29, 4), stroke("sign-thin", 15, 4, 15, 8), svg("circle", { class: "sign-outlet", cx: "15", cy: "11", r: "3" }));
+    return sign;
+  }
+  sign.append(stroke("sign-wall", 1, 8, 8, 8), stroke("sign-wall", 22, 8, 29, 8), stroke("sign-thin", 8, 3, 8, 13), stroke("sign-thin", 22, 3, 22, 13));
+  if (kind === "door") sign.append(stroke("sign-thin", 8, 8, 22, 8));
+  if (kind === "window") sign.append(stroke("sign-thin", 8, 6, 22, 6), stroke("sign-thin", 8, 10, 22, 10));
+  return sign;
+}
+
+/** This function gives the name of a length of a feature in the form. The distance along the wall has the name of the corner where it starts. */
+function fieldName(kind: FeatureKind, field: FeatureField, side: number, end: FeatureEnd): string {
+  if (field === "width") return "Width";
+  if (field === "sill") return "Bottom above the floor";
+  if (field === "height") return kind === "outlet" ? "Above the floor" : "Height";
+  const count = draft.sides.length;
+  if (count < 3) return end === "start" ? "From the start of the wall" : "From the end of the wall";
+  // The corner at the start of a wall is the corner with the wall before it in the walk.
+  const other = (side + (end === "start" ? count - 1 : 1)) % count;
+  return `From the corner with wall ${String(other + 1)}`;
+}
+
+/** This function gives the fields of a door, a window, an opening or an outlet. */
+function featureItem(item: PlacedFeature): HTMLLIElement {
+  const { feature, side } = item;
+  const title = `${FEATURE_NAMES[feature.kind]} ${String(item.number)}`;
+  const name = title.toLowerCase();
+  const remove = h("button", { class: "remove", type: "button", "data-action": "remove-feature", "aria-label": `Remove ${name}`, title: `Remove ${name}` }, "×");
+  const rows = fieldsOf(feature.kind).map((field) => {
+    const words = fieldName(feature.kind, field, side, feature.from);
+    const usual = usualOf(feature.kind, field, draft.mode);
+    const length = h("span", { class: "length", "data-of": field });
+    lengthFields(length, feature[field], `${title}, ${words.toLowerCase()}`, usual === undefined ? undefined : typedOf(usual, draft.mode));
+    if (field !== "offset") return h("div", { class: "field" }, h("span", { class: "field-name" }, words), length);
+    const swap = h("button", { class: "swap", type: "button", "data-action": "swap", "aria-label": `Measure ${name} from the other corner of its wall` }, "Use the other corner");
+    return h("div", { class: "field" }, h("span", { class: "field-name" }, words, swap), length);
+  });
+  const note = h("p", { class: "feature-note" });
+  note.hidden = true;
+  return h("li", { class: "feature", "data-key": feature.key, "data-kind": feature.kind }, h("div", { class: "feature-head" }, featureSign(feature.kind), h("span", { class: "feature-name" }, title), remove), rows, note);
+}
+
+/** This function gives the control that adds a feature to a wall: one button that shows a button for each kind. */
+function addControl(side: DraftSide, number: string): HTMLElement {
+  const id = `kinds-${side.key}`;
+  const open = h("button", { class: "feature-open", type: "button", "data-action": "features", "aria-expanded": "false", "aria-controls": id }, "Add a door, a window or an outlet");
+  const kinds = h(
+    "div",
+    { id, class: "feature-kinds", role: "group", "aria-label": `Add to wall ${number}` },
+    FEATURE_KINDS.map((kind) => h("button", { class: "tool", type: "button", "data-action": "add-feature", "data-kind": kind }, featureSign(kind), ADD_NAMES[kind])),
+  );
+  kinds.hidden = true;
+  return h("div", { class: "feature-add" }, open, kinds);
+}
+
+function sideItem(side: DraftSide, index: number, placed: readonly PlacedFeature[]): HTMLLIElement {
   const number = String(index + 1);
+  const features = placed.filter((item) => item.side === index);
   const length = h("span", { class: "length", "data-of": "side" });
   lengthFields(length, side.length, `Length of wall ${number}`);
   const remove = h("button", { class: "remove", type: "button", "data-action": "remove", "aria-label": `Remove wall ${number}`, title: `Remove wall ${number}` }, "×");
@@ -134,11 +228,29 @@ function sideItem(side: DraftSide, index: number): HTMLLIElement {
       h("div", { class: "choices", role: "radiogroup", "aria-labelledby": turn }, choice("left", "Left"), choice("right", "Right"), choice("angle", "Angle")),
       angleBox,
     ),
+    // The features are below the corner, so the length and the turn of each wall stay together.
+    features.length === 0 ? null : h("ul", { class: "features", "aria-label": `Doors, windows and outlets of wall ${number}` }, features.map(featureItem)),
+    addControl(side, number),
   );
 }
 
 function renderSides(): void {
-  sidesList.replaceChildren(...draft.sides.map(sideItem));
+  const placed = placedFeatures(draft);
+  sidesList.replaceChildren(...draft.sides.map((side, index) => sideItem(side, index, placed)));
+  showFaults();
+}
+
+/** This function shows the fault of the place of each feature at its fields. The status tells a field that needs a value. */
+function showFaults(): void {
+  for (const item of sidesList.querySelectorAll<HTMLElement>("li.feature")) {
+    const fault = faults.find((entry) => entry.key === item.dataset["key"] && entry.level !== "typing");
+    if (fault === undefined) item.removeAttribute("data-fault");
+    else item.dataset["fault"] = fault.level;
+    const note = item.querySelector<HTMLElement>(".feature-note");
+    if (note === null) continue;
+    note.hidden = fault === undefined;
+    note.textContent = fault?.note ?? "";
+  }
 }
 
 /** This function shows the draft in each field of the form. */
@@ -154,6 +266,11 @@ function renderForm(): void {
 /** This function gives the first field of the length of a wall. */
 function lengthField(index: number): HTMLInputElement | null {
   return sidesList.querySelector<HTMLInputElement>(`li[data-side="${String(index)}"] .length input`);
+}
+
+/** This function gives the first field of a feature. */
+function featureField(key: string): HTMLInputElement | null {
+  return sidesList.querySelector<HTMLInputElement>(`li.feature[data-key="${CSS.escape(key)}"] .length input`);
 }
 
 function showStatus(): void {
@@ -173,6 +290,11 @@ function showFacts(): void {
     ["Around the room", around > 0 ? lengthText(around, draft.mode) : "No length yet"],
   ];
   if (status.level === "closed" && ring !== undefined) rows.push(["Floor area", areaText(regionArea({ kind: "polygon", points: ring }), draft.mode)]);
+  const kinds = draft.sides.flatMap((side) => side.features.map((feature) => feature.kind));
+  for (const kind of FEATURE_KINDS) {
+    const count = kinds.filter((item) => item === kind).length;
+    if (count > 0) rows.push([COUNT_NAMES[kind], String(count)]);
+  }
   byId("facts").replaceChildren(...rows.map(([label, value]) => h("div", {}, h("dt", {}, label), h("dd", {}, value))));
 }
 
@@ -193,6 +315,61 @@ function label(className: string, at: Pixel, anchor: string, text: string): SVGT
 /** The arrow on the first wall, in pixels. `base` and `tip` are distances from the start of the walk, and `half` is half of its width. */
 const ARROW = { base: 13, tip: 25, half: 5 };
 
+/**
+ * The sizes of the symbols of the features, in pixels. `jamb` is half of the line at each edge of an opening.
+ * `glass` is half of the space between the two lines of a window.
+ *
+ * `outlet` is the distance from the wall to the center of an outlet, and `radius` is its radius.
+ * `reach` is the distance from the wall to the line of the measured distance. `tick` is half of the line at each end of that line.
+ * `touch` is the radius of the area that selects an outlet.
+ */
+const SYMBOL = { jamb: 5.5, glass: 2.25, outlet: 9, radius: 3.5, reach: 13, tick: 4, touch: 14 };
+
+/**
+ * This function draws a feature of a wall. An opening is a break in the line of the wall: a door has one thin line, and a window has two.
+ * An outlet is a circle on the side of the room.
+ */
+function featureMark(feature: WalkFeature): SVGGElement {
+  const group = svg("g", { class: "walk-feature", "data-key": feature.key, "data-kind": feature.kind });
+  if (feature.fault !== undefined) group.dataset["fault"] = feature.fault;
+  const [nx, ny] = feature.inner;
+  const move = ([x, y]: Pixel, distance: number): Pixel => [x + nx * distance, y + ny * distance];
+  // The measured distance, from the corner to the near edge. The page shows it for the feature whose field has the focus.
+  const [corner, near] = feature.reach;
+  group.append(
+    line("walk-reach", move(corner, SYMBOL.reach), move(near, SYMBOL.reach)),
+    line("walk-reach", move(corner, SYMBOL.reach - SYMBOL.tick), move(corner, SYMBOL.reach + SYMBOL.tick)),
+    line("walk-reach", move(near, SYMBOL.reach - SYMBOL.tick), move(near, SYMBOL.reach + SYMBOL.tick)),
+  );
+  if (feature.kind === "outlet") {
+    const center = move(feature.from, SYMBOL.outlet);
+    group.append(
+      line("walk-thin", feature.from, move(feature.from, SYMBOL.outlet - SYMBOL.radius)),
+      svg("circle", { class: "walk-outlet", cx: number(center[0]), cy: number(center[1]), r: String(SYMBOL.radius) }),
+    );
+    return group;
+  }
+  group.append(line("walk-hole", feature.from, feature.to));
+  for (const edge of [feature.from, feature.to]) group.append(line("walk-thin", move(edge, 0 - SYMBOL.jamb), move(edge, SYMBOL.jamb)));
+  if (feature.kind === "door") group.append(line("walk-thin", feature.from, feature.to));
+  if (feature.kind === "window") {
+    group.append(line("walk-thin", move(feature.from, 0 - SYMBOL.glass), move(feature.to, 0 - SYMBOL.glass)), line("walk-thin", move(feature.from, SYMBOL.glass), move(feature.to, SYMBOL.glass)));
+  }
+  return group;
+}
+
+/** This function gives an area with no color above a feature, so that a finger can select the feature. */
+function featureHit(feature: WalkFeature): SVGElement {
+  const [x, y] = feature.from;
+  const [nx, ny] = feature.inner;
+  const hit =
+    feature.kind === "outlet"
+      ? svg("circle", { class: "walk-touch", cx: number(x + nx * SYMBOL.outlet), cy: number(y + ny * SYMBOL.outlet), r: String(SYMBOL.touch) })
+      : line("walk-hit", feature.from, feature.to);
+  hit.dataset["feature"] = feature.key;
+  return hit;
+}
+
 /** This function draws the walk in the box of the drawing. */
 function showDrawing(): void {
   const size = { width: planBox.clientWidth, height: planBox.clientHeight };
@@ -201,7 +378,7 @@ function showDrawing(): void {
     const reading = readLength(side.length, draft.mode);
     return reading.state === "ok" && reading.value > 0 ? dimensionText(reading.value, draft.mode) : undefined;
   });
-  const drawing = drawWalk(result, size, texts);
+  const drawing = drawWalk(result, size, texts, featureSpans(draft, faults));
   const picture = svg("svg", { class: "walk", viewBox: `0 0 ${String(size.width)} ${String(size.height)}`, width: String(size.width), height: String(size.height), role: "img" });
   picture.setAttribute("aria-label", `Drawing of the walk around the room. ${status.title}`);
 
@@ -213,6 +390,7 @@ function showDrawing(): void {
   // Each wall has a wide mark below its line. `showActive` shows the mark of the wall whose field has the focus.
   for (const wall of drawing.walls) picture.append(line("walk-mark", wall.from, wall.to, wall.side));
   for (const wall of drawing.walls) picture.append(line("walk-wall", wall.from, wall.to, wall.side));
+  for (const feature of drawing.features) picture.append(featureMark(feature));
   if (drawing.gap !== undefined) picture.append(line("walk-gap", drawing.gap.from, drawing.gap.to), label("walk-gap-label", drawing.gap.at, "middle", "gap"));
   const corners = [...drawing.walls.map((wall) => wall.from), ...(drawing.floor === undefined ? drawing.walls.slice(-1).map((wall) => wall.to) : [])];
   for (const [x, y] of corners) picture.append(svg("circle", { class: "walk-corner", cx: number(x), cy: number(y), r: "3" }));
@@ -232,29 +410,40 @@ function showDrawing(): void {
   }
   // A wide line with no color above each wall, so that a finger can select the wall.
   for (const wall of drawing.walls) picture.append(line("walk-hit", wall.from, wall.to, wall.side));
+  for (const feature of drawing.features) picture.append(featureHit(feature));
 
   planBox.replaceChildren(picture);
   lastLevel = status.level;
   showActive();
 }
 
-/** This function marks the wall whose field has the focus. It changes no element of the drawing, so a click on a wall keeps its target. */
+/**
+ * This function marks the wall and the feature whose field has the focus. A feature with the focus shows its measured distance.
+ * The function changes no element of the drawing, so a click on a wall keeps its target.
+ */
 function showActive(): void {
   const side = activeSide === undefined ? undefined : String(activeSide);
   for (const element of planBox.querySelectorAll<SVGElement>(".walk-mark, .walk-label")) element.classList.toggle("walk-on", element.dataset["side"] === side);
+  for (const element of planBox.querySelectorAll<SVGElement>(".walk-feature")) element.classList.toggle("walk-on", activeFeature !== undefined && element.dataset["key"] === activeFeature);
 }
 
-// A click on a wall of the drawing goes to the field of its length.
+// A click on a wall of the drawing goes to the field of its length. A click on a feature goes to its first field.
 planBox.addEventListener("click", (event) => {
-  const side = event.target instanceof SVGElement ? event.target.dataset["side"] : undefined;
-  if (side === undefined) return;
-  const field = lengthField(Number(side));
+  const target = event.target instanceof SVGElement ? event.target : undefined;
+  const feature = target?.dataset["feature"];
+  const side = target?.dataset["side"];
+  const field = feature !== undefined ? featureField(feature) : side !== undefined ? lengthField(Number(side)) : null;
   field?.focus();
   field?.select();
 });
 
+/** This function gives the room that the page shows and saves: the room record with no feature that has an error. */
+function roomOf(): Room {
+  return shownRoom(result.room, faults);
+}
+
 function sceneOf(): Scene {
-  return { schema: SCENE_SCHEMA, room: result.room };
+  return { schema: SCENE_SCHEMA, room: roomOf() };
 }
 
 function showTheme(): void {
@@ -304,9 +493,11 @@ async function enterRoom(): Promise<void> {
 /** This function calculates the room of the draft and shows it. */
 function refresh(): void {
   result = expandSurvey(surveyOf(draft));
-  status = statusOf(draft, result);
+  faults = featureFaults(draft, result);
+  status = statusOf(draft, result, faults);
   showStatus();
   showFacts();
+  showFaults();
   showView();
   if (view === "room") viewer?.setScene(sceneOf());
   showDrawing();
@@ -354,6 +545,16 @@ form.addEventListener("input", (event) => {
   }
   if (part !== "value" && part !== "inches") return;
   const of = target.closest<HTMLElement>(".length")?.dataset["of"];
+  // A feature has a height too, so the page looks for a feature before the height of the room.
+  const featureKey = target.closest<HTMLElement>("li.feature")?.dataset["key"];
+  if (featureKey !== undefined) {
+    const feature = featureOf(draft, featureKey);
+    const field = FEATURE_FIELDS.find((item) => item === of);
+    if (feature === undefined || field === undefined) return;
+    const length: TypedLength = part === "value" ? { ...feature[field], value: target.value } : { ...feature[field], inches: target.value };
+    change(withFeature(draft, featureKey, field === "offset" ? { offset: length } : field === "width" ? { width: length } : field === "height" ? { height: length } : { sill: length }));
+    return;
+  }
   if (of === "height" || of === "thickness") {
     change({ ...draft, [of]: { ...draft[of], [part]: target.value } });
     return;
@@ -386,14 +587,53 @@ form.addEventListener("change", (event) => {
 });
 
 form.addEventListener("click", (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLButtonElement) || target.dataset["action"] !== "remove") return;
-  const key = keyOf(target);
-  if (key === undefined) return;
-  const index = draft.sides.findIndex((side) => side.key === key);
-  change(withoutSide(draft, key));
-  renderSides();
-  lengthField(Math.min(index, draft.sides.length - 1))?.focus();
+  const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-action]") : null;
+  const key = target === null ? undefined : keyOf(target);
+  if (target === null || key === undefined) return;
+  const action = target.dataset["action"];
+  const feature = target.closest<HTMLElement>("li.feature")?.dataset["key"];
+  if (action === "remove") {
+    const index = draft.sides.findIndex((side) => side.key === key);
+    change(withoutSide(draft, key));
+    renderSides();
+    lengthField(Math.min(index, draft.sides.length - 1))?.focus();
+    return;
+  }
+  if (action === "features") {
+    const kinds = target.parentElement?.querySelector<HTMLElement>(".feature-kinds");
+    if (kinds === null || kinds === undefined) return;
+    kinds.hidden = !kinds.hidden;
+    target.setAttribute("aria-expanded", String(!kinds.hidden));
+    if (!kinds.hidden) kinds.querySelector("button")?.focus();
+    return;
+  }
+  if (action === "add-feature") {
+    const kind = FEATURE_KINDS.find((item) => item === target.dataset["kind"]);
+    if (kind === undefined) return;
+    const before = new Set(draft.sides.flatMap((side) => side.features.map((item) => item.key)));
+    change(withNewFeature(draft, key, kind));
+    renderSides();
+    const added = draft.sides.flatMap((side) => side.features).find((item) => !before.has(item.key));
+    if (added !== undefined) featureField(added.key)?.focus();
+    return;
+  }
+  if (feature === undefined) return;
+  if (action === "remove-feature") {
+    change(withoutFeature(draft, feature));
+    renderSides();
+    sidesList.querySelector<HTMLElement>(`li.side[data-key="${CSS.escape(key)}"] [data-action="features"]`)?.focus();
+    return;
+  }
+  if (action === "swap") {
+    // The typed number stays: only its corner changes.
+    const from = featureOf(draft, feature)?.from;
+    if (from === undefined) return;
+    change(withFeature(draft, feature, { from: from === "start" ? "end" : "start" }));
+    renderSides();
+    const field = featureField(feature);
+    field?.focus();
+    field?.select();
+  }
 });
 
 byId("add").addEventListener("click", () => {
@@ -412,19 +652,21 @@ form.addEventListener("keydown", (event) => {
   if (next === undefined) return;
   next.focus({ preventScroll: true });
   if (next instanceof HTMLInputElement) next.select();
-  // The next wall goes below the drawing, which stays at the top of a small screen.
-  (next.closest("li.side") ?? next).scrollIntoView({ block: "nearest" });
+  // The next wall or feature goes below the drawing, which stays at the top of a small screen.
+  (next.closest("li.feature") ?? next.closest("li.side") ?? next).scrollIntoView({ block: "nearest" });
 });
 
 form.addEventListener("focusin", (event) => {
-  const item = event.target instanceof Element ? event.target.closest<HTMLElement>("li.side") : null;
-  const side = item?.dataset["side"];
+  const target = event.target instanceof Element ? event.target : null;
+  const side = target?.closest<HTMLElement>("li.side")?.dataset["side"];
   activeSide = side === undefined ? undefined : Number(side);
+  activeFeature = target?.closest<HTMLElement>("li.feature")?.dataset["key"];
   showActive();
 });
 
 form.addEventListener("focusout", () => {
   activeSide = undefined;
+  activeFeature = undefined;
   showActive();
 });
 
@@ -470,7 +712,7 @@ byId("save-survey").addEventListener("click", () => {
 });
 
 byId("save-room").addEventListener("click", () => {
-  download(fileName(draft, "room"), JSON.stringify(result.room, null, 2));
+  download(fileName(draft, "room"), JSON.stringify(roomOf(), null, 2));
 });
 
 /** The action that the visitor confirms. */
@@ -539,7 +781,7 @@ async function openFile(file: File): Promise<void> {
   const survey = parsed.data;
   replaceRoom("This replaces the room of the page with the room of the file.", "Replace the room", () => {
     load(draftOf(survey));
-    keepNote.textContent = hasMoreThanWalls(survey) ? "The page shows the walls of the file. It does not keep openings, outlets and checks yet." : "The page shows the room of the file.";
+    keepNote.textContent = hasMore(survey) ? "The page shows the walls, the doors, the windows and the outlets of the file. It does not keep the other data of the file yet." : "The page shows the room of the file.";
   });
 }
 

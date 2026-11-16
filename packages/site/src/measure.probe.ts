@@ -17,6 +17,12 @@ const walls = (): number => $$("#sides li.side").length;
 const lengthField = (side: number): HTMLInputElement | null => document.querySelector<HTMLInputElement>(`#sides li[data-side="${String(side)}"] .length input`);
 const fieldsOf = (side: number): string => $(`#sides li[data-side="${String(side)}"] .length`)?.dataset["fields"] ?? "";
 const fact = (name: string): string => $$("#facts div").find((row) => row.querySelector("dt")?.textContent === name)?.querySelector("dd")?.textContent ?? "";
+/** The doors, the windows, the openings and the outlets of the form. */
+const features = (): number => $$("#sides li.feature").length;
+/** This function gives the first field of a length of the first feature of a kind. */
+const featureField = (kind: string, of: string): HTMLInputElement | null => document.querySelector<HTMLInputElement>(`#sides li.feature[data-kind="${kind}"] .length[data-of="${of}"] input`);
+/** This function gives the features of a kind in the drawing. */
+const marks = (kind: string): HTMLElement[] => $$(`#plan-box .walk-feature[data-kind="${kind}"]`);
 
 /** This function clicks a control. A page with no such control fails a check, and the probe continues. */
 const press = (selector: string): void => {
@@ -47,12 +53,18 @@ check("the page draws a room at its start", drawing, "The box of the drawing has
 const height = (drawing as Element | null)?.getBoundingClientRect().height ?? 0;
 check("the drawing has a height of 160 pixels or more", height >= 160, height);
 check("a first visit shows the example room, and its walk closes", $("#example-note")?.hidden === false && level() === "closed", status());
+check(
+  "the example room has a door, a window and an outlet",
+  features() === 3 && $$("#plan-box .walk-feature").length === 3 && fact("Doors") === "1" && fact("Windows") === "1" && fact("Outlets") === "1",
+  [features(), $$("#plan-box .walk-feature").length, text("#facts")],
+);
 
 // A new room in meters: four walls with no lengths. The page asks first when a room has numbers from an earlier view.
 press("#clear");
 if ($("#confirm")?.hidden === false) press("#confirm-yes");
 setUnits("m");
 check("a new room has four walls and asks for the first length", walls() === 4 && level() === "typing" && title() === "Type the length of wall 1.", status());
+check("a new room has no door, no window and no outlet", features() === 0 && $$("#plan-box .walk-feature").length === 0 && fact("Doors") === "", [features(), text("#facts")]);
 check("a length in meters has one field", fieldsOf(0) === "1" && text('#sides li[data-side="0"] .unit') === "m", fieldsOf(0));
 check("a room with no closed walk has no record and no 3D view", disabled("#save-room") && disabled("#view-room"), [disabled("#save-room"), disabled("#view-room")]);
 
@@ -80,6 +92,70 @@ check("the page tells the numbers of the room", fact("Walls") === "6" && fact("A
 check("a closed room has a record", !disabled("#save-room"), disabled("#save-room"));
 check("the example note goes when the room has numbers of the visitor", $("#example-note")?.hidden === true);
 
+// A door on the first wall. The button of a wall shows one button for each kind of feature.
+const wallOne = '#sides li[data-side="0"]';
+const door = '#sides li.feature[data-kind="door"]';
+const exact = "The walk ends exactly at its start.";
+press(`${wallOne} [data-action="features"]`);
+check(
+  "the button of a wall shows the kinds of features",
+  $(`${wallOne} .feature-kinds`)?.hidden === false && $(`${wallOne} [data-action="features"]`)?.getAttribute("aria-expanded") === "true" && $$(`${wallOne} [data-action="add-feature"]`).length === 4,
+  $$(`${wallOne} [data-action="add-feature"]`).length,
+);
+press(`${wallOne} [data-action="add-feature"][data-kind="door"]`);
+check(
+  "a new door asks for its distance from the corner",
+  features() === 1 && text(`${door} .feature-name`) === "Door 1" && level() === "closed" && text("#status-text") === "Type the distance from the corner of door 1 on wall 1.",
+  status(),
+);
+check("a new door has the focus in its first field", document.activeElement !== null && document.activeElement === featureField("door", "offset"), document.activeElement?.getAttribute("aria-label"));
+check("the height of a door shows its usual value", featureField("door", "height")?.placeholder === "2.03", featureField("door", "height")?.placeholder);
+check("a door with no numbers is not in the drawing", marks("door").length === 0 && fact("Doors") === "1", [marks("door").length, fact("Doors")]);
+enter(featureField("door", "offset"), "1");
+check("a door asks for its width next", text("#status-text") === "Type the width of door 1 on wall 1.", status());
+enter(featureField("door", "width"), "0.9");
+check("a door with its numbers is in the drawing, and the room has no fault", marks("door").length === 1 && marks("door")[0]?.dataset["fault"] === undefined && text("#status-text") === exact, status());
+
+// A door that is larger than the space of its wall. The room stays closed, and the page tells the fault at the fields of the door.
+enter(featureField("door", "offset"), "4.5");
+check(
+  "a door that does not fit tells the fault at its fields",
+  $(door)?.dataset["fault"] === "error" && $(`${door} .feature-note`)?.hidden === false && text(`${door} .feature-note`) === "It does not fit in the wall.",
+  text(`${door} .feature-note`),
+);
+check(
+  "the status and the drawing tell the fault, and the room stays closed",
+  level() === "closed" && text("#status-text") === "Door 1 does not fit in wall 1." && marks("door")[0]?.dataset["fault"] === "error" && !disabled("#save-room"),
+  status(),
+);
+enter(featureField("door", "offset"), "1");
+check("the correct distance removes the fault", $(door)?.dataset["fault"] === undefined && $(`${door} .feature-note`)?.hidden === true && text("#status-text") === exact, status());
+
+// The distance of a feature can start at each corner of its wall. The typed number stays.
+const holeOf = (): string => {
+  const hole = $(`#plan-box .walk-feature[data-kind="door"] .walk-hole`);
+  return `${hole?.getAttribute("x1") ?? ""} ${hole?.getAttribute("y1") ?? ""}`;
+};
+const nearStart = holeOf();
+check("the distance of a door starts at the corner with the wall before it", text(`${door} .field-name`).startsWith("From the corner with wall 6"), text(`${door} .field-name`));
+press(`${door} [data-action="swap"]`);
+check(
+  "the other corner keeps the typed number and moves the door",
+  featureField("door", "offset")?.value === "1" && text(`${door} .field-name`).startsWith("From the corner with wall 2") && holeOf() !== nearStart && text("#status-text") === exact,
+  [featureField("door", "offset")?.value, text(`${door} .field-name`), nearStart, holeOf()],
+);
+
+// An outlet on the second wall. It needs only its distance, because its height above the floor has a usual value.
+const wallTwo = '#sides li[data-side="1"]';
+press(`${wallTwo} [data-action="features"]`);
+press(`${wallTwo} [data-action="add-feature"][data-kind="outlet"]`);
+check("a new outlet asks for its distance from the corner", features() === 2 && text("#status-text") === "Type the distance from the corner of outlet 1 on wall 2.", status());
+enter(featureField("outlet", "offset"), "1.5");
+check("an outlet with its distance is in the drawing", marks("outlet").length === 1 && fact("Outlets") === "1" && fact("Doors") === "1" && text("#status-text") === exact, [marks("outlet").length, text("#facts"), status()]);
+$("#plan-box .walk-touch[data-feature]")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+check("a click on an outlet of the drawing goes to its first field", document.activeElement !== null && document.activeElement === featureField("outlet", "offset"), document.activeElement?.getAttribute("aria-label"));
+if (document.hasFocus()) check("the drawing shows the measured distance of the feature with the focus", await until(() => $('#plan-box .walk-feature[data-kind="outlet"].walk-on'), 1000));
+
 // A click on a wall of the drawing goes to its field. An element of a drawing has no function `click`.
 $('#plan-box .walk-hit[data-side="2"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 check("a click on a wall of the drawing goes to the field of its length", document.activeElement !== null && document.activeElement === lengthField(2), document.activeElement?.getAttribute("aria-label"));
@@ -105,8 +181,10 @@ check("a square corner hides the field of the angle", angle?.closest<HTMLElement
 setUnits("ft-in");
 check("feet and inches have two fields", fieldsOf(0) === "2" && lengthField(0)?.value === "16" && $("#fractions")?.hidden === false, [fieldsOf(0), lengthField(0)?.value]);
 check("the room stays closed in feet and inches", level() === "closed" && walls() === 6, status());
+check("a change of the units converts the lengths of a door", $(`${door} .length[data-of="offset"]`)?.dataset["fields"] === "2" && featureField("door", "offset")?.value === "3" && $(door)?.dataset["fault"] === undefined, [featureField("door", "offset")?.value, status()]);
 setUnits("m");
 check("the first units show the typed numbers again", fieldsOf(0) === "1" && lengthField(0)?.value === "5" && lengthField(5)?.value === "4", [lengthField(0)?.value, lengthField(5)?.value]);
+check("the first units show the typed numbers of a door again", featureField("door", "offset")?.value === "1" && featureField("door", "width")?.value === "0.9", [featureField("door", "offset")?.value, featureField("door", "width")?.value]);
 
 // The removal of a wall opens the walk.
 press('#sides li[data-side="5"] .remove');
@@ -138,15 +216,25 @@ if ($("#room-box canvas") !== null) {
 
 // The page keeps the room in the browser.
 enter(document.querySelector<HTMLInputElement>("#name"), "Main bedroom");
-const keptRoom = (): { readonly name?: string; readonly sides?: readonly unknown[] } | undefined => {
+interface KeptRoom {
+  readonly name?: string;
+  readonly sides?: readonly { readonly features?: readonly { readonly kind?: string }[] }[];
+}
+const keptRoom = (): KeptRoom | undefined => {
   try {
-    const kept = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null") as { readonly rooms?: readonly { readonly name?: string; readonly sides?: readonly unknown[] }[] } | null;
+    const kept = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null") as { readonly rooms?: readonly KeptRoom[] } | null;
     return kept?.rooms?.[0];
   } catch {
     return undefined;
   }
 };
+const keptKinds = (): string => (keptRoom()?.sides ?? []).map((side) => (side.features ?? []).map((feature) => feature.kind ?? "").join("+")).join(",");
 check("the page keeps the room in the browser", keptRoom()?.name === "Main bedroom" && keptRoom()?.sides?.length === 6, localStorage.getItem(STORE_KEY)?.slice(0, 120));
+check("the page keeps the door and the outlet with their walls", keptKinds() === "door,outlet,,,,", keptKinds());
+
+// The removal of a feature.
+press(`${door} [data-action="remove-feature"]`);
+check("the removal of a door removes its fields, its symbol and its number", features() === 1 && marks("door").length === 0 && marks("outlet").length === 1 && fact("Doors") === "" && keptKinds() === ",outlet,,,,", [features(), text("#facts"), keptKinds()]);
 
 // A new room removes typed numbers, so the page asks first.
 press("#clear");
@@ -155,7 +243,7 @@ press("#confirm-no");
 check("the answer no keeps the numbers", $("#confirm")?.hidden === true && walls() === 6 && lengthField(0)?.value === "5", [walls(), lengthField(0)?.value]);
 press("#clear");
 press("#confirm-yes");
-check("the answer yes gives a new room", $("#confirm")?.hidden === true && walls() === 4 && lengthField(0)?.value === "" && level() === "typing", [walls(), status()]);
+check("the answer yes gives a new room", $("#confirm")?.hidden === true && walls() === 4 && features() === 0 && lengthField(0)?.value === "" && level() === "typing", [walls(), features(), status()]);
 
 // The next view of the check starts as a first visit, with the example room.
 localStorage.removeItem(STORE_KEY);
