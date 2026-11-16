@@ -81,10 +81,13 @@ if (canvas !== null) {
   // The part of the cells that have the same name in two scans, from 0 to 1.
   const same = (a: readonly string[], b: readonly string[]): number => a.filter((name, index) => name === b[index]).length / a.length;
 
-  let first: readonly string[] = [];
+  // The first scan is the scan of a picture at rest: two scans in sequence are equal.
+  let first: readonly string[] = scan();
   const found = await until(() => {
-    first = scan();
-    return new Set(first.filter((name) => name !== "")).size >= 3;
+    const next = scan();
+    const atRest = same(next, first) === 1;
+    first = next;
+    return atRest && new Set(first.filter((name) => name !== "")).size >= 3;
   }, 5000);
   check("the pointer finds the parts of the room in the 3D picture", found, [...new Set(first)]);
   check("the name goes when the pointer leaves the picture", text("#readout") === "", text("#readout"));
@@ -118,16 +121,17 @@ if (canvas !== null) {
   let turned: readonly string[] = [];
   const turns = await until(() => {
     turned = scan();
-    return same(turned, first) < 0.9;
+    return same(turned, first) < 1;
   }, 5000);
   check("a drag turns the room", turns, same(turned, first));
 
   // The room continues to turn for a moment after a drag. The button "Corner view" stops the turn, and the first view comes back.
+  // The view is exact, so each cell has the part of the first scan.
   click("#view-home");
   let back: readonly string[] = [];
   const returns = await until(() => {
     back = scan();
-    return same(back, first) >= 0.95;
+    return same(back, first) === 1;
   }, 5000);
   check("the button Corner view brings the first view back after a drag", returns, same(back, first));
 }
