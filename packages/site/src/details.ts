@@ -1,5 +1,6 @@
+import { circuitStates, outletLevels, type ElectricalLayer, type LoadLevel } from "@mark1russell7/electrical";
 import { regionArea } from "@mark1russell7/layout-contract";
-import { circuitStates, levelShape, outletLevels, type LengthUnit, type LevelShape, type LoadLevel, type OpeningKind, type Scene, type SolidKind } from "@mark1russell7/room-view";
+import { levelShape, type LengthUnit, type LevelShape, type OpeningKind, type Scene, type SolidKind } from "@mark1russell7/room-view";
 
 /** A record of a scene that the page shows: the kind of its solids, and its `id` in the scene. */
 export interface PartRecord {
@@ -251,17 +252,23 @@ export function roomDetails(scene: Scene): Details {
   };
 }
 
-/** This function gives each circuit of a scene as text and numbers for a meter. */
-export function circuitRows(scene: Scene): readonly CircuitRow[] {
-  return circuitStates(scene).map((state): CircuitRow => {
-    const limit = `${formatNumber(state.limit)} W`;
+/**
+ * This function gives each circuit of an electrical layer as text and numbers for a meter. The load is the known load of the circuit.
+ * A row does not name the feeds with no watts. The layer of a `scene/1` has the total load of each circuit, and no watts of a feed.
+ * A circuit with no limit has only its load, and the status tells that it has no limit.
+ */
+export function circuitRows(layer: ElectricalLayer): readonly CircuitRow[] {
+  return circuitStates(layer).map((state): CircuitRow => {
+    const ratio = state.ratio ?? 0;
+    const limit = state.limit === undefined ? undefined : `${formatNumber(state.limit)} W`;
+    const load = `${formatNumber(state.watts)} W`;
     return {
       id: state.circuit,
-      name: circuitName(scene, state.circuit),
+      name: layer.circuits?.find((circuit) => circuit.id === state.circuit)?.name ?? state.circuit,
       level: state.level,
-      fill: Math.min(1, Math.max(0, state.ratio)),
-      figure: state.level === "unknown" ? `The limit is ${limit}` : `${formatNumber(state.watts)} of ${limit}, ${formatNumber(state.ratio * 100)}% of the limit`,
-      status: STATUS[state.level],
+      fill: Math.min(1, Math.max(0, ratio)),
+      figure: limit === undefined ? load : state.level === "unknown" ? `The limit is ${limit}` : `${formatNumber(state.watts)} of ${limit}, ${formatNumber(ratio * 100)}% of the limit`,
+      status: limit === undefined ? "No limit" : STATUS[state.level],
       records: [
         ...state.outlets.map((source): PartRecord => ({ kind: "outlet", source })),
         ...state.objects.map((source): PartRecord => ({ kind: "object", source })),
@@ -273,10 +280,10 @@ export function circuitRows(scene: Scene): readonly CircuitRow[] {
 /** The levels in the sequence of a legend: the levels with a load first, then the level with no load value. */
 const LEGEND_LEVELS: readonly LoadLevel[] = ["ok", "near", "over", "unknown"];
 
-/** This function gives the legend of the outlets of a scene: one line for each level, with the sign that the viewer shows. */
-export function legendRows(scene: Scene): readonly LegendRow[] {
-  const levels = outletLevels(scene);
-  const outlets = scene.room.outlets ?? [];
+/** This function gives the legend of the outlets of an electrical layer: one line for each level, with the sign that the viewer shows. */
+export function legendRows(layer: ElectricalLayer): readonly LegendRow[] {
+  const levels = outletLevels(layer);
+  const outlets = layer.outlets ?? [];
   return LEGEND_LEVELS.map((level): LegendRow => {
     const count = outlets.filter((outlet) => (levels.get(outlet.id) ?? "unknown") === level).length;
     return { level, shape: levelShape(level), label: STATUS[level], count };

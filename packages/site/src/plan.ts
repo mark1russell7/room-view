@@ -1,4 +1,5 @@
-import { levelShape, outletLevels, planShapes, SHAPE_OUTLINES, shapeRing, type LevelShape, type PlanShape } from "@mark1russell7/room-view";
+import { fromSceneV1, outletLevels } from "@mark1russell7/electrical";
+import { levelShape, planShapes, SHAPE_OUTLINES, shapeRing, type LevelShape, type PlanShape } from "@mark1russell7/room-view";
 import type { RoomViewer, RoomViewerOptions, ViewerPick, ViewerRecord, ViewerTheme } from "@mark1russell7/room-view/three";
 
 /** The part of a viewer that the page uses. The 3D viewer and the plan have these functions. */
@@ -50,7 +51,7 @@ export function signPath(shape: PlanShape, sign: LevelShape, factor: number): st
  */
 export function createPlanView(container: HTMLElement, options: RoomViewerOptions & { readonly theme: ViewerTheme }): RoomStage {
   const { scene } = options;
-  const levels = outletLevels(scene, options.loads);
+  const levels = outletLevels(fromSceneV1(scene), options.loads);
   const signOf = (shape: PlanShape): LevelShape => levelShape(levels.get(shape.source));
   // An outlet is above each other shape, so that a wall does not hide it.
   const cut = planShapes(scene, { ...options.solids, cut: CUT });
