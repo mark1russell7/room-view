@@ -154,24 +154,32 @@ Two procedures packages wrap this API, in the monorepo of the universal client: 
 - `electrical.limit`: a breaker and a voltage give the limit of a circuit.
 - `electrical.loads`: an electrical layer gives the load of each circuit against its limit.
 
+The input names the add-ons in the field `addOns`, a list of schema names: `{ "scene": {}, "addOns": ["electrical/1"] }`.
+
+- The list has no duplicates, and its order has no effect. An unknown name is a validation error that names it.
+- The output lists the findings and the marks by add-on, then by `id`. Thus equal inputs give equal JSON.
+- Each procedure reads nothing and writes nothing.
+
 ## The versions
 
-R7 changes the public API, so `@mark1russell7/room-view` goes to 0.2.0. Before 1.0.0, a break raises MINOR.
+Step 2 adds to the public API, so it is a PATCH: before 1.0.0, a feature raises PATCH. Step 6 removes records from the public API, so `@mark1russell7/room-view` goes to 0.2.0: before 1.0.0, a break raises MINOR.
 
 - `room/1` and `scene/1` stay readable. `fromSceneV1` of the electrical add-on gives a `scene/2` and an electrical layer.
 - The core rejects `outlets` in a `room/2` with a finding that names `fromSceneV1`.
 
 ## The steps
 
+The first steps add, and the last step removes. Thus each step keeps the page and the viewer in operation, and no step waits for a different step of a different maintainer.
+
 1. This design, and a review of the marks by the maintainer of `@mark1russell7/visuals`.
-2. The core: anchors, layers, the add-on contract, `room/2` and `scene/2`.
-3. The electrical add-on, with `fromSceneV1`. The tests of the electrical checks move with it.
+2. The core adds anchors, layers and the add-on contract. `Scene.layers` is a new optional field, so `scene/1` stays valid. This step is a feature, and it removes nothing.
+3. The electrical add-on, with `fromSceneV1` and the circuit math. The electrical checks have their tests in the add-on, and the core checks of outlets stay until step 6.
 4. `cluster-design` imports the circuit math from `@mark1russell7/electrical`, and it removes its copy.
-5. The site: the form and the store get the topic fields from the add-ons.
-6. The viewer draws marks from `@mark1russell7/visuals`.
+5. The site: the form and the store get the topic fields from the add-ons. The viewer draws marks from `@mark1russell7/visuals`, in the move of the viewer to that package.
+6. The core removes `outlets`, `circuits`, `loads` and `PlacedObject.outlet`, and it gives `room/2` and `scene/2`. This step is the break of the version.
 7. The procedures packages.
 
 ## The open questions
 
 - A run along two walls and a ceiling needs a path of anchors. The first version has runs on one surface.
-- A scene with many add-ons needs one order of their marks in the picture. The first version draws the layers in the order of the list of the host.
+- Two marks at one point hide each other. The marks have one order, by add-on and then by `id`, and the viewer decides how it shows two marks at one point.
