@@ -71,7 +71,7 @@ export function wallPoint(frame: WallFrame, along: number, across: number): Poin
 
 /**
  * This function gives the transform from the frame of a wall to the room.
- * In the frame of a wall, x is the distance along the wall, y is the distance across it, and z is the height above the floor.
+ * In the frame of a wall, x is the distance along the wall and y is the distance across it. The height above the floor is z.
  */
 export function wallTransform(frame: WallFrame): Transform3 {
   return {

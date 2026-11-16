@@ -3,7 +3,7 @@ import type { Room, Scene } from "./room.ts";
 /**
  * A sample room in meters. It is not a real room.
  *
- * The outline has the shape of the letter L, and each outer wall has its line on the inner face: `side` is `right` on a counter-clockwise outline.
+ * The outline is an L shape. Each outer wall has its line on the inner face: `side` is `right` on a counter-clockwise outline.
  * A short wall makes a nook at the top. The floor goes around that wall.
  */
 export const SAMPLE_ROOM: Room = {

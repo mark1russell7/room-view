@@ -89,7 +89,7 @@ function solidRing(ring: Ring): Ring {
   return regionArea({ kind: "polygon", points: ring }) > EMPTY_AREA ? ring : [];
 }
 
-/** This function tells if the model makes a wall: the wall has an outline in the plan, and its height is above 0 and in the range of the model. */
+/** This function tells if the model makes a wall. Such a wall has an outline in the plan, and its height is above 0 and in the range of the model. */
 function isMade(frame: WallFrame): boolean {
   return wallHasOutline(frame) && frame.height > 0 && lengthsInRange(frame.height);
 }
@@ -106,7 +106,7 @@ interface Hole {
 
 /**
  * This function gives the openings of one wall that the model can make, in sequence along the wall.
- * It skips an opening with no size, an opening out of the straight part of the wall and an opening that overlaps the opening before it.
+ * It skips an opening with no size and an opening out of the straight part of the wall. It also skips an opening that overlaps the opening before it.
  */
 function holesOf(room: Room, frame: WallFrame, footprint: WallFootprint, scale: number): readonly Hole[] {
   const [clearFrom, clearTo] = footprint.clear;
@@ -152,7 +152,7 @@ function slice(frame: WallFrame, ring: Ring, from: number, to: number): Ring {
   return solidRing(withoutRepeats(part));
 }
 
-/** This function gives the solids of one wall: the parts between its openings, the part below and above each opening, and the glass of each window. */
+/** This function gives the solids of one wall: the parts between, below and above its openings, and the glass of each window. */
 function wallSolids(room: Room, frame: WallFrame, footprint: WallFootprint, scale: number, depth: number): readonly Solid[] {
   if (footprint.ring.length < 3 || !isMade(frame)) return [];
   const walls: Solid[] = [];
@@ -192,11 +192,12 @@ function wallSolids(room: Room, frame: WallFrame, footprint: WallFootprint, scal
 }
 
 /**
- * This function gives the 3D model of a room as a list of solids: the floors, the walls with their openings, the glass of the windows and the outlets.
+ * This function gives the 3D model of a room as a list of solids.
+ * The solids are the floors, the walls with their openings, the glass of the windows and the outlets.
  *
- * The function does not stop for a record with a fault. It skips each part that it cannot make: for example, a wall with no length,
- * a part with a number that is not finite or not in the range of the model (`LARGEST_LENGTH`), or an opening on a wall
- * that the room does not have. `checkRoom` tells each fault.
+ * The function does not stop for a record with a fault. It skips each part that it cannot make.
+ * One example is a wall with no length. A second example is an opening on a wall that the room does not have.
+ * A third example is a part with a number that is not finite or not in the range of the model (`LARGEST_LENGTH`). `checkRoom` tells each fault.
  */
 export function roomSolids(room: Room, options: SolidOptions = {}): readonly Solid[] {
   const scale = metersPer(room.unit);
@@ -244,8 +245,8 @@ export function roomSolids(room: Room, options: SolidOptions = {}): readonly Sol
 /**
  * This function gives the transform of each placed object of a scene, from the frame of the object to the room, in meters.
  * The origin of the frame of an object is the center of its bottom. An object with a parent gets the transform of the parent first.
- * An object has no transform when a parent is not in the scene, when its parents make a loop,
- * or when a number of its place is not finite or not in the range of the model.
+ * An object has no transform when a parent is not in the scene, or when its parents make a loop.
+ * An object also has no transform when one value of its place is not finite or not in the range of the model.
  */
 export function objectTransforms(scene: Scene): ReadonlyMap<string, Transform3> {
   const scale = metersPer(scene.room.unit);
@@ -300,7 +301,7 @@ export function sceneSolids(scene: Scene, options: SolidOptions = {}): readonly 
   return solids;
 }
 
-/** This function gives the corners of a solid in the room: 8 for a box, and 2 for each corner of the outline of a prism. */
+/** This function gives the corners of a solid in the room. A box has 8, and a prism has 2 for each corner of its outline. */
 export function solidCorners(solid: Solid): readonly Point3[] {
   const shape = solid.shape;
   if (shape.kind === "box") return box3Corners(shape.box).map((corner) => transformPoint3(shape.transform, corner));

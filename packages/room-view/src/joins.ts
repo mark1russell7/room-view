@@ -37,7 +37,7 @@ const PARALLEL = 1e-9;
 /** A corner of an outline with a turn of this value or less is flat, so the outline does not need it. */
 const FLAT = 1e-12;
 
-/** Two points at this distance or less are one point, and a point at this distance or less from a face of a wall is on the face. */
+/** Two points at this distance or less are one point. A point at this distance or less from a face of a wall is on the face. */
 const SAME = 1e-9;
 
 /**
@@ -166,8 +166,8 @@ function faceRange(frame: WallFrame, ring: Ring, offset: number): readonly [numb
 /**
  * This function gives the outline of each wall in the plan, in the sequence of the frames.
  *
- * Two or more ends of walls at one point make a corner. At a corner, the faces of the walls that are adjacent meet at a point,
- * and each wall ends at the lines from the corner to those points. Thus two walls make a miter, and the walls of a corner do not overlap.
+ * Two or more ends of walls at one point make a corner. At a corner, the faces of the walls that are adjacent meet at a point.
+ * Each wall ends at the lines from the corner to those points. Thus two walls make a miter, and the walls of a corner do not overlap.
  * An end with no other end at its point is square. An end on the face of a different wall is also square: the two walls touch.
  * A wall with no outline (`wallHasOutline`) gets an empty outline, and it makes no corner.
  */

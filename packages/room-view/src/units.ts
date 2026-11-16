@@ -17,7 +17,7 @@ export function metersPer(unit: LengthUnit): number {
  */
 export const LARGEST_LENGTH = 1e6;
 
-/** This function tells if each value is a length that the model can use: a finite number of meters, with a size of `LARGEST_LENGTH` or less. */
+/** This function tells if the model can use each value as a length. Such a value is a finite number of meters, with a size of `LARGEST_LENGTH` or less. */
 export function lengthsInRange(...meters: readonly number[]): boolean {
   return meters.every((value) => Math.abs(value) <= LARGEST_LENGTH);
 }
