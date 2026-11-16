@@ -1,5 +1,5 @@
 import { regionArea } from "@mark1russell7/layout-contract";
-import { circuitStates, type LengthUnit, type LoadLevel, type OpeningKind, type Scene, type SolidKind } from "@mark1russell7/room-view";
+import { circuitStates, levelShape, outletLevels, type LengthUnit, type LevelShape, type LoadLevel, type OpeningKind, type Scene, type SolidKind } from "@mark1russell7/room-view";
 
 /** A record of a scene that the page shows: the kind of its solids, and its `id` in the scene. */
 export interface PartRecord {
@@ -37,6 +37,17 @@ export interface CircuitRow {
   readonly status: string;
   /** The outlets of the circuit, and the objects that take power from them. */
   readonly records: readonly PartRecord[];
+}
+
+/** One line of the legend of the outlets: a level, its sign and the number of the outlets with the level. */
+export interface LegendRow {
+  readonly level: LoadLevel;
+  /** The shape of the sign of the level. */
+  readonly shape: LevelShape;
+  /** The level in plain words. */
+  readonly label: string;
+  /** The number of the outlets of the scene with the level. An outlet with no circuit has the level `unknown`. */
+  readonly count: number;
 }
 
 /** A part of the room in a list. */
@@ -256,6 +267,19 @@ export function circuitRows(scene: Scene): readonly CircuitRow[] {
         ...state.objects.map((source): PartRecord => ({ kind: "object", source })),
       ],
     };
+  });
+}
+
+/** The levels in the sequence of a legend: the levels with a load first, then the level with no load value. */
+const LEGEND_LEVELS: readonly LoadLevel[] = ["ok", "near", "over", "unknown"];
+
+/** This function gives the legend of the outlets of a scene: one line for each level, with the sign that the viewer shows. */
+export function legendRows(scene: Scene): readonly LegendRow[] {
+  const levels = outletLevels(scene);
+  const outlets = scene.room.outlets ?? [];
+  return LEGEND_LEVELS.map((level): LegendRow => {
+    const count = outlets.filter((outlet) => (levels.get(outlet.id) ?? "unknown") === level).length;
+    return { level, shape: levelShape(level), label: STATUS[level], count };
   });
 }
 

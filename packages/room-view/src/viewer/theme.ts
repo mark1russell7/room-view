@@ -1,3 +1,5 @@
+import type { LoadLevel } from "../loads.ts";
+
 /**
  * The colors of a viewer. Each color is a CSS hex color, for example `#22364a`.
  * The viewer has no background: the page shows behind the model.
@@ -12,7 +14,12 @@ export interface ViewerTheme {
   readonly glass: string;
   /** The part of the glass that is not clear, from 0 to 1. */
   readonly glassOpacity: number;
+  /** The color of an outlet with no circuit. */
   readonly outlet: string;
+  /** The color of the outlets of a circuit at each level of its load. */
+  readonly levels: Readonly<Record<LoadLevel, string>>;
+  /** The color of the line around the marker of an outlet. It is the color of the page, so a marker is clear on each solid. */
+  readonly halo: string;
   /** The color of a placed object whose kind has no color in `objects`. */
   readonly object: string;
   /** The color of the placed objects of each kind. The key is the field `kind` of a placed object. */
@@ -31,7 +38,9 @@ export const LIGHT_THEME: ViewerTheme = {
   wall: "#fcfcfb",
   glass: "#8fc4e8",
   glassOpacity: 0.35,
-  outlet: "#e2a400",
+  outlet: "#55677a",
+  levels: { unknown: "#55677a", ok: "#1f5fa8", near: "#d9662f", over: "#c62f2f" },
+  halo: "#ffffff",
   object: "#b8c0c8",
   objects: { desk: "#c9b596", sofa: "#8fa3b5", rack: "#3d4954", computer: "#5b6d7e", display: "#2c3640" },
   sky: "#ffffff",
@@ -46,7 +55,9 @@ export const DARK_THEME: ViewerTheme = {
   wall: "#1f4a73",
   glass: "#9fd0ff",
   glassOpacity: 0.25,
-  outlet: "#ffd24a",
+  outlet: "#a9bfd4",
+  levels: { unknown: "#a9bfd4", ok: "#6fb3f2", near: "#f5a962", over: "#f0625f" },
+  halo: "#0e2740",
   object: "#2a5580",
   objects: { desk: "#2a5a8a", sofa: "#28527c", rack: "#16324e", computer: "#3a74ad", display: "#122a42" },
   sky: "#ffffff",

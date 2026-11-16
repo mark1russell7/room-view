@@ -31,6 +31,10 @@
     <div class="view">
       <div id="viewer" class="viewer"></div>
       <p id="readout" class="readout" aria-hidden="true"></p>
+      <div class="legend">
+        <span id="legend-title" class="legend-title">Outlets, by the load of their circuit</span>
+        <ul id="legend" class="legend-list" aria-labelledby="legend-title"></ul>
+      </div>
       <div class="view-bar">
         <div id="views" class="views" role="group" aria-label="View">
           <button id="view-home" class="tool" type="button">Corner view</button>
@@ -47,7 +51,7 @@
   <div class="below">
     <section aria-labelledby="circuits-title">
       <h2 id="circuits-title">Circuits</h2>
-      <p class="section-note">Each outlet is on a circuit, and each circuit has a limit. Select a circuit to see its outlets and the machines on them. The line on a meter is at 80% of the limit.</p>
+      <p class="section-note">Each outlet is on a circuit, and each circuit has a limit. Select a circuit to see its outlets and the machines on them. A line goes from each outlet to its machines. The line on a meter is at 80% of the limit.</p>
       <ul id="circuits" class="meters"></ul>
     </section>
 

@@ -1,10 +1,11 @@
 import type { Point3 } from "@mark1russell7/layout-contract";
-import { DirectionalLight, HemisphereLight, PerspectiveCamera, Raycaster, Scene as World, Vector2, WebGLRenderer, type Object3D } from "three";
+import { DirectionalLight, HemisphereLight, PerspectiveCamera, Raycaster, Scene as World, Vector2, Vector3, WebGLRenderer, type Object3D } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import type { LoadOptions } from "../loads.ts";
 import type { Scene } from "../room.ts";
 import type { SolidKind, SolidOptions } from "../solids.ts";
 import { hidingWalls } from "./fade.ts";
-import { buildModel, disposeModel, paintPart, recordName, type ModelPart, type PartMark, type RoomModel } from "./model.ts";
+import { buildModel, disposeModel, paintLink, paintPart, recordName, type ModelPart, type PartMark, type RoomModel } from "./model.ts";
 import { LIGHT_THEME, type ViewerTheme } from "./theme.ts";
 import { cameraPosition, fitDistance, HOME_VIEW, TOP_VIEW, toRoom, turnBetween, viewOf, type ViewAngles } from "./view.ts";
 
@@ -32,6 +33,8 @@ export interface RoomViewerOptions {
   readonly theme?: ViewerTheme | undefined;
   /** The options of the model. */
   readonly solids?: SolidOptions | undefined;
+  /** The options of the levels of the circuits. */
+  readonly loads?: LoadOptions | undefined;
   /** The name of the picture for a screen reader. */
   readonly label?: string | undefined;
   /** The viewer starts this function when the pointer goes to a different record, or to no record. */
@@ -82,6 +85,9 @@ const SMALLEST_POLAR = 0.0005;
 /** The largest polar angle: the camera stays above the floor. */
 const LARGEST_POLAR = Math.PI / 2 - 0.05;
 
+/** A solid hides a marker when it is this distance or more before the outlet, in meters. */
+const SIGHT_MARGIN = 0.06;
+
 /** A place of the camera: the point that it looks at, the angles and the distance. */
 interface Place extends ViewAngles {
   readonly target: Point3;
@@ -105,6 +111,8 @@ function lessMotion(): boolean {
  *
  * A person turns the model with a drag, and moves nearer with the wheel after a click in the picture.
  * The walls between the camera and the room become almost clear. A click selects the record of a solid.
+ * Each outlet has a marker with the color and the shape of the level of its circuit. A marker keeps its size in the picture.
+ * A marked outlet or object shows a line from the outlet to each object that takes its power from it.
  * With the keyboard, the arrow keys turn the model, `+` and `-` change the distance, `Home` shows the first view and `T` shows the plan.
  *
  * The function gives `undefined` when the browser has no WebGL 2. It does not throw, and it writes no error to the console.
@@ -139,8 +147,8 @@ export function createRoomViewer(container: HTMLElement, options: RoomViewerOpti
 
   let scene = options.scene;
   let theme = options.theme ?? LIGHT_THEME;
-  let model: RoomModel = buildModel(scene, options.solids);
-  world.add(model.group);
+  let model: RoomModel = buildModel(scene, options.solids, options.loads);
+  world.add(model.group, model.overlay);
 
   let hovered: string | undefined;
   let selected: string | undefined;
@@ -150,6 +158,8 @@ export function createRoomViewer(container: HTMLElement, options: RoomViewerOpti
   let move: Move | undefined;
   /** This value is true after a person moved the view. Then a new size of the container does not move the camera. */
   let moved = false;
+  /** The height of the picture, in CSS pixels. */
+  let viewHeight = 1;
   let frame = 0;
   let lastTime = 0;
   let disposed = false;
@@ -167,9 +177,12 @@ export function createRoomViewer(container: HTMLElement, options: RoomViewerOpti
   // The wheel moves the page until a person uses the picture. Thus the picture does not stop a person who reads down the page.
   controls.enableZoom = false;
 
-  const markOf = (part: ModelPart): PartMark => (part.record === selected ? 2 : part.record === hovered || marked.has(part.record) ? 1 : 0);
+  const markOfRecord = (record: string): PartMark => (record === selected ? 2 : record === hovered || marked.has(record) ? 1 : 0);
+  const markOf = (part: ModelPart): PartMark => markOfRecord(part.record);
   const paintAll = (): void => {
     for (const part of model.parts) paintPart(part, scene, theme, markOf(part));
+    // A link shows while its outlet or its object has a mark.
+    for (const link of model.links) paintLink(link, theme, markOfRecord(link.outlet) !== 0 || markOfRecord(link.object) !== 0);
     invalidate();
   };
   const pickOf = (part: ModelPart): ViewerPick => ({ solid: part.solid.id, kind: part.solid.kind, source: part.solid.source });
@@ -199,9 +212,23 @@ export function createRoomViewer(container: HTMLElement, options: RoomViewerOpti
     camera.far = far * 8 + 100;
     camera.updateProjectionMatrix();
   };
+  /**
+   * This function stops the turn that continues after a drag. The camera stays where it is.
+   * Without it, the camera continues to turn after a move to a view, and the view is not exact.
+   */
+  const stopDrift = (): void => {
+    if (!controls.enableDamping) return;
+    const now = placeNow();
+    // With no damping, an update of the controls uses all of the turn that remains. The camera then goes back.
+    controls.enableDamping = false;
+    controls.update();
+    controls.enableDamping = true;
+    place(now);
+  };
   const goTo = (name: ViewName, animate: boolean): void => {
     view = name;
     moved = false;
+    stopDrift();
     const to = fit(name);
     if (animate && !lessMotion()) {
       move = { from: placeNow(), to, start: performance.now() };
@@ -217,6 +244,7 @@ export function createRoomViewer(container: HTMLElement, options: RoomViewerOpti
     const width = container.clientWidth;
     const height = container.clientHeight;
     if (width === 0 || height === 0) return false;
+    viewHeight = height;
     renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio, 2));
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
@@ -261,6 +289,40 @@ export function createRoomViewer(container: HTMLElement, options: RoomViewerOpti
     return active;
   };
 
+  const sight = new Raycaster();
+  const forward = new Vector3();
+  const offset = new Vector3();
+  /**
+   * This function turns each marker to the camera and gives it its size in the picture.
+   * It also finds each marker with a solid between the camera and its outlet: such a marker is less clear.
+   */
+  const stepOverlay = (): void => {
+    const perPixel = (2 * Math.tan((FIELD_OF_VIEW * Math.PI) / 360)) / viewHeight;
+    camera.getWorldDirection(forward);
+    model.group.updateMatrixWorld();
+    // Glass, a clear wall and a clear box of objects hide nothing.
+    const blockers = model.parts
+      .filter((part) => {
+        const kind = part.solid.kind;
+        return kind === "floor" || (kind === "wall" && !hiding.has(part.solid.source)) || (kind === "object" && !part.holds);
+      })
+      .map((part) => part.mesh);
+    for (const part of model.parts) {
+      const marker = part.marker;
+      if (marker === undefined) continue;
+      offset.subVectors(marker.root.position, camera.position);
+      const distance = offset.length();
+      marker.root.quaternion.copy(camera.quaternion);
+      marker.root.scale.setScalar(Math.max(offset.dot(forward), 0.01) * perPixel * marker.radius);
+      sight.set(camera.position, offset.divideScalar(Math.max(distance, 1e-9)));
+      sight.far = distance - SIGHT_MARGIN;
+      const hidden = sight.far > 0 && sight.intersectObjects(blockers, false).length > 0;
+      if (hidden === marker.hidden) continue;
+      marker.hidden = hidden;
+      paintPart(part, scene, theme, markOf(part));
+    }
+  };
+
   function tick(now: number): void {
     frame = 0;
     if (disposed) return;
@@ -268,6 +330,7 @@ export function createRoomViewer(container: HTMLElement, options: RoomViewerOpti
     let active = stepMove(now);
     active = controls.update() || active;
     active = stepFade(lessMotion() ? 0 : seconds) || active;
+    stepOverlay();
     renderer.render(world, camera);
     lastTime = active ? now : 0;
     if (active) invalidate();
@@ -275,12 +338,19 @@ export function createRoomViewer(container: HTMLElement, options: RoomViewerOpti
 
   const raycaster = new Raycaster();
   const pointer = new Vector2();
-  /** This function gives the part under a pointer. A wall that hides the room is clear, and the pointer goes through it. */
+  /**
+   * This function gives the part under a pointer. A wall that hides the room is clear, and the pointer goes through it.
+   * The marker of an outlet is above each solid in the picture, so the pointer selects a marker first.
+   */
   const partAt = (event: PointerEvent): ModelPart | undefined => {
     const box = canvas.getBoundingClientRect();
     if (box.width === 0 || box.height === 0) return undefined;
     pointer.set(((event.clientX - box.left) / box.width) * 2 - 1, 1 - ((event.clientY - box.top) / box.height) * 2);
     raycaster.setFromCamera(pointer, camera);
+    const bySign = new Map<Object3D, ModelPart>();
+    for (const part of model.parts) if (part.marker !== undefined) bySign.set(part.marker.back, part);
+    const sign = raycaster.intersectObjects([...bySign.keys()], false)[0];
+    if (sign !== undefined) return bySign.get(sign.object);
     const open = model.parts.filter((part) => part.wall === undefined || !hiding.has(part.wall));
     const byMesh = new Map<Object3D, ModelPart>(open.map((part) => [part.mesh, part]));
     const hits = raycaster.intersectObjects(
@@ -420,11 +490,11 @@ export function createRoomViewer(container: HTMLElement, options: RoomViewerOpti
   return {
     canvas,
     setScene(next: Scene): void {
-      world.remove(model.group);
+      world.remove(model.group, model.overlay);
       disposeModel(model);
       scene = next;
-      model = buildModel(scene, options.solids);
-      world.add(model.group);
+      model = buildModel(scene, options.solids, options.loads);
+      world.add(model.group, model.overlay);
       hovered = undefined;
       if (selected !== undefined && !model.parts.some((part) => part.record === selected)) selected = undefined;
       setLimits();
@@ -454,7 +524,7 @@ export function createRoomViewer(container: HTMLElement, options: RoomViewerOpti
       observer.disconnect();
       listeners.abort();
       controls.dispose();
-      world.remove(model.group);
+      world.remove(model.group, model.overlay);
       disposeModel(model);
       renderer.dispose();
       canvas.remove();
