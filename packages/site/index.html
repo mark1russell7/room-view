@@ -24,15 +24,58 @@
 </header>
 
 <main>
-  <h1>room-view</h1>
-  <p class="lead">A three.js viewer of a room model, with the placed objects, the outlets and the circuits as data.</p>
+  <h1>A room as data, shown in 3D</h1>
+  <p class="lead">room-view makes a 3D model from one record of a room: its walls, windows, outlets and furniture. This sample room is not a real room. Turn it, and select a part to see its measurements.</p>
 
-  <h2>Install</h2>
-  <div class="command">
-    <code id="install">pnpm add @mark1russell7/room-view</code>
-    <button id="copy" type="button">Copy</button>
+  <section class="sheet" aria-label="The sample room">
+    <div class="view">
+      <div id="viewer" class="viewer"></div>
+      <p id="readout" class="readout" aria-hidden="true"></p>
+      <div class="view-bar">
+        <div id="views" class="views" role="group" aria-label="View">
+          <button id="view-home" class="tool" type="button">Corner view</button>
+          <button id="view-top" class="tool" type="button">Plan view</button>
+        </div>
+        <p id="hint" class="hint">Drag to turn the room. Click it, then scroll to zoom.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <div id="details" class="details" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <div class="below">
+    <section aria-labelledby="circuits-title">
+      <h2 id="circuits-title">Circuits</h2>
+      <p class="section-note">Each outlet is on a circuit, and each circuit has a limit. Select a circuit to see its outlets and the machines on them. The line on a meter is at 80% of the limit.</p>
+      <ul id="circuits" class="meters"></ul>
+    </section>
+
+    <section aria-labelledby="parts-title">
+      <h2 id="parts-title">Parts of the room</h2>
+      <p class="section-note">Each part is one record of the room data. Select a part to see it in the room.</p>
+      <div id="parts"></div>
+    </section>
   </div>
-  <p class="note">This package has no release on npm yet. <a href="./releases/">Releases</a> shows each version, and <a href="./status/">Status</a> shows the open work.</p>
+
+  <section class="start" aria-labelledby="start-title">
+    <h2 id="start-title">Put a room in a page</h2>
+    <div class="command">
+      <code id="install">pnpm add @mark1russell7/room-view three</code>
+      <button id="copy" class="tool" type="button">Copy</button>
+    </div>
+    <pre class="code"><code>import { SAMPLE_SCENE } from "@mark1russell7/room-view/sample";
+import { createRoomViewer } from "@mark1russell7/room-view/three";
+
+// The viewer fills this element, so give the element a height.
+const room = document.querySelector("#room");
+const viewer = createRoomViewer(room, {
+  scene: SAMPLE_SCENE,
+  onSelect: (pick) =&gt; console.log(pick),
+});</code></pre>
+    <p class="note">In a browser with no WebGL 2, <code>createRoomViewer</code> gives <code>undefined</code>, and it changes nothing in the page.</p>
+    <p class="note">This package has no release on npm yet. <a href="./releases/">Releases</a> shows each version, and <a href="./status/">Status</a> shows the open work.</p>
+  </section>
 </main>
 
 <script type="module" src="./src/index.ts"></script>
