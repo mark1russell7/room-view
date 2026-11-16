@@ -1,5 +1,5 @@
 import type { LevelResult } from "@mark1russell7/room-view";
-import type { DraftEnd, FeatureSpan } from "./draft.ts";
+import type { DraftEnd, FeatureSpan, ObjectMark } from "./draft.ts";
 import type { Joint, JointState } from "./level.ts";
 import { drawWalkAt, fitOf, type PictureMargin, type PictureSize, type Pixel, type WalkDrawing } from "./walk.ts";
 
@@ -12,6 +12,8 @@ export interface PlanInput {
   readonly name: string;
   /** The place of each feature along its wall: the result of `featureSpans`. */
   readonly spans: readonly FeatureSpan[];
+  /** Each object of the survey record of the room: the result of `objectMarks`. */
+  readonly marks: readonly ObjectMark[];
 }
 
 /** One room of the drawing of a level. */
@@ -19,7 +21,7 @@ export interface PlanRoom {
   /** The position of the room in the level, from 0. */
   readonly room: number;
   readonly name: string;
-  /** The walls, the features and the floor of the room. The drawing has no label of a wall. */
+  /** The walls, the features, the objects and the floor of the room. The drawing has no label of a wall. */
   readonly drawing: WalkDrawing;
   /** The center of the label with the name. A room has no label when its floor has no space for the name, or when the room does not close. */
   readonly label: Pixel | undefined;
@@ -110,7 +112,7 @@ function labelAt(floor: readonly Pixel[], text: string): Pixel | undefined {
 
 /**
  * This function gives the drawing of the rooms of a level in a picture. `result` is the expansion of the level record.
- * `inputs` has the name and the features of each room, and `joints` has the state of each connection.
+ * `inputs` has the name, the features and the objects of each room, and `joints` has the state of each connection.
  * The rooms fill the picture together, with `PLAN_MARGIN` at each edge.
  */
 export function drawLevel(result: LevelResult, size: PictureSize, inputs: readonly PlanInput[], joints: readonly Joint[]): LevelDrawing {
@@ -119,7 +121,7 @@ export function drawLevel(result: LevelResult, size: PictureSize, inputs: readon
   const rooms = result.rooms.map((room, index): PlanRoom => {
     const input = inputs[index];
     const name = input?.name ?? "";
-    const drawing = drawWalkAt(room.result, pixel, [], input?.spans ?? []);
+    const drawing = drawWalkAt(room.result, pixel, [], input?.spans ?? [], input?.marks ?? []);
     const label = drawing.floor === undefined || name === "" ? undefined : labelAt(drawing.floor, name);
     return { room: index, name, drawing, label, apart: room.group > 0 };
   });

@@ -1,4 +1,4 @@
-import { regionArea } from "@mark1russell7/layout-contract";
+import { rectInRegion, regionArea, regionHitsRect, type Region } from "@mark1russell7/layout-contract";
 import { expandLevel, expandSurvey, SCENE_SCHEMA, type LevelResult, type Room, type Scene, type SurveyResult } from "@mark1russell7/room-view";
 import type { RoomViewer, ViewerTheme } from "@mark1russell7/room-view/three";
 import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome";
@@ -19,16 +19,28 @@ import {
   fieldsOf,
   fileName,
   hasMore,
+  isExample,
   LENGTH_MODES,
   lengthText,
+  listedObjects,
   MODE_NAMES,
+  MOST_LEVELS,
+  MOST_OBJECTS,
   MOST_ROOMS,
+  OBJECT_FIELDS,
+  OBJECT_KINDS,
+  OBJECT_NAMES,
+  objectFaults,
+  objectMarks,
+  objectOf,
+  objectWords,
   parseStore,
   placedFeatures,
   readLength,
   roomName,
   roomState,
   sameDraft,
+  shownObjects,
   shownRoom,
   statusOf,
   storeOf,
@@ -36,15 +48,20 @@ import {
   surveyOf,
   typedOf,
   usualOf,
+  usualSize,
   withActive,
   withConnection,
+  withExample,
   withFeature,
   withMode,
   withNewFeature,
+  withNewObject,
   withNewRoom,
   withNewRooms,
   withNewSide,
+  withObject,
   withoutFeature,
+  withoutObject,
   withoutRoom,
   withoutSide,
   withRoom,
@@ -57,6 +74,10 @@ import {
   type FeatureFault,
   type FeatureField,
   type FeatureKind,
+  type ListedObject,
+  type ObjectFault,
+  type ObjectField,
+  type ObjectPlace,
   type PlacedFeature,
   type RoomState,
   type Status,
@@ -65,12 +86,13 @@ import {
   type TypedLength,
 } from "./draft.ts";
 import { drawLevel, type PlanInput } from "./floorplan.ts";
-import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, shownLevel, type Joint, type JointState, type LevelDrafts } from "./level.ts";
+import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, shownLevel, shownLevelObjects, type Joint, type JointState, type LevelDrafts } from "./level.ts";
 import { svg } from "./plan.ts";
-import { drawWalk, pathOf, type PictureSize, type Pixel, type WalkFeature } from "./walk.ts";
+import { drawWalk, pathOf, type PictureSize, type Pixel, type WalkFeature, type WalkObject } from "./walk.ts";
 
 // The page "Measure a room". A person types the length of each wall and the turn at each corner.
 // The page keeps the text of each field in a draft, makes the survey record from it, and draws the result.
+// Each wall has its doors, its windows, its outlets and its furniture. A piece of furniture can hold a different object, for example a display on a desk.
 // With two rooms or more, a door of one room goes to a door of a different room, and the page draws the rooms together.
 
 /** The key of the rooms in the storage of the browser. */
@@ -87,7 +109,9 @@ function readStore(): Store | undefined {
   }
 }
 
-let store: Store = readStore() ?? storeOf([exampleDraft(defaultMode(navigator.language))]);
+// A browser can keep the example room of the page from before the furniture. The page then shows the example room with its furniture.
+const kept = readStore();
+let store: Store = kept === undefined ? storeOf([exampleDraft(defaultMode(navigator.language))]) : withExample(kept);
 let draft: Draft = store.rooms[store.active] ?? exampleDraft("m");
 /**
  * The draft with the numbers that the visitor typed. A change of the units converts this draft, and not the converted numbers.
@@ -97,7 +121,9 @@ let typed: Draft = draft;
 let result: SurveyResult = expandSurvey(surveyOf(draft));
 /** The faults of the doors, the windows, the openings and the outlets. */
 let faults: readonly FeatureFault[] = featureFaults(draft, result);
-let status: Status = statusOf(draft, result, faults);
+/** The faults of the furniture and the equipment. */
+let objectList: readonly ObjectFault[] = objectFaults(draft, result);
+let status: Status = statusOf(draft, result, faults, objectList);
 
 /** This function gives the status of a room that the page does not show. */
 function statusFor(room: Draft): Status {
@@ -127,6 +153,13 @@ let shownRooms = "";
 let activeSide: number | undefined;
 /** The key of the feature whose field has the focus. */
 let activeFeature: string | undefined;
+/** The key of the object whose field has the focus. */
+let activeObject: string | undefined;
+/**
+ * The state of the box "More" of each object that a person opened or closed, by the key of the object.
+ * The form makes its fields again after some changes, and a box keeps its state.
+ */
+const moreBoxes = new Map<string, boolean>();
 let view: "plan" | "room" = "plan";
 let viewer: RoomViewer | undefined;
 let themes: { readonly light: ViewerTheme; readonly dark: ViewerTheme } | undefined;
@@ -155,7 +188,7 @@ const SIGNS: Readonly<Record<StatusLevel, string>> = { typing: "…", open: "!",
 const ROOM_STATES: Readonly<Record<RoomState, readonly [sign: string, words: string]>> = {
   typing: ["…", "needs a number"],
   open: ["!", "the walk does not close"],
-  fault: ["!", "a door, a window or an outlet is not ready"],
+  fault: ["!", "a door, a window, an outlet or a piece of furniture is not ready"],
   closed: ["✓", "the walk closes"],
 };
 
@@ -236,16 +269,27 @@ function featureSign(kind: FeatureKind): SVGSVGElement {
   return sign;
 }
 
+/**
+ * This function gives the name of a distance along a wall: the name of the corner where it starts.
+ * For an object on a different object, the distance starts at the edge of the holder near that corner.
+ */
+function alongName(side: number, end: FeatureEnd, held: boolean): string {
+  const count = draft.sides.length;
+  if (count < 3) {
+    const words = end === "start" ? "the start of the wall" : "the end of the wall";
+    return held ? `From the edge near ${words}` : `From ${words}`;
+  }
+  // The corner at the start of a wall is the corner with the wall before it in the walk.
+  const other = String(((side + (end === "start" ? count - 1 : 1)) % count) + 1);
+  return held ? `From the edge near wall ${other}` : `From the corner with wall ${other}`;
+}
+
 /** This function gives the name of a length of a feature in the form. The distance along the wall has the name of the corner where it starts. */
 function fieldName(kind: FeatureKind, field: FeatureField, side: number, end: FeatureEnd): string {
   if (field === "width") return "Width";
   if (field === "sill") return "Bottom above the floor";
   if (field === "height") return kind === "outlet" ? "Above the floor" : "Height";
-  const count = draft.sides.length;
-  if (count < 3) return end === "start" ? "From the start of the wall" : "From the end of the wall";
-  // The corner at the start of a wall is the corner with the wall before it in the walk.
-  const other = (side + (end === "start" ? count - 1 : 1)) % count;
-  return `From the corner with wall ${String(other + 1)}`;
+  return alongName(side, end, false);
 }
 
 /** This function gives the fields of a door, a window, an opening or an outlet. */
@@ -315,9 +359,159 @@ function addControl(side: DraftSide, number: string): HTMLElement {
   return h("div", { class: "feature-add" }, open, kinds);
 }
 
-function sideItem(side: DraftSide, index: number, placed: readonly PlacedFeature[]): HTMLLIElement {
+/** This function gives the name of a kind of object in the form. A kind from a file that the form does not offer gets its own words. */
+function kindName(kind: string): string {
+  const offered = OBJECT_KINDS.find((item) => item === kind);
+  if (offered !== undefined) return OBJECT_NAMES[offered];
+  const words = objectWords(kind);
+  return `${words.slice(0, 1).toUpperCase()}${words.slice(1)}`;
+}
+
+/** This function gives the title of an object in the form and in the messages: its kind and its number, for example `Desk 2`. */
+function objectTitle(item: ListedObject): string {
+  return `${kindName(item.object.kind)} ${String(item.number)}`;
+}
+
+/** These kinds of objects hold an object inside them. Each other kind holds an object on its top. */
+const HOLDS_INSIDE: ReadonlySet<string> = new Set(["cabinet", "rack"]);
+
+/**
+ * This function gives the sign of an object: its outline in the drawing, against a short part of a wall.
+ * An object on a different object has a small box inside a quiet outline.
+ */
+function objectSign(level: number): SVGSVGElement {
+  const sign = svg("svg", { class: "sign", viewBox: "0 0 30 16", width: "30", height: "16", "aria-hidden": "true" });
+  sign.append(svg("line", { class: "sign-wall", x1: "1", y1: "2", x2: "29", y2: "2" }));
+  if (level === 1) {
+    sign.append(svg("rect", { class: "sign-object", x: "7", y: "4.5", width: "16", height: "10" }));
+    return sign;
+  }
+  sign.append(svg("rect", { class: "sign-holder", x: "5", y: "4.5", width: "20", height: "10" }), svg("rect", { class: "sign-object", x: "10", y: "7", width: "10", height: "5" }));
+  return sign;
+}
+
+/** This function gives the name of a length of an object in the form. */
+function objectFieldName(item: ListedObject, field: ObjectField): string {
+  const holder = item.holder === undefined ? undefined : objectTitle(item.holder).toLowerCase();
+  switch (field) {
+    case "offset":
+      return alongName(item.side, item.object.from, holder !== undefined);
+    case "width":
+      return "Width along the wall";
+    case "depth":
+      return "Depth into the room";
+    case "height":
+      return "Height";
+    case "gap":
+      return holder === undefined ? "Space behind it" : `From the back of ${holder}`;
+    case "lift":
+      return holder === undefined ? "Bottom above the floor" : `Bottom above the bottom of ${holder}`;
+  }
+}
+
+/** This function gives the fields of one length of an object. An empty field shows the usual size of the kind. */
+function objectRow(item: ListedObject, field: ObjectField, extra: HTMLElement | null = null): HTMLElement {
+  const words = objectFieldName(item, field);
+  const usual = usualSize(item.object.kind, field, draft.mode);
+  const length = h("span", { class: "length", "data-of": field });
+  lengthFields(length, item.object[field], `${objectTitle(item)}, ${words.toLowerCase()}`, usual === undefined ? undefined : typedOf(usual, draft.mode));
+  return h("div", { class: "field" }, h("span", { class: "field-name" }, words, extra), length);
+}
+
+/** This function tells if a person typed a value in a field of the box "More" of an object. Such a box is open when the form shows the object. */
+function hasMoreText(item: ListedObject): boolean {
+  const { name, gap, lift, outlet } = item.object;
+  return name !== "" || outlet !== "" || [gap, lift].some((length) => length.value !== "" || length.inches !== "");
+}
+
+/**
+ * This function gives the control that adds an object against a wall, or on a different object.
+ * It is one button that shows a button for each kind. A room with the largest number of objects gets no new object.
+ */
+function objectAdd(place: ObjectPlace, text: string, label: string, count: number): HTMLElement {
+  const id = "side" in place ? `objects-of-${place.side}` : `objects-on-${place.holder}`;
+  const full = count >= MOST_OBJECTS;
+  const open = h(
+    "button",
+    { class: "feature-open", type: "button", "data-action": "objects", "aria-expanded": "false", "aria-controls": id, title: full ? `The page keeps ${String(MOST_OBJECTS)} objects in a room at most.` : null },
+    text,
+  );
+  open.disabled = full;
+  const kinds = h(
+    "div",
+    { id, class: "object-kinds", role: "group", "aria-label": label },
+    OBJECT_KINDS.map((kind) => h("button", { class: "tool", type: "button", "data-action": "add-object", "data-kind": kind }, OBJECT_NAMES[kind])),
+  );
+  kinds.hidden = true;
+  return h("div", { class: "object-add", "data-holder": "holder" in place ? place.holder : null }, open, kinds);
+}
+
+/**
+ * This function gives the fields of an object, with the objects that it holds.
+ * The size of the object comes first. The box "More" has its name, its other distances and its outlet.
+ */
+function objectItem(item: ListedObject, listed: readonly ListedObject[], outlets: readonly PlacedFeature[]): HTMLLIElement {
+  const { object, level, holder } = item;
+  const held = holder !== undefined;
+  const title = objectTitle(item);
+  const words = title.toLowerCase();
+  const remove = h("button", { class: "remove", type: "button", "data-action": "remove-object", "aria-label": `Remove ${words}`, title: `Remove ${words}` }, "×");
+  const given = object.name.trim() === "" ? null : h("span", { class: "object-given" }, object.name.trim());
+  const swap = h(
+    "button",
+    { class: "swap", type: "button", "data-action": "swap-object", "aria-label": `Measure ${words} from the other ${held ? "edge" : "corner"}` },
+    held ? "Use the other edge" : "Use the other corner",
+  );
+  const nameInput = h("input", { class: "text-field", type: "text", "data-part": "name", "aria-label": `Name of ${words}`, placeholder: kindName(object.kind), autocomplete: "off" });
+  nameInput.value = object.name;
+  const lift = h("p", { class: "object-aid" }, holder === undefined ? "With no number, it is on the floor." : `With no number, it is on top of ${objectTitle(holder).toLowerCase()}.`);
+  let power: HTMLElement;
+  if (outlets.length === 0) power = h("p", { class: "object-aid" }, "To give it power, add an outlet to a wall.");
+  else {
+    const options = outlets.map((outlet) => {
+      const option = h("option", { value: outlet.feature.key }, `Outlet ${String(outlet.number)}, wall ${String(outlet.side + 1)}`);
+      option.selected = outlet.feature.key === object.outlet;
+      return option;
+    });
+    const select = h("select", { class: "text-field", "data-part": "outlet", "aria-label": `Outlet of ${words}` }, h("option", { value: "" }, "No outlet"), options);
+    power = h("div", { class: "field" }, h("span", { class: "field-name" }, "Power from"), select);
+  }
+  const more = h(
+    "details",
+    { class: "more" },
+    h("summary", {}, "Name, outlet and more distances"),
+    h("div", { class: "field" }, h("span", { class: "field-name" }, "Name"), nameInput),
+    objectRow(item, "gap"),
+    objectRow(item, "lift"),
+    lift,
+    power,
+  );
+  more.open = moreBoxes.get(object.key) ?? hasMoreText(item);
+  const note = h("p", { class: "object-note" });
+  note.hidden = true;
+  const holds = listed.filter((other) => other.holder?.object.key === object.key);
+  const inside = HOLDS_INSIDE.has(object.kind);
+  return h(
+    "li",
+    { class: "object", "data-key": object.key, "data-kind": object.kind, "data-level": String(level) },
+    h("div", { class: "feature-head" }, objectSign(level), h("span", { class: "feature-name" }, title), given, remove),
+    objectRow(item, "offset", swap),
+    objectRow(item, "width"),
+    objectRow(item, "depth"),
+    objectRow(item, "height"),
+    more,
+    note,
+    holds.length === 0 ? null : h("ul", { class: "objects", "aria-label": `${inside ? "In" : "On"} ${words}` }, holds.map((other) => objectItem(other, listed, outlets))),
+    // An object at the last level holds no object.
+    level >= MOST_LEVELS ? null : objectAdd({ holder: object.key }, `Put something ${inside ? "in" : "on"} ${words}`, `Add ${inside ? "in" : "on"} ${words}`, listed.length),
+  );
+}
+
+function sideItem(side: DraftSide, index: number, placed: readonly PlacedFeature[], listed: readonly ListedObject[]): HTMLLIElement {
   const number = String(index + 1);
   const features = placed.filter((item) => item.side === index);
+  const objects = listed.filter((item) => item.side === index && item.holder === undefined);
+  const outlets = placed.filter((item) => item.feature.kind === "outlet");
   const length = h("span", { class: "length", "data-of": "side" });
   lengthFields(length, side.length, `Length of wall ${number}`);
   const remove = h("button", { class: "remove", type: "button", "data-action": "remove", "aria-label": `Remove wall ${number}`, title: `Remove wall ${number}` }, "×");
@@ -354,12 +548,16 @@ function sideItem(side: DraftSide, index: number, placed: readonly PlacedFeature
     // The features are below the corner, so the length and the turn of each wall stay together.
     features.length === 0 ? null : h("ul", { class: "features", "aria-label": `Doors, windows and outlets of wall ${number}` }, features.map(featureItem)),
     addControl(side, number),
+    // The furniture comes after the doors and the windows: a person measures the walls first.
+    objects.length === 0 ? null : h("ul", { class: "objects", "aria-label": `Furniture and equipment of wall ${number}` }, objects.map((item) => objectItem(item, listed, outlets))),
+    objectAdd({ side: side.key }, "Add furniture or equipment", `Add to wall ${number}`, listed.length),
   );
 }
 
 function renderSides(): void {
   const placed = placedFeatures(draft);
-  sidesList.replaceChildren(...draft.sides.map((side, index) => sideItem(side, index, placed)));
+  const listed = listedObjects(draft);
+  sidesList.replaceChildren(...draft.sides.map((side, index) => sideItem(side, index, placed, listed)));
   showFaults();
   showJoins();
 }
@@ -378,16 +576,21 @@ function showJoins(): void {
   }
 }
 
-/** This function shows the fault of the place of each feature at its fields. The status tells a field that needs a value. */
+/** This function shows the fault of the place of each feature and each object at its fields. The status tells a field that needs a value. */
 function showFaults(): void {
-  for (const item of sidesList.querySelectorAll<HTMLElement>("li.feature")) {
-    const fault = faults.find((entry) => entry.key === item.dataset["key"] && entry.level !== "typing");
+  const show = (item: HTMLElement, fault: { readonly level: string; readonly note: string } | undefined, note: HTMLElement | null): void => {
     if (fault === undefined) item.removeAttribute("data-fault");
     else item.dataset["fault"] = fault.level;
-    const note = item.querySelector<HTMLElement>(".feature-note");
-    if (note === null) continue;
+    if (note === null) return;
     note.hidden = fault === undefined;
     note.textContent = fault?.note ?? "";
+  };
+  for (const item of sidesList.querySelectorAll<HTMLElement>("li.feature")) {
+    show(item, faults.find((entry) => entry.key === item.dataset["key"] && entry.level !== "typing"), item.querySelector<HTMLElement>(".feature-note"));
+  }
+  // An object holds its own objects, so its note is a child of its item.
+  for (const item of sidesList.querySelectorAll<HTMLElement>("li.object")) {
+    show(item, objectList.find((entry) => entry.key === item.dataset["key"] && entry.level !== "typing"), item.querySelector<HTMLElement>(":scope > .object-note"));
   }
 }
 
@@ -409,6 +612,11 @@ function lengthField(index: number): HTMLInputElement | null {
 /** This function gives the first field of a feature. */
 function featureField(key: string): HTMLInputElement | null {
   return sidesList.querySelector<HTMLInputElement>(`li.feature[data-key="${CSS.escape(key)}"] .length input`);
+}
+
+/** This function gives the first field of an object: its distance along the wall. */
+function objectField(key: string): HTMLInputElement | null {
+  return sidesList.querySelector<HTMLInputElement>(`li.object[data-key="${CSS.escape(key)}"] > .field .length input`);
 }
 
 /** This function gives the rooms as one level when the page shows them together. */
@@ -442,6 +650,8 @@ function roomFacts(): readonly Fact[] {
     const count = kinds.filter((item) => item === kind).length;
     if (count > 0) rows.push([COUNT_NAMES[kind], String(count)]);
   }
+  const objects = listedObjects(draft).length;
+  if (objects > 0) rows.push(["Furniture and equipment", String(objects)]);
   return rows;
 }
 
@@ -455,6 +665,8 @@ function levelFacts(level: Whole): readonly Fact[] {
     rows.push(["Floor area", areaText(area, store.rooms[0]?.mode ?? "m")]);
   }
   rows.push(["Doors between rooms", String(level.joints.length)]);
+  const objects = store.rooms.reduce((sum, room) => sum + listedObjects(room).length, 0);
+  if (objects > 0) rows.push(["Furniture and equipment", String(objects)]);
   return rows;
 }
 
@@ -538,6 +750,55 @@ function featureHit(feature: WalkFeature): SVGElement {
   return hit;
 }
 
+/** This function draws an object from above: its outline. An object with a fault has the color of its fault. */
+function objectMark(object: WalkObject): SVGPathElement {
+  const path = svg("path", { class: "walk-object", d: pathOf(object.ring, true), "data-key": object.key, "data-level": String(object.level) });
+  if (object.fault !== undefined) path.dataset["fault"] = object.fault;
+  return path;
+}
+
+/** This function gives an area with no color above an object, so that a finger can select the object. Its title names the object. */
+function objectHit(object: WalkObject, title: string | undefined): SVGPathElement {
+  const hit = svg("path", { class: "walk-touch", d: pathOf(object.ring, true) });
+  hit.dataset["object"] = object.key;
+  if (title === undefined) return hit;
+  const name = svg("title", {});
+  name.textContent = title;
+  hit.append(name);
+  return hit;
+}
+
+/** The size of a name of an object in the drawing, in pixels. It has the width of one letter, the height of the line and the space around the name. */
+const OBJECT_NAME = { letter: 6.4, line: 13, space: 4 };
+
+/**
+ * This function gives the names of the objects in the drawing. A name is at the center of its object, and only where it fits inside the outline.
+ * A later object is above this object in the drawing, so the drawing has no name below the outline of a later object.
+ */
+function objectLabels(objects: readonly WalkObject[], titles: ReadonlyMap<string, string>): readonly SVGTextElement[] {
+  const regions = objects.map((object): Region => ({ kind: "polygon", points: object.ring }));
+  return objects.flatMap((object, index): SVGTextElement[] => {
+    const text = titles.get(object.key);
+    const region = regions[index];
+    if (text === undefined || region === undefined || object.ring.length === 0) return [];
+    const xs = object.ring.map(([x]) => x);
+    const ys = object.ring.map(([, y]) => y);
+    const center: Pixel = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+    const width = text.length * OBJECT_NAME.letter + OBJECT_NAME.space * 2;
+    const height = OBJECT_NAME.line + OBJECT_NAME.space;
+    const rect = { x: center[0] - width / 2, y: center[1] - height / 2, w: width, h: height };
+    if (!rectInRegion(region, rect) || regions.slice(index + 1).some((other) => regionHitsRect(other, rect))) return [];
+    const element = label("walk-object-name", center, "middle", text);
+    element.dataset["key"] = object.key;
+    return [element];
+  });
+}
+
+/** This function gives the name of each object of a draft in the drawing, by its key. It is the name that a person gave it, or its kind and its number. */
+function objectTitles(room: Draft): ReadonlyMap<string, string> {
+  return new Map(listedObjects(room).map((item): [string, string] => [item.object.key, item.object.name.trim() === "" ? objectTitle(item) : item.object.name.trim()]));
+}
+
 /** The radius of the dot of a door between two rooms, in pixels. */
 const TIE_RADIUS = 4;
 
@@ -548,7 +809,9 @@ const TIE_RADIUS = 4;
 function levelPicture(level: Whole, size: PictureSize): SVGSVGElement {
   const inputs = store.rooms.map((room, index): PlanInput => {
     const placed = level.result.rooms[index];
-    return { name: roomName(room, index), spans: placed === undefined ? [] : featureSpans(room, featureFaults(room, placed.result)) };
+    const name = roomName(room, index);
+    if (placed === undefined) return { name, spans: [], marks: [] };
+    return { name, spans: featureSpans(room, featureFaults(room, placed.result)), marks: objectMarks(room, objectFaults(room, placed.result)) };
   });
   const drawing = drawLevel(level.result, size, inputs, level.joints);
   const picture = svg("svg", { class: "walk", viewBox: `0 0 ${String(size.width)} ${String(size.height)}`, width: String(size.width), height: String(size.height), role: "img" });
@@ -560,6 +823,8 @@ function levelPicture(level: Whole, size: PictureSize): SVGSVGElement {
     title.textContent = room.name;
     group.append(title);
     if (room.drawing.floor !== undefined) group.append(svg("path", { class: "walk-floor", d: pathOf(room.drawing.floor, true) }));
+    // The furniture is below the walls, so a wall stays one clear line.
+    for (const object of room.drawing.objects) group.append(objectMark(object));
     for (const wall of room.drawing.walls) group.append(line("walk-wall", wall.from, wall.to));
     for (const feature of room.drawing.features) group.append(featureMark(feature));
     if (room.drawing.gap !== undefined) group.append(line("walk-gap", room.drawing.gap.from, room.drawing.gap.to));
@@ -593,7 +858,8 @@ function showDrawing(): void {
     const reading = readLength(side.length, draft.mode);
     return reading.state === "ok" && reading.value > 0 ? dimensionText(reading.value, draft.mode) : undefined;
   });
-  const drawing = drawWalk(result, size, texts, featureSpans(draft, faults));
+  const drawing = drawWalk(result, size, texts, featureSpans(draft, faults), objectMarks(draft, objectList));
+  const titles = objectTitles(draft);
   const picture = svg("svg", { class: "walk", viewBox: `0 0 ${String(size.width)} ${String(size.height)}`, width: String(size.width), height: String(size.height), role: "img" });
   picture.setAttribute("aria-label", `Drawing of the walk around the room. ${status.title}`);
 
@@ -602,6 +868,8 @@ function showDrawing(): void {
     if (lastLevel !== undefined && lastLevel !== "closed") floor.classList.add("walk-floor-new");
     picture.append(floor);
   }
+  // The furniture is below the walls and the features, so a wall and an opening stay clear lines.
+  for (const object of drawing.objects) picture.append(objectMark(object));
   // Each wall has a wide mark below its line. `showActive` shows the mark of the wall whose field has the focus.
   for (const wall of drawing.walls) picture.append(line("walk-mark", wall.from, wall.to, wall.side));
   for (const wall of drawing.walls) picture.append(line("walk-wall", wall.from, wall.to, wall.side));
@@ -618,6 +886,7 @@ function showDrawing(): void {
     picture.append(svg("path", { class: "walk-arrow", d: pathOf([tip, one, two], true) }));
   }
   picture.append(svg("circle", { class: "walk-start", cx: number(drawing.start[0]), cy: number(drawing.start[1]), r: "6.5" }));
+  picture.append(...objectLabels(drawing.objects, titles));
   for (const item of drawing.labels) {
     const text = label("walk-label", item.at, item.anchor, item.text);
     text.dataset["side"] = String(item.side);
@@ -625,6 +894,8 @@ function showDrawing(): void {
   }
   // A wide line with no color above each wall, so that a finger can select the wall.
   for (const wall of drawing.walls) picture.append(line("walk-hit", wall.from, wall.to, wall.side));
+  // An object is above the wide line of its wall, and a feature is above an object: the smaller target comes last.
+  for (const object of drawing.objects) picture.append(objectHit(object, titles.get(object.key)));
   for (const feature of drawing.features) picture.append(featureHit(feature));
 
   planBox.replaceChildren(picture);
@@ -633,16 +904,17 @@ function showDrawing(): void {
 }
 
 /**
- * This function marks the wall and the feature whose field has the focus. A feature with the focus shows its measured distance.
+ * This function marks the wall, the feature and the object whose field has the focus. A feature with the focus shows its measured distance.
  * The function changes no element of the drawing, so a click on a wall keeps its target.
  */
 function showActive(): void {
   const side = activeSide === undefined ? undefined : String(activeSide);
   for (const element of planBox.querySelectorAll<SVGElement>(".walk-mark, .walk-label")) element.classList.toggle("walk-on", element.dataset["side"] === side);
   for (const element of planBox.querySelectorAll<SVGElement>(".walk-feature")) element.classList.toggle("walk-on", activeFeature !== undefined && element.dataset["key"] === activeFeature);
+  for (const element of planBox.querySelectorAll<SVGElement>(".walk-object, .walk-object-name")) element.classList.toggle("walk-on", activeObject !== undefined && element.dataset["key"] === activeObject);
 }
 
-// A click on a wall of the drawing goes to the field of its length. A click on a feature goes to its first field.
+// A click on a wall of the drawing goes to the field of its length. A click on a feature or an object goes to its first field.
 // A click on a room of the drawing of the rooms opens that room.
 planBox.addEventListener("click", (event) => {
   const target = event.target instanceof SVGElement ? event.target : undefined;
@@ -652,8 +924,9 @@ planBox.addEventListener("click", (event) => {
     return;
   }
   const feature = target?.dataset["feature"];
+  const object = target?.dataset["object"];
   const side = target?.dataset["side"];
-  const field = feature !== undefined ? featureField(feature) : side !== undefined ? lengthField(Number(side)) : null;
+  const field = feature !== undefined ? featureField(feature) : object !== undefined ? objectField(object) : side !== undefined ? lengthField(Number(side)) : null;
   field?.focus();
   field?.select();
 });
@@ -667,8 +940,15 @@ function roomOf(): Room {
   return level === undefined ? shownRoom(result.room, faults) : shownLevel(level.result);
 }
 
+/**
+ * This function gives the scene that the page shows in 3D: the room record with its furniture.
+ * An object does not keep an outlet that the room record does not have. The rooms together have no object of a room that does not close.
+ */
 function sceneOf(): Scene {
-  return { schema: SCENE_SCHEMA, room: roomOf() };
+  const level = shownWhole();
+  const room = roomOf();
+  const objects = level === undefined ? (result.closure.closed ? shownObjects(room, result.objects) : []) : shownLevelObjects(level.result, room);
+  return objects.length === 0 ? { schema: SCENE_SCHEMA, room } : { schema: SCENE_SCHEMA, room, objects };
 }
 
 /**
@@ -800,7 +1080,8 @@ function showScope(): void {
 function refresh(): void {
   result = expandSurvey(surveyOf(draft));
   faults = featureFaults(draft, result);
-  status = statusOf(draft, result, faults);
+  objectList = objectFaults(draft, result);
+  status = statusOf(draft, result, faults, objectList);
   statuses[store.active] = status;
   whole = wholeOf();
   // One room has no view of the rooms together.
@@ -814,7 +1095,7 @@ function refresh(): void {
   showView();
   if (view === "room") viewer?.setScene(sceneOf());
   showDrawing();
-  byId("example-note").hidden = !sameDraft(draft, exampleDraft(draft.mode));
+  byId("example-note").hidden = !isExample(draft);
   byId<HTMLButtonElement>("save-room").disabled = !hasModel();
 }
 
@@ -903,6 +1184,12 @@ form.addEventListener("input", (event) => {
   }
   const part = target.dataset["part"];
   const key = keyOf(target);
+  // An object is in the item of its wall, and not in the item of a feature. The innermost object is the object of the field.
+  const objectKey = target.closest<HTMLElement>("li.object")?.dataset["key"];
+  if (objectKey !== undefined) {
+    typeObject(objectKey, target, part);
+    return;
+  }
   if (part === "angle" && key !== undefined) {
     change(withSide(draft, key, { angle: target.value }));
     return;
@@ -927,13 +1214,46 @@ form.addEventListener("input", (event) => {
   if (side !== undefined) change(withSide(draft, side.key, { length: { ...side.length, [part]: target.value } }));
 });
 
+/** This function shows the name that a person gives to an object in the head of its item, next to its kind and its number. */
+function showGiven(item: HTMLElement, name: string): void {
+  const head = item.querySelector<HTMLElement>(":scope > .feature-head");
+  const given = head?.querySelector<HTMLElement>(".object-given");
+  if (head === null || head === undefined) return;
+  if (name === "") {
+    given?.remove();
+    return;
+  }
+  if (given !== null && given !== undefined) {
+    given.textContent = name;
+    return;
+  }
+  head.querySelector(".feature-name")?.after(h("span", { class: "object-given" }, name));
+}
+
+/** This function keeps the text that a person types in a field of an object: its name, or a part of one of its lengths. */
+function typeObject(key: string, target: HTMLInputElement, part: string | undefined): void {
+  if (part === "name") {
+    change(withObject(draft, key, { name: target.value }));
+    const item = target.closest<HTMLElement>("li.object");
+    if (item !== null) showGiven(item, target.value.trim());
+    return;
+  }
+  const object = objectOf(draft, key);
+  const of = target.closest<HTMLElement>(".length")?.dataset["of"];
+  const field = OBJECT_FIELDS.find((item) => item === of);
+  if (object === undefined || field === undefined || (part !== "value" && part !== "inches")) return;
+  const lengths: { [K in ObjectField]?: TypedLength } = {};
+  lengths[field] = part === "value" ? { ...object[field], value: target.value } : { ...object[field], inches: target.value };
+  change(withObject(draft, key, lengths));
+}
+
 form.addEventListener("change", (event) => {
   const target = event.target;
   if (target === modeField) {
     const mode = LENGTH_MODES.find((item) => item === modeField.value);
     if (mode === undefined) return;
     // The example room and the empty room have round numbers in each unit. A room of the visitor keeps its lengths.
-    const fresh = [exampleDraft, emptyDraft].find((make) => sameDraft(draft, make(draft.mode)));
+    const fresh = isExample(draft) ? exampleDraft : sameDraft(draft, emptyDraft(draft.mode)) ? emptyDraft : undefined;
     const origin = fresh === undefined ? typed : fresh(mode);
     load(withMode(origin, mode));
     typed = origin;
@@ -953,6 +1273,11 @@ form.addEventListener("change", (event) => {
     sidesList.querySelector<HTMLElement>(`li.feature[data-key="${CSS.escape(feature)}"] select`)?.focus();
     return;
   }
+  if (target instanceof HTMLSelectElement && target.dataset["part"] === "outlet") {
+    const object = target.closest<HTMLElement>("li.object")?.dataset["key"];
+    if (object !== undefined) change(withObject(draft, object, { outlet: target.value }));
+    return;
+  }
   if (!(target instanceof HTMLInputElement) || target.type !== "radio") return;
   const key = keyOf(target);
   const corner: Corner | undefined = target.value === "left" || target.value === "right" || target.value === "angle" ? target.value : undefined;
@@ -970,6 +1295,10 @@ form.addEventListener("click", (event) => {
   if (target === null || key === undefined) return;
   const action = target.dataset["action"];
   const feature = target.closest<HTMLElement>("li.feature")?.dataset["key"];
+  if (action === "objects" || action === "add-object" || action === "remove-object" || action === "swap-object") {
+    clickObject(target, action, key);
+    return;
+  }
   if (action === "remove") {
     const index = draft.sides.findIndex((side) => side.key === key);
     change(withoutSide(draft, key));
@@ -1014,6 +1343,66 @@ form.addEventListener("click", (event) => {
   }
 });
 
+/**
+ * This function makes the change of a button of an object. It shows the kinds, adds or removes an object, or measures from the other end.
+ * `side` is the key of the wall of the button.
+ */
+function clickObject(target: HTMLButtonElement, action: string, side: string): void {
+  if (action === "objects") {
+    const kinds = target.parentElement?.querySelector<HTMLElement>(".object-kinds");
+    if (kinds === null || kinds === undefined) return;
+    kinds.hidden = !kinds.hidden;
+    target.setAttribute("aria-expanded", String(!kinds.hidden));
+    if (!kinds.hidden) kinds.querySelector("button")?.focus();
+    return;
+  }
+  if (action === "add-object") {
+    const kind = OBJECT_KINDS.find((item) => item === target.dataset["kind"]);
+    if (kind === undefined) return;
+    const holder = target.closest<HTMLElement>(".object-add")?.dataset["holder"];
+    const place: ObjectPlace = holder === undefined ? { side } : { holder };
+    const before = new Set(listedObjects(draft).map((item) => item.object.key));
+    change(withNewObject(draft, place, kind));
+    renderSides();
+    const added = listedObjects(draft).find((item) => !before.has(item.object.key));
+    if (added !== undefined) objectField(added.object.key)?.focus();
+    return;
+  }
+  const item = target.closest<HTMLElement>("li.object");
+  const key = item?.dataset["key"];
+  if (item === null || key === undefined) return;
+  if (action === "remove-object") {
+    // The focus goes to the button that adds an object at the same place.
+    const holder = item.parentElement?.closest<HTMLElement>("li.object")?.dataset["key"];
+    change(withoutObject(draft, key));
+    moreBoxes.delete(key);
+    renderSides();
+    const add = holder === undefined ? `li.side[data-key="${CSS.escape(side)}"] > .object-add` : `li.object[data-key="${CSS.escape(holder)}"] > .object-add`;
+    sidesList.querySelector<HTMLElement>(`${add} [data-action="objects"]`)?.focus();
+    return;
+  }
+  // The typed number stays: only its corner, or its edge, changes.
+  const from = objectOf(draft, key)?.from;
+  if (from === undefined) return;
+  change(withObject(draft, key, { from: from === "start" ? "end" : "start" }));
+  renderSides();
+  const field = objectField(key);
+  field?.focus();
+  field?.select();
+}
+
+// The box "More" of an object keeps its state when the form makes its fields again. The event of the box does not bubble.
+form.addEventListener(
+  "toggle",
+  (event) => {
+    const box = event.target;
+    if (!(box instanceof HTMLDetailsElement)) return;
+    const key = box.closest<HTMLElement>("li.object")?.dataset["key"];
+    if (key !== undefined) moreBoxes.set(key, box.open);
+  },
+  true,
+);
+
 byId("add").addEventListener("click", () => {
   change(withNewSide(draft));
   renderSides();
@@ -1025,13 +1414,15 @@ form.addEventListener("keydown", (event) => {
   const target = event.target;
   if (event.key !== "Enter" || !(target instanceof HTMLInputElement) || target.type !== "text") return;
   event.preventDefault();
-  const fields = [...form.querySelectorAll<HTMLElement>('input[type="text"], #add')].filter((field) => field.closest("[hidden]") === null);
+  // A field in a closed box "More" is not on the screen.
+  const fields = [...form.querySelectorAll<HTMLElement>('input[type="text"], #add')].filter((field) => field.closest("[hidden], details:not([open])") === null);
   const next = fields[fields.indexOf(target) + 1];
   if (next === undefined) return;
   next.focus({ preventScroll: true });
   if (next instanceof HTMLInputElement) next.select();
-  // The next wall or feature goes below the drawing, which stays at the top of a small screen.
-  (next.closest("li.feature") ?? next.closest("li.side") ?? next).scrollIntoView({ block: "nearest" });
+  // The next wall, feature or field of an object goes below the drawing, which stays at the top of a small screen.
+  // An object can be taller than the screen, so the page shows the field and not all of the object.
+  (next.closest("li.feature") ?? next.closest("li.object .field") ?? next.closest("li.side") ?? next).scrollIntoView({ block: "nearest" });
 });
 
 form.addEventListener("focusin", (event) => {
@@ -1039,12 +1430,14 @@ form.addEventListener("focusin", (event) => {
   const side = target?.closest<HTMLElement>("li.side")?.dataset["side"];
   activeSide = side === undefined ? undefined : Number(side);
   activeFeature = target?.closest<HTMLElement>("li.feature")?.dataset["key"];
+  activeObject = target?.closest<HTMLElement>("li.object")?.dataset["key"];
   showActive();
 });
 
 form.addEventListener("focusout", () => {
   activeSide = undefined;
   activeFeature = undefined;
+  activeObject = undefined;
   showActive();
 });
 
@@ -1109,7 +1502,7 @@ let confirmed: (() => void) | undefined;
 /** This function makes a change that removes typed numbers. It asks first when the room has numbers of the visitor. */
 function replaceRoom(question: string, yes: string, action: () => void): void {
   keepNote.textContent = "";
-  if (sameDraft(draft, exampleDraft(draft.mode)) || sameDraft(draft, emptyDraft(draft.mode))) {
+  if (isExample(draft) || sameDraft(draft, emptyDraft(draft.mode))) {
     action();
     return;
   }
@@ -1201,7 +1594,7 @@ async function openFile(file: File): Promise<void> {
   if (survey.success) {
     const more = hasMore(survey.data);
     if (!addRooms({ rooms: [draftOf(survey.data)], connections: [], more }, FULL_FOR_FILE)) return;
-    keepNote.textContent = more ? "The page shows the walls, the doors, the windows and the outlets of the file. It does not keep the other data of the file yet." : "The page shows the room of the file.";
+    keepNote.textContent = more ? "The page shows the walls, the doors, the windows, the outlets and the furniture of the file. It does not keep the other data of the file yet." : "The page shows the room of the file.";
     return;
   }
   // A file from the rooms together has each room and the doors between them.

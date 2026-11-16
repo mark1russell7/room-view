@@ -7,18 +7,21 @@ import {
   type Level,
   type LevelConnection,
   type LevelResult,
+  type PlacedObject,
   type Room,
 } from "@mark1russell7/room-view";
 import {
   draftKeys,
   FEATURE_NAMES,
   featureFaults,
+  hasFault,
   hasMore,
   joinedTo,
   lengthText,
   nameWords,
   placedFeatures,
   roomName,
+  shownObjects,
   surveyOf,
   unitOf,
   validConnections,
@@ -313,7 +316,7 @@ export function levelStatus(rooms: readonly Draft[], statuses: readonly Status[]
       text: "Open one of these rooms. At one of its doors, select where the door goes. Until then, the drawing shows these rooms apart.",
     };
   }
-  const fault = statuses.findIndex((status) => status.level === "closed" && status.feature !== undefined);
+  const fault = statuses.findIndex((status) => hasFault(status));
   if (fault >= 0) return { level: "closed", title: "The rooms fit together.", text: `${nameAt(fault)}: ${statuses[fault]?.text ?? ""}` };
   const near = joints.find((joint) => joint.state === "near");
   if (near !== undefined) return { level: "closed", title: "The rooms fit together.", text: near.text };
@@ -342,4 +345,14 @@ export function shownLevel(result: LevelResult): Room {
     ...(openings === undefined ? {} : { openings: openings.filter((item) => stays(item.id)) }),
     ...(outlets === undefined ? {} : { outlets: outlets.filter((item) => stays(item.id)) }),
   };
+}
+
+/**
+ * This function gives the objects of a level that the page shows and saves. `room` is the result of `shownLevel`.
+ * It has no object of a room that does not close. An object does not keep an outlet that `room` does not have.
+ */
+export function shownLevelObjects(result: LevelResult, room: Room): readonly PlacedObject[] {
+  const open = result.rooms.filter((item) => !item.result.closure.closed).map((item) => `${item.id}/`);
+  const objects = open.length === 0 ? result.objects : result.objects.filter((object) => !open.some((prefix) => object.id.startsWith(prefix)));
+  return shownObjects(room, objects);
 }

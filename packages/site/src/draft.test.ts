@@ -17,20 +17,30 @@ import {
   featureSpans,
   fieldsOf,
   fileName,
+  hasFault,
   hasMore,
+  isExample,
   joinedTo,
   LENGTH_MODES,
   lengthText,
+  listedObjects,
+  MOST_LEVELS,
   MOST_ROOMS,
   nameWords,
   numberOf,
+  objectFaults,
+  objectMarks,
+  objectOf,
+  objectWords,
   parseStore,
   placedFeatures,
   readFeature,
+  readObject,
   readLength,
   roomName,
   roomState,
   sameDraft,
+  shownObjects,
   shownRoom,
   statusOf,
   storeOf,
@@ -39,16 +49,21 @@ import {
   turnOf,
   typedOf,
   usualOf,
+  usualSize,
   walksRight,
   withActive,
   withConnection,
+  withExample,
   withFeature,
   withMode,
   withNewFeature,
+  withNewObject,
   withNewRoom,
   withNewRooms,
   withNewSide,
+  withObject,
   withoutFeature,
+  withoutObject,
   withoutRoom,
   withoutSide,
   withRoom,
@@ -58,12 +73,15 @@ import {
   type DraftConnection,
   type DraftEnd,
   type DraftFeature,
+  type DraftObject,
   type DraftSide,
   type FeatureEnd,
   type FeatureFault,
   type FeatureField,
   type FeatureKind,
   type LengthMode,
+  type ObjectFault,
+  type ObjectField,
   type Status,
   type Store,
   type TypedLength,
@@ -75,7 +93,7 @@ const NO_TEXT: TypedLength = { value: "", inches: "" };
 
 /** This function gives a wall with one number for its length, and with no features. */
 function wall(length: string, corner: Corner = "left", angle = ""): Wall {
-  return { length: { value: length, inches: "" }, corner, angle, features: [] };
+  return { length: { value: length, inches: "" }, corner, angle, features: [], objects: [] };
 }
 
 /** This function gives a draft with the walls of a list. */
@@ -200,6 +218,11 @@ describe("surveyOf", () => {
         { id: "window-1", wall: "wall-3", kind: "window", offset: 1.2, width: 1.2, sill: 0.9, height: 1.2 },
       ],
       outlets: [{ id: "outlet-1", wall: "wall-2", offset: 1.5, height: 0.3 }],
+      objects: [
+        { id: "rack-1", kind: "rack", wall: "wall-2", offset: 1.2, width: 0.6, depth: 0.9, height: 1.2, gap: 0.1, outlet: "outlet-1" },
+        { id: "desk-1", kind: "desk", wall: "wall-3", offset: 1.05, width: 1.5, depth: 0.75, height: 0.75 },
+        { id: "display-1", kind: "display", on: "desk-1", offset: 0.45, width: 0.6, depth: 0.2, height: 0.45, gap: 0.1 },
+      ],
     });
   });
 
@@ -398,7 +421,7 @@ describe("draftOf", () => {
     const draft = draftOf({ schema: "survey/1", unit: "m", height: Number.NaN, wallThickness: -1, sides: [{ id: "a", length: 0, turn: Number.POSITIVE_INFINITY }] });
     expect(draft.height).toEqual({ value: "", inches: "" });
     expect(draft.thickness).toEqual({ value: "", inches: "" });
-    expect(draft.sides[0]).toEqual({ key: "s1", length: { value: "", inches: "" }, corner: "angle", angle: "", features: [] });
+    expect(draft.sides[0]).toEqual({ key: "s1", length: { value: "", inches: "" }, corner: "angle", angle: "", features: [], objects: [] });
   });
 });
 
@@ -723,7 +746,7 @@ describe("the changes of a draft", () => {
 
   it("adds a wall with no length and the corner of the wall before it", () => {
     const right = withSide(exampleDraft("m"), "s4", { corner: "right" });
-    expect(withNewSide(right).sides.at(-1)).toEqual({ key: "s5", length: { value: "", inches: "" }, corner: "right", angle: "", features: [] });
+    expect(withNewSide(right).sides.at(-1)).toEqual({ key: "s5", length: { value: "", inches: "" }, corner: "right", angle: "", features: [], objects: [] });
     const angle = withSide(exampleDraft("m"), "s4", { corner: "angle", angle: "135" });
     expect(withNewSide(angle).sides.at(-1)?.corner).toBe("left");
   });
@@ -1224,5 +1247,478 @@ describe("the rooms of a store", () => {
     }
     expect(withActive(store, 1)).toBe(store);
     expect(withActive(store, 0)).toEqual(storeOf([named("A"), named("B")], 0));
+  });
+});
+
+/** This function gives an object with one number for each length of a list. Each other length has no text. */
+function thing(key: string, kind: string, lengths: Partial<Readonly<Record<ObjectField, string>>> = {}, more: Partial<Pick<DraftObject, "name" | "from" | "outlet" | "holds">> = {}): DraftObject {
+  const typed = (text: string | undefined): TypedLength => ({ value: text ?? "", inches: "" });
+  return {
+    key,
+    kind,
+    name: "",
+    from: "start",
+    offset: typed(lengths.offset),
+    width: typed(lengths.width),
+    depth: typed(lengths.depth),
+    height: typed(lengths.height),
+    gap: typed(lengths.gap),
+    lift: typed(lengths.lift),
+    outlet: "",
+    holds: [],
+    ...more,
+  };
+}
+
+/** This function gives a draft with the objects of a list against the wall at a position, from 0. */
+function against(draft: Draft, index: number, objects: readonly DraftObject[]): Draft {
+  return { ...draft, sides: draft.sides.map((side, at) => (at === index ? { ...side, objects } : side)) };
+}
+
+function objectFaultsFor(draft: Draft): readonly ObjectFault[] {
+  return objectFaults(draft, expandSurvey(surveyOf(draft)));
+}
+
+/** This function gives the example room of the page from before the furniture. */
+function bare(mode: LengthMode): Draft {
+  const example = exampleDraft(mode);
+  return { ...example, sides: example.sides.map((side) => ({ ...side, objects: [] })) };
+}
+
+describe("the kinds of objects", () => {
+  it("gives the words of a kind for a message", () => {
+    expect(objectWords("desk")).toBe("desk");
+    expect(objectWords("shelf")).toBe("shelves");
+    expect(objectWords("other")).toBe("object");
+    expect(objectWords("Floor lamp #2")).toBe("floor lamp 2");
+    expect(objectWords(" ? ")).toBe("object");
+  });
+
+  it("gives the usual size of a kind in the unit of the mode", () => {
+    expect(usualSize("desk", "width", "m")).toBe(1.5);
+    expect(usualSize("desk", "depth", "cm")).toBe(75);
+    expect(usualSize("desk", "width", "ft-in")).toBe(60);
+    expect(usualSize("rack", "height", "in")).toBe(48);
+    expect(usualSize("Floor lamp", "width", "m")).toBe(0.6);
+    expect(usualSize("desk", "gap", "m")).toBe(0);
+    expect(usualSize("desk", "offset", "m")).toBeUndefined();
+    expect(usualSize("desk", "lift", "m")).toBeUndefined();
+  });
+});
+
+describe("readObject", () => {
+  it("gives the numbers of an object, with the usual size for a field with no text", () => {
+    expect(readObject(thing("o1", "desk", { offset: "1" }), 4, "m")).toEqual({ state: "ok", numbers: { start: 1, width: 1.5, depth: 0.75, height: 0.75, gap: 0, lift: undefined } });
+    const typed = thing("o1", "desk", { offset: "0", width: "2", depth: "1", height: "0.7", gap: "0.05", lift: "0.1" });
+    expect(readObject(typed, 4, "m")).toEqual({ state: "ok", numbers: { start: 0, width: 2, depth: 1, height: 0.7, gap: 0.05, lift: 0.1 } });
+  });
+
+  it("measures from the far end of the wall, or of the holder", () => {
+    expect(readObject(thing("o1", "desk", { offset: "0.5" }, { from: "end" }), 4, "m")).toMatchObject({ state: "ok", numbers: { start: 2 } });
+    expect(readObject(thing("o1", "display", { offset: "0.1" }, { from: "end" }), 1.5, "m")).toMatchObject({ state: "ok", numbers: { start: 0.8 } });
+  });
+
+  it("tells the first field that needs a value", () => {
+    expect(readObject(thing("o1", "desk"), 4, "m")).toEqual({ state: "empty", field: "offset" });
+    expect(readObject(thing("o1", "desk", { offset: "1", width: "wide" }), 4, "m")).toEqual({ state: "bad", field: "width" });
+    expect(readObject(thing("o1", "desk", { offset: "1", depth: "0" }), 4, "m")).toEqual({ state: "zero", field: "depth" });
+    expect(readObject(thing("o1", "desk", { offset: "1", lift: "up" }), 4, "m")).toEqual({ state: "bad", field: "lift" });
+  });
+});
+
+describe("the objects of a survey record", () => {
+  const desk = thing("o1", "desk", { offset: "0.5" }, { name: " Standing desk ", holds: [thing("o2", "display", { offset: "0.2" }), thing("o3", "computer", { offset: "1", lift: "0" })] });
+  const lamp = thing("o5", "Floor lamp", { offset: "0.2", width: "0.3", depth: "0.3", height: "1.6", gap: "0.1" });
+  const draft = against(against(BOX, 0, [desk, thing("o4", "desk", { offset: "0.25" }, { from: "end" })]), 2, [lamp]);
+
+  it("lists each object with its wall, its holder, its level and its name", () => {
+    const listed = listedObjects(draft);
+    expect(listed.map((item) => item.id)).toEqual(["desk-1", "display-1", "computer-1", "desk-2", "floor-lamp-1"]);
+    expect(listed.map((item) => item.words)).toEqual(["desk 1", "display 1", "computer 1", "desk 2", "floor lamp 1"]);
+    expect(listed.map((item) => item.level)).toEqual([1, 2, 2, 1, 1]);
+    expect(listed.map((item) => item.side)).toEqual([0, 0, 0, 0, 2]);
+    expect(listed.map((item) => item.holder?.id)).toEqual([undefined, "desk-1", "desk-1", undefined, undefined]);
+    expect(listed.map((item) => item.base)).toEqual([4, 1.5, 1.5, 4, 4]);
+    expect(listed.map((item) => item.ready)).toEqual([true, true, true, true, true]);
+  });
+
+  it("has each object against its wall, or on its holder", () => {
+    expect(surveyOf(draft).objects).toEqual([
+      { id: "desk-1", kind: "desk", name: "Standing desk", wall: "wall-1", offset: 0.5, width: 1.5, depth: 0.75, height: 0.75 },
+      { id: "display-1", kind: "display", on: "desk-1", offset: 0.2, width: 0.6, depth: 0.2, height: 0.45 },
+      { id: "computer-1", kind: "computer", on: "desk-1", offset: 1, width: 0.2, depth: 0.45, height: 0.45, lift: 0 },
+      { id: "desk-2", kind: "desk", wall: "wall-1", offset: 2.25, width: 1.5, depth: 0.75, height: 0.75 },
+      { id: "floor-lamp-1", kind: "Floor lamp", wall: "wall-3", offset: 0.2, width: 0.3, depth: 0.3, height: 1.6, gap: 0.1 },
+    ]);
+  });
+
+  it("gives a place in the room to each object", () => {
+    const result = expandSurvey(surveyOf(draft));
+    expect(result.objects.map((item) => item.id)).toEqual(["desk-1", "display-1", "computer-1", "desk-2", "floor-lamp-1"]);
+    expect(result.objects.map((item) => item.parent)).toEqual([undefined, "desk-1", "desk-1", undefined, undefined]);
+    expect(objectFaultsFor(draft)).toEqual([]);
+  });
+
+  it("has no record of an object that needs a value, of an object on it, or of an object on a wall with no length", () => {
+    const held = thing("o2", "display", { offset: "0.2" });
+    expect(surveyOf(against(BOX, 0, [thing("o1", "desk", {}, { holds: [held] })])).objects).toBeUndefined();
+    const noWall = against(withSide(BOX, "s1", { length: NO_TEXT }), 0, [thing("o1", "desk", { offset: "1" }, { holds: [held] })]);
+    expect(surveyOf(noWall).objects).toBeUndefined();
+    expect(listedObjects(noWall).map((item) => item.ready)).toEqual([false, false]);
+  });
+
+  it("keeps the number of an object when an object before it needs a value", () => {
+    const two = against(BOX, 0, [thing("o1", "desk"), thing("o2", "desk", { offset: "2" })]);
+    expect(surveyOf(two).objects?.map((item) => item.id)).toEqual(["desk-2"]);
+  });
+
+  it("gives the outlet of an object only when the record has that outlet", () => {
+    const rack = thing("o1", "rack", { offset: "0.5" }, { outlet: "f1" });
+    expect(surveyOf(against(onWall(BOX, 1, [feature("f1", "outlet", { offset: "1" })]), 0, [rack])).objects?.[0]?.outlet).toBe("outlet-1");
+    expect(surveyOf(against(BOX, 0, [rack])).objects?.[0]).toEqual({ id: "rack-1", kind: "rack", wall: "wall-1", offset: 0.5, width: 0.6, depth: 0.9, height: 1.2 });
+    // An outlet that needs a value is not in the record.
+    expect(surveyOf(against(onWall(BOX, 1, [feature("f1", "outlet")]), 0, [rack])).objects?.[0]?.outlet).toBeUndefined();
+    // A door is not an outlet.
+    expect(surveyOf(against(onWall(BOX, 1, [feature("f1", "door", { offset: "1", width: "0.9" })]), 0, [rack])).objects?.[0]?.outlet).toBeUndefined();
+  });
+});
+
+describe("the objects of the draft of a survey record", () => {
+  const sizes = { offset: 0, width: 0.5, depth: 0.5, height: 0.5 };
+
+  it("reads the objects of its own record", () => {
+    // A record in inches gives a draft in feet and inches.
+    for (const mode of LENGTH_MODES.filter((item) => item !== "in")) expect(draftOf(surveyOf(exampleDraft(mode))), mode).toEqual(exampleDraft(mode));
+    expect(draftOf(surveyOf(exampleDraft("in")))).toEqual(exampleDraft("ft-in"));
+  });
+
+  it("sorts the objects of a wall by their distance, and gives each object its holder and its outlet", () => {
+    const survey: Survey = {
+      ...surveyOf(onWall(BOX, 1, [feature("f1", "outlet", { offset: "1" })])),
+      objects: [
+        { id: "b", kind: " Lamp ", wall: "wall-1", offset: 2, width: 0.3, depth: 0.3, height: 1.6, lift: 0 },
+        { id: "a", kind: "desk", name: " Standing desk ", wall: "wall-1", offset: 0.5, width: 1.5, depth: 0.75, height: 0.75, gap: 0.05, outlet: "outlet-1" },
+        { id: "c", kind: "display", on: "a", offset: 0.2, width: 0.6, depth: 0.2, height: 0.45 },
+        { id: "d", kind: "", wall: "wall-3", offset: 0, width: 0, depth: 1, height: 1 },
+      ],
+    };
+    const draft = draftOf(survey);
+    expect(draft.sides.map((side) => side.objects.map((item) => `${item.key} ${item.kind}`))).toEqual([["o1 desk", "o3 Lamp"], [], ["o4 other"], []]);
+    expect(objectOf(draft, "o1")).toMatchObject({ name: "Standing desk", from: "start", offset: { value: "0.5" }, gap: { value: "0.05" }, lift: NO_TEXT, outlet: "f1" });
+    expect(objectOf(draft, "o1")?.holds.map((item) => `${item.key} ${item.kind}`)).toEqual(["o2 display"]);
+    expect(objectOf(draft, "o3")).toMatchObject({ gap: NO_TEXT, lift: { value: "0" }, outlet: "" });
+    // A size of 0 stays as text, so the page tells the fault.
+    expect(objectOf(draft, "o4")).toMatchObject({ offset: { value: "0" }, width: { value: "0" } });
+    expect(hasMore(survey)).toBe(false);
+  });
+
+  it("keeps the first object of a name, and no object that the room cannot have", () => {
+    const base = surveyOf(BOX);
+    const survey: Survey = {
+      ...base,
+      objects: [
+        { id: "a", kind: "desk", wall: "wall-1", ...sizes },
+        { id: "a", kind: "sofa", wall: "wall-2", ...sizes },
+        { id: "b", kind: "rack", wall: "hall", ...sizes },
+        { id: "c", kind: "display", on: "b", ...sizes },
+        { id: "d", kind: "chair", on: "e", ...sizes },
+        { id: "e", kind: "chair", on: "d", ...sizes },
+        { id: "f", kind: "bed", ...sizes },
+      ],
+    };
+    expect(draftOf(survey).sides.map((side) => side.objects.map((item) => item.kind))).toEqual([["desk"], [], [], []]);
+    expect(hasMore(survey)).toBe(true);
+  });
+
+  it("keeps the objects down to the last level", () => {
+    const ids = ["a", "b", "c", "d", "e"];
+    const objects = ids.map((id, index) => ({ id, kind: "shelf", ...(index === 0 ? { wall: "wall-1" } : { on: ids[index - 1] ?? "" }), ...sizes }));
+    const survey: Survey = { ...surveyOf(BOX), objects };
+    expect(listedObjects(draftOf(survey)).map((item) => item.level)).toEqual(Array.from({ length: MOST_LEVELS }, (_, index) => index + 1));
+    expect(hasMore(survey)).toBe(true);
+    expect(hasMore({ ...survey, objects: objects.slice(0, MOST_LEVELS) })).toBe(false);
+  });
+
+  it("tells the data of an object that a draft does not keep", () => {
+    const base = surveyOf(exampleDraft("m"));
+    const objects = base.objects ?? [];
+    expect(objects).toHaveLength(3);
+    const more: readonly Survey[] = [
+      { ...base, objects: objects.map((item) => (item.id === "desk-1" ? { ...item, outlet: "outlet-9" } : item)) },
+      { ...base, objects: objects.map((item) => ({ ...item, gap: -0.1 })) },
+      { ...base, objects: objects.map((item) => ({ ...item, lift: -0.1 })) },
+      // The outlet of the rack is on a wall that the survey does not have.
+      { ...base, outlets: [{ id: "outlet-1", wall: "hall", offset: 1, height: 0.3 }] },
+    ];
+    for (const [index, item] of more.entries()) expect(hasMore(item), String(index)).toBe(true);
+  });
+
+  it("keeps 80 characters of a name", () => {
+    const long = "n".repeat(100);
+    const survey: Survey = { ...surveyOf(BOX), name: long, objects: [{ id: "a", kind: long, name: long, wall: "wall-1", ...sizes }] };
+    const draft = draftOf(survey);
+    expect(draft.name).toHaveLength(80);
+    expect(objectOf(draft, "o1")?.kind).toHaveLength(80);
+    expect(objectOf(draft, "o1")?.name).toHaveLength(80);
+    expect(parseStore(storeText(storeOf([draft])))).toEqual(storeOf([draft]));
+  });
+});
+
+describe("the example room with furniture", () => {
+  it("has a rack at the outlet, and a desk with a display", () => {
+    for (const mode of LENGTH_MODES) {
+      const example = exampleDraft(mode);
+      expect(example.sides.map((side) => side.objects.map((item) => `${item.key} ${item.kind}`)), mode).toEqual([[], ["o1 rack"], ["o2 desk"], []]);
+      expect(objectOf(example, "o1")?.outlet, mode).toBe("f2");
+      expect(objectOf(example, "o2")?.holds.map((item) => `${item.key} ${item.kind}`), mode).toEqual(["o3 display"]);
+      expect(objectFaultsFor(example), mode).toEqual([]);
+      expect(expandSurvey(surveyOf(example)).objects, mode).toHaveLength(3);
+    }
+  });
+
+  it("is the example with its furniture or with no furniture, and no other room", () => {
+    for (const mode of LENGTH_MODES) {
+      expect(isExample(exampleDraft(mode)), mode).toBe(true);
+      expect(isExample(bare(mode)), mode).toBe(true);
+      expect(isExample(emptyDraft(mode)), mode).toBe(false);
+      expect(isExample(withObject(exampleDraft(mode), "o1", { name: "Rack" })), mode).toBe(false);
+      expect(isExample(withoutObject(exampleDraft(mode), "o3")), mode).toBe(false);
+      expect(isExample({ ...bare(mode), name: "Office" }), mode).toBe(false);
+    }
+  });
+
+  it("replaces the example of the page from before the furniture", () => {
+    const sides = bare("m").sides.map(({ key, length, corner, angle, features }) => ({ key, length, corner, angle, features }));
+    const old = parseStore(JSON.stringify({ version: 1, rooms: [{ ...bare("m"), sides }], active: 0 }));
+    if (old === undefined) throw new Error("the page does not read the old store");
+    expect(old).toEqual(storeOf([bare("m")]));
+    expect(withExample(old)).toEqual(storeOf([exampleDraft("m")]));
+  });
+
+  it("keeps each other store", () => {
+    const stores: readonly Store[] = [storeOf([exampleDraft("m")]), storeOf([{ ...bare("m"), name: "Office" }]), storeOf([bare("m"), bare("m")]), storeOf([emptyDraft("m")])];
+    for (const [index, store] of stores.entries()) expect(withExample(store), String(index)).toBe(store);
+  });
+
+  it("gets a new room in its place, with or without its furniture", () => {
+    expect(withNewRoom(storeOf([exampleDraft("m")]), BOX).rooms).toEqual([BOX]);
+    expect(withNewRoom(storeOf([bare("m")]), BOX).rooms).toEqual([BOX]);
+  });
+});
+
+describe("the changes of the objects of a draft", () => {
+  it("adds an object with no lengths against a wall, with a key that no object has", () => {
+    const one = withNewObject(BOX, { side: "s2" }, "desk");
+    expect(one.sides[1]?.objects).toEqual([thing("o1", "desk")]);
+    const two = withNewObject(one, { side: "s2" }, "rack");
+    expect(two.sides[1]?.objects.map((item) => `${item.key} ${item.kind}`)).toEqual(["o1 desk", "o2 rack"]);
+    expect(withNewObject(withoutObject(two, "o1"), { side: "s1" }, "desk").sides[0]?.objects[0]?.key).toBe("o3");
+    expect(withNewObject(BOX, { side: "none" }, "desk")).toEqual(BOX);
+  });
+
+  it("adds an object on an object, down to the last level", () => {
+    let draft = withNewObject(BOX, { side: "s1" }, "shelf");
+    for (let level = 1; level < MOST_LEVELS; level += 1) draft = withNewObject(draft, { holder: `o${String(level)}` }, "other");
+    expect(listedObjects(draft).map((item) => `${item.object.key} ${String(item.level)}`)).toEqual(Array.from({ length: MOST_LEVELS }, (_, index) => `o${String(index + 1)} ${String(index + 1)}`));
+    expect(withNewObject(draft, { holder: `o${String(MOST_LEVELS)}` }, "other")).toBe(draft);
+    expect(withNewObject(draft, { holder: "o99" }, "other")).toBe(draft);
+  });
+
+  it("does not add an object to a room with the largest number of objects", () => {
+    let draft = BOX;
+    for (let count = 0; count < 200; count += 1) draft = withNewObject(draft, { side: count % 2 === 0 ? "s1" : "s3" }, "chair");
+    expect(draft.sides.flatMap((side) => side.objects)).toHaveLength(200);
+    expect(withNewObject(draft, { side: "s1" }, "chair")).toBe(draft);
+    expect(withNewObject(draft, { holder: "o1" }, "chair")).toBe(draft);
+    expect(parseStore(storeText(storeOf([draft])))).toEqual(storeOf([draft]));
+  });
+
+  it("changes and removes an object at each level", () => {
+    const draft = against(BOX, 0, [thing("o1", "desk", { offset: "1" }, { holds: [thing("o2", "display", { offset: "0.2" })] })]);
+    const named = withObject(draft, "o2", { name: "Left display", from: "end" });
+    expect(objectOf(named, "o2")).toMatchObject({ name: "Left display", from: "end", offset: { value: "0.2" } });
+    expect(objectOf(named, "o1")).toMatchObject({ kind: "desk", offset: { value: "1" } });
+    expect(withObject(draft, "o9", { name: "x" })).toBe(draft);
+    expect(objectOf(withoutObject(draft, "o2"), "o1")?.holds).toEqual([]);
+    expect(withoutObject(draft, "o1").sides[0]?.objects).toEqual([]);
+    expect(objectOf(withoutObject(draft, "o1"), "o2")).toBeUndefined();
+    expect(withoutObject(draft, "o9")).toBe(draft);
+  });
+
+  it("removes the outlet of an object with its feature, and with the wall of its feature", () => {
+    const outlets = [feature("f1", "outlet", { offset: "1" }), feature("f2", "outlet", { offset: "2" })];
+    const draft = against(onWall(BOX, 1, outlets), 0, [thing("o1", "rack", { offset: "0.5" }, { outlet: "f1", holds: [thing("o2", "computer", { offset: "0.1" }, { outlet: "f2" })] })]);
+    const less = withoutFeature(draft, "f2");
+    expect(objectOf(less, "o1")?.outlet).toBe("f1");
+    expect(objectOf(less, "o2")?.outlet).toBe("");
+    const none = withoutSide(draft, "s2");
+    expect(objectOf(none, "o1")?.outlet).toBe("");
+    expect(objectOf(none, "o2")?.outlet).toBe("");
+    expect(withoutSide(draft, "s1").sides.flatMap((side) => side.objects)).toEqual([]);
+  });
+
+  it("keeps each length of an object in a different mode", () => {
+    const draft = against(BOX, 0, [thing("o1", "desk", { offset: "1", width: "1.5" }, { holds: [thing("o2", "display", { offset: "0.25", lift: "0.1" })] })]);
+    const inches = withMode(draft, "in");
+    expect(objectOf(inches, "o1")).toMatchObject({ offset: { value: "39.37" }, width: { value: "59.06" }, depth: NO_TEXT });
+    expect(objectOf(inches, "o2")).toMatchObject({ offset: { value: "9.84" }, lift: { value: "3.94" } });
+  });
+});
+
+describe("the objects of a store", () => {
+  const desk = thing("o1", "desk", { offset: "1" });
+  const [first, second, ...others] = BOX.sides;
+  /** This function gives a room whose first wall has a list of objects. */
+  const withFirst = (objects: unknown): unknown => ({ ...BOX, sides: [{ ...first, objects }, second, ...others] });
+  /** This function gives an object with a number of levels of objects on it. */
+  const stack = (levels: number, from = 1): DraftObject => thing(`o${String(from)}`, "other", { offset: "0" }, levels > 1 ? { holds: [stack(levels - 1, from + 1)] } : {});
+  /** This function gives a number of objects with keys from a number. */
+  const many = (from: number, count: number): DraftObject[] => Array.from({ length: count }, (_, index) => ({ ...desk, key: `o${String(from + index)}` }));
+  const read = (item: unknown): Store | undefined => parseStore(JSON.stringify({ version: 1, rooms: [item], active: 0 }));
+
+  it("reads its own text with the objects of each level", () => {
+    const store = storeOf([against(BOX, 0, [thing("o1", "desk", { offset: "1" }, { name: "Desk", holds: [thing("o2", "display", { offset: "0.2" }, { from: "end" })] })])]);
+    expect(parseStore(storeText(store))).toEqual(store);
+    expect(parseStore(storeText(storeOf([exampleDraft("ft-in")])))).toEqual(storeOf([exampleDraft("ft-in")]));
+  });
+
+  it("removes an outlet that the room does not have", () => {
+    const rack = thing("o1", "rack", { offset: "0.5" }, { outlet: "f9" });
+    expect(read(against(BOX, 0, [rack]))).toEqual(storeOf([against(BOX, 0, [{ ...rack, outlet: "" }])]));
+    // A door is not an outlet.
+    const door = against(onWall(BOX, 1, [feature("f9", "door", { offset: "1", width: "0.9" })]), 0, [rack]);
+    expect(read(door)?.rooms[0]?.sides[0]?.objects[0]?.outlet).toBe("");
+    const outlet = against(onWall(BOX, 1, [feature("f9", "outlet", { offset: "1" })]), 0, [rack]);
+    expect(read(outlet)).toEqual(storeOf([outlet]));
+  });
+
+  it("refuses an object that is not an object of the page", () => {
+    const rooms: readonly unknown[] = [
+      withFirst("none"),
+      withFirst([null]),
+      withFirst([{ ...desk, from: "middle" }]),
+      withFirst([{ ...desk, width: "1" }]),
+      withFirst([{ ...desk, key: 1 }]),
+      withFirst([{ ...desk, kind: "k".repeat(81) }]),
+      withFirst([{ ...desk, name: 5 }]),
+      withFirst([{ ...desk, outlet: null }]),
+      withFirst([{ ...desk, holds: "none" }]),
+      withFirst([{ ...desk, holds: [{ ...desk, key: "o2", lift: 0 }] }]),
+      withFirst([desk, desk]),
+      // An object has the key of the object that holds it.
+      withFirst([{ ...desk, holds: [desk] }]),
+      // Two walls have an object with the same key.
+      { ...BOX, sides: [{ ...first, objects: [desk] }, { ...second, objects: [desk] }, ...others] },
+      withFirst([stack(MOST_LEVELS + 1)]),
+      withFirst(many(0, 201)),
+      // Each wall has a permitted number of objects, and the room has too many.
+      { ...BOX, sides: [{ ...first, objects: many(0, 150) }, { ...second, objects: many(150, 51) }, ...others] },
+    ];
+    for (const [index, item] of rooms.entries()) expect(read(item), String(index)).toBeUndefined();
+    expect(read(withFirst([stack(MOST_LEVELS)]))).toEqual(storeOf([against(BOX, 0, [stack(MOST_LEVELS)])]));
+    expect(read({ ...BOX, sides: [{ ...first, objects: many(0, 150) }, { ...second, objects: many(150, 50) }, ...others] })?.rooms[0]?.sides[1]?.objects).toHaveLength(50);
+  });
+});
+
+describe("objectFaults", () => {
+  it("asks for the first field of an object that needs a value", () => {
+    expect(objectFaultsFor(against(BOX, 0, [thing("o1", "desk")]))).toEqual([
+      { side: 0, key: "o1", id: "desk-1", level: "typing", field: "offset", text: "Type the distance from the corner of desk 1 on wall 1.", note: "Type its distance from the corner." },
+    ]);
+    expect(objectFaultsFor(against(BOX, 1, [thing("o1", "rack", { offset: "1", width: "wide" })]))[0]).toMatchObject({
+      side: 1,
+      level: "typing",
+      field: "width",
+      text: "The width of rack 1 on wall 2 is not a number.",
+      note: "Its width is not a number.",
+    });
+    expect(objectFaultsFor(against(BOX, 0, [thing("o1", "desk", { offset: "1", depth: "0" })]))[0]).toMatchObject({ field: "depth", text: "The depth of desk 1 on wall 1 is 0.", note: "Its depth is 0." });
+    expect(objectFaultsFor(against(BOX, 0, [thing("o1", "desk", { offset: "1", gap: "far" })]))[0]).toMatchObject({ field: "gap", text: "The distance from the wall of desk 1 on wall 1 is not a number." });
+    expect(objectFaultsFor(against(BOX, 0, [thing("o1", "desk", { offset: "1", lift: "up" })]))[0]).toMatchObject({ field: "lift", text: "The height of the bottom of desk 1 on wall 1 is not a number." });
+  });
+
+  it("uses the words of an object on a holder", () => {
+    const faults = objectFaultsFor(against(BOX, 0, [thing("o1", "desk", { offset: "1" }, { holds: [thing("o2", "display"), thing("o3", "display", { offset: "1", gap: "back" })] })]));
+    expect(faults).toHaveLength(2);
+    expect(faults[0]).toMatchObject({ side: 0, key: "o2", id: "display-1", field: "offset", text: "Type the distance from the edge of display 1 on desk 1.", note: "Type its distance from the edge." });
+    expect(faults[1]).toMatchObject({ side: 0, key: "o3", id: "display-2", field: "gap", text: "The distance from the back of display 2 on desk 1 is not a number." });
+  });
+
+  it("tells an object that is not in the room", () => {
+    expect(objectFaultsFor(against(BOX, 0, [thing("o1", "desk", { offset: "5" })]))).toEqual([
+      { side: 0, key: "o1", id: "desk-1", level: "warning", text: "Desk 1 on wall 1 is not in the room.", note: "It is not in the room. Examine its distances." },
+    ]);
+  });
+
+  it("tells an object in the space of a wall", () => {
+    expect(objectFaultsFor(against(BOX, 0, [thing("o1", "desk", { offset: "3" })]))).toEqual([
+      { side: 0, key: "o1", id: "desk-1", level: "warning", text: "Desk 1 on wall 1 is in the space of wall 2.", note: "It is in the space of wall 2." },
+    ]);
+  });
+
+  it("tells each of two objects that share a space, and not a holder with the object on it", () => {
+    const draft = against(BOX, 0, [thing("o1", "desk", { offset: "1" }, { holds: [thing("o2", "display", { offset: "0.2" })] }), thing("o3", "cabinet", { offset: "2" })]);
+    expect(objectFaultsFor(draft).map((fault) => `${fault.key} ${fault.level}: ${fault.text}`)).toEqual([
+      "o1 warning: Desk 1 on wall 1 is in the space of cabinet 1.",
+      "o3 warning: Cabinet 1 on wall 1 is in the space of desk 1.",
+    ]);
+    expect(objectFaultsFor(draft).map((fault) => fault.note)).toEqual(["It is in the space of cabinet 1.", "It is in the space of desk 1."]);
+  });
+
+  it("gives no fault of its place to an object in a room that does not close, or on a wall with no length", () => {
+    const open = against(room("m", [wall("4"), wall("3"), wall("4"), wall("1")]), 0, [thing("o1", "desk", { offset: "9" })]);
+    expect(objectFaultsFor(open)).toEqual([]);
+    const noWall = against(withSide(BOX, "s1", { length: NO_TEXT }), 0, [thing("o1", "desk", { offset: "9" }, { holds: [thing("o2", "display", { offset: "9" })] })]);
+    expect(objectFaultsFor(noWall)).toEqual([]);
+  });
+});
+
+describe("the status of a room with objects", () => {
+  const outside = against(BOX, 0, [thing("o1", "desk", { offset: "5" })]);
+
+  it("tells the first fault of the objects of a closed room", () => {
+    expect(statusFor(outside)).toEqual({ level: "closed", title: "The room closes.", text: "Desk 1 on wall 1 is not in the room.", side: 0, object: "o1" });
+    expect(hasFault(statusFor(outside))).toBe(true);
+    expect(roomState(statusFor(outside))).toBe("fault");
+    expect(hasFault(statusFor(BOX))).toBe(false);
+    const typing = against(BOX, 2, [thing("o1", "sofa")]);
+    expect(statusFor(typing)).toEqual({ level: "closed", title: "The room closes.", text: "Type the distance from the corner of sofa 1 on wall 3.", side: 2, object: "o1" });
+  });
+
+  it("tells a fault of a feature before a fault of an object", () => {
+    const both = onWall(outside, 1, [feature("f1", "door")]);
+    expect(statusFor(both)).toMatchObject({ side: 1, feature: "f1" });
+    expect(statusFor(both).object).toBeUndefined();
+  });
+
+  it("uses the faults that it gets", () => {
+    expect(statusOf(outside, expandSurvey(surveyOf(outside)), [], [])).toEqual({ level: "closed", title: "The room closes.", text: "The walk ends exactly at its start." });
+  });
+
+  it("tells a wall that needs a value before a fault of an object", () => {
+    expect(statusFor(withSide(outside, "s2", { length: NO_TEXT }))).toMatchObject({ level: "typing", side: 1 });
+  });
+});
+
+describe("objectMarks", () => {
+  it("gives each object of the record with the level of the fault of its place", () => {
+    const draft = against(BOX, 0, [thing("o1", "desk", { offset: "0.2" }, { holds: [thing("o2", "display", { offset: "0.2" })] }), thing("o3", "cabinet", { offset: "5" }), thing("o4", "chair")]);
+    expect(objectMarks(draft, objectFaultsFor(draft))).toEqual([
+      { side: 0, key: "o1", id: "desk-1", kind: "desk", level: 1, fault: undefined },
+      { side: 0, key: "o2", id: "display-1", kind: "display", level: 2, fault: undefined },
+      { side: 0, key: "o3", id: "cabinet-1", kind: "cabinet", level: 1, fault: "warning" },
+    ]);
+  });
+});
+
+describe("shownObjects", () => {
+  it("removes an outlet that the shown room does not have", () => {
+    const draft = against(onWall(BOX, 1, [feature("f1", "outlet", { offset: "1" })]), 0, [thing("o1", "rack", { offset: "0.5" }, { outlet: "f1" })]);
+    const result = expandSurvey(surveyOf(draft));
+    expect(result.objects[0]?.outlet).toBe("outlet-1");
+    expect(shownObjects(result.room, result.objects)).toEqual(result.objects);
+    const shown = shownObjects({ ...result.room, outlets: [] }, result.objects);
+    expect(shown[0]?.outlet).toBeUndefined();
+    expect(shown[0]).toMatchObject({ id: "rack-1", kind: "rack", size: result.objects[0]?.size });
   });
 });

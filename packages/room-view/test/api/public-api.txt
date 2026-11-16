@@ -165,6 +165,7 @@ export interface Finding {
   readonly record: RecordKind;
   readonly at: string;
   readonly message: string;
+  readonly other?: string | undefined;
 }
 
 ### build/index.d.ts#FindingCode

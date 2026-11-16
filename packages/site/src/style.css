@@ -1318,6 +1318,7 @@ a.tool {
 
 /* The shape of the sign tells the fault, so the color is not the only sign. */
 .feature-note,
+.object-note,
 .join-note {
   display: flex;
   align-items: flex-start;
@@ -1327,6 +1328,7 @@ a.tool {
 }
 
 .feature-note::before,
+.object-note::before,
 .join-note::before {
   content: "!";
   display: grid;
@@ -1344,7 +1346,8 @@ a.tool {
   line-height: 1;
 }
 
-.feature[data-fault="warning"] .feature-note::before {
+.feature[data-fault="warning"] .feature-note::before,
+.object[data-fault="warning"] > .object-note::before {
   background: var(--level-near);
 }
 
@@ -1401,6 +1404,143 @@ a.tool {
   padding: 6px 10px;
   text-align: left;
   line-height: 1.2;
+}
+
+.feature-open:disabled {
+  color: var(--quiet);
+  text-decoration: none;
+  cursor: default;
+}
+
+/*
+ * The furniture and the equipment of a wall. They come after the doors and the windows, with the same rule at the left.
+ * An object on a different object is in the item of its holder, so the rules show what holds what.
+ */
+.objects {
+  display: grid;
+  gap: 12px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.object {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border-left: 2px solid var(--line);
+  padding: 0 0 2px 12px;
+  scroll-margin-top: calc(var(--board, 0px) + 28px);
+  scroll-margin-bottom: 16px;
+}
+
+.object:focus-within {
+  border-left-color: var(--ink);
+}
+
+.object[data-fault="warning"] {
+  border-left-color: var(--level-near);
+}
+
+.object[data-fault="error"] {
+  border-left-color: var(--level-over);
+}
+
+/* The name that a person gives to an object is quiet, next to its kind and its number. A long name ends with an ellipsis. */
+.object-given {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--quiet);
+  font-size: 0.9375rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sign-object,
+.sign-holder {
+  fill: none;
+  stroke: currentColor;
+}
+
+.sign-object {
+  stroke-width: 1.5;
+}
+
+.sign-holder {
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+/* The box "More" has the fields that most objects do not need: the name, the space behind, the bottom and the outlet. */
+.more > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  width: fit-content;
+  min-height: 40px;
+  color: var(--link);
+  font-size: 0.9375rem;
+  list-style: none;
+  cursor: pointer;
+}
+
+.more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.more > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 7px solid currentColor;
+  transition: transform 120ms ease-out;
+}
+
+.more[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.more > summary:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
+}
+
+.more > :not(summary) {
+  margin-top: 8px;
+}
+
+.object-aid {
+  margin: 0;
+  color: var(--quiet);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.object-add {
+  display: grid;
+  gap: 8px;
+}
+
+.object-kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5em, 1fr));
+  gap: 8px;
+}
+
+.object-kinds .tool {
+  min-height: 44px;
+  padding: 6px 10px;
+  text-align: left;
+  line-height: 1.2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .more > summary::before {
+    transition: none;
+  }
 }
 
 .add {
@@ -1547,6 +1687,49 @@ a.tool {
   fill: transparent;
   pointer-events: fill;
   cursor: pointer;
+}
+
+/*
+ * The furniture from above: the outline of each object, on the floor and below the walls.
+ * An object on a different object has a darker fill. The outline of an object with a fault has the color of the fault, and an error is a broken line.
+ */
+.walk-object {
+  fill: color-mix(in oklab, var(--ink) 8%, var(--sheet));
+  stroke: var(--ink);
+  stroke-width: 1.25;
+  stroke-linejoin: round;
+}
+
+.walk-object:not([data-level="1"]) {
+  fill: color-mix(in oklab, var(--ink) 17%, var(--sheet));
+}
+
+.walk-object[data-fault="warning"] {
+  stroke: var(--level-near);
+  stroke-width: 2;
+}
+
+.walk-object[data-fault="error"] {
+  stroke: var(--level-over);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+.walk-object.walk-on {
+  stroke: var(--link);
+  stroke-width: 2.5;
+}
+
+.walk-object-name {
+  fill: var(--ink);
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.walk-object-name.walk-on {
+  font-weight: 600;
 }
 
 .walk-gap {

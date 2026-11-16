@@ -319,10 +319,13 @@ describe("checkScene", () => {
     expect(found(checkScene(scene({ objects })))).toEqual(["warning/object-overlap/object/p", "warning/object-overlap/object/q"]);
     const findings = checkScene(scene({ objects: objects.slice(0, 2) }));
     expect(findings.map((finding) => finding.message)).toEqual(['The objects "p" and "q" overlap.']);
+    // The finding names its second record.
+    expect(findings.map((finding) => [finding.at, finding.other])).toEqual([["p", "q"]]);
   });
 
   it("tells an object in a wall", () => {
     expect(found(checkScene(scene({ objects: [{ ...box, id: "o", at: [2, 0.3] }] })))).toEqual(["warning/object-in-wall/object/o"]);
+    expect(checkScene(scene({ objects: [{ ...box, id: "o", at: [2, 0.3] }] })).map((finding) => finding.other)).toEqual(["a"]);
     expect(checkScene(scene({ objects: [{ ...box, id: "o", at: [2, 0.6] }] }))).toEqual([]);
     // An object above the top of the wall is not in the wall.
     expect(checkScene(scene({ objects: [{ ...box, id: "o", at: [2, 0.3], lift: 2.4 }] }))).toEqual([]);

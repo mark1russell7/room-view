@@ -5,12 +5,16 @@ import {
   emptyDraft,
   featureFaults,
   featureSpans,
+  listedObjects,
+  objectFaults,
+  objectMarks,
   roomName,
   storeOf,
   withConnection,
   withNewRooms,
   type Draft,
   type DraftFeature,
+  type DraftObject,
   type DraftSide,
   type Store,
   type TypedLength,
@@ -26,7 +30,7 @@ function box(name: string, lengths: readonly string[], features: Readonly<Record
   return {
     ...emptyDraft("m"),
     name,
-    sides: lengths.map((length, index): DraftSide => ({ key: `s${String(index + 1)}`, length: typed(length), corner: "left", angle: "", features: features[index] ?? [] })),
+    sides: lengths.map((length, index): DraftSide => ({ key: `s${String(index + 1)}`, length: typed(length), corner: "left", angle: "", features: features[index] ?? [], objects: [] })),
   };
 }
 
@@ -47,7 +51,8 @@ function draw(store: Store, size = SIZE): LevelDrawing {
   const result = expandLevel(levelOf(store));
   const inputs = store.rooms.map((room, index): PlanInput => {
     const placed = result.rooms[index];
-    return { name: roomName(room, index), spans: placed === undefined ? [] : featureSpans(room, featureFaults(room, placed.result)) };
+    if (placed === undefined) return { name: roomName(room, index), spans: [], marks: [] };
+    return { name: roomName(room, index), spans: featureSpans(room, featureFaults(room, placed.result)), marks: objectMarks(room, objectFaults(room, placed.result)) };
   });
   return drawLevel(result, size, inputs, jointsOf(store, result));
 }
@@ -66,6 +71,9 @@ function boxOf(points: readonly Pixel[]): Box {
 }
 
 const floorOf = (drawing: LevelDrawing, room: number): Box => boxOf(drawing.rooms[room]?.drawing.floor ?? []);
+
+/** The rooms of the sample apartment. */
+const drafts = (): readonly Draft[] => draftsOf(SAMPLE_LEVEL).rooms;
 
 describe("drawLevel", () => {
   it("draws the rooms with one scale, in the picture", () => {
@@ -189,5 +197,35 @@ describe("drawLevel", () => {
       expect(floor.top).toBeGreaterThanOrEqual(PLAN_MARGIN.y - 1e-6);
       expect(floor.bottom).toBeLessThanOrEqual(520 - PLAN_MARGIN.y + 1e-6);
     }
+  });
+
+  it("draws the objects of each room on its floor", () => {
+    const drafts = draftsOf(SAMPLE_LEVEL);
+    const store = withNewRooms(storeOf([emptyDraft("m")]), drafts.rooms, drafts.connections, true);
+    const drawing = draw(store, { width: 720, height: 520 });
+    expect(drawing.rooms.map((room) => room.drawing.objects.length)).toEqual(store.rooms.map((room) => listedObjects(room).length));
+    expect(drawing.rooms.map((room) => room.drawing.objects.length)).toEqual([9, 1, 1, 2]);
+    for (const room of drawing.rooms) {
+      const floor = boxOf(room.drawing.floor ?? []);
+      for (const object of room.drawing.objects) {
+        const outline = boxOf(object.ring);
+        expect(object.fault).toBeUndefined();
+        expect(outline.left).toBeGreaterThanOrEqual(floor.left - 1e-6);
+        expect(outline.right).toBeLessThanOrEqual(floor.right + 1e-6);
+        expect(outline.top).toBeGreaterThanOrEqual(floor.top - 1e-6);
+        expect(outline.bottom).toBeLessThanOrEqual(floor.bottom + 1e-6);
+      }
+    }
+    // A display on a desk comes after the desk, so the drawing shows it.
+    const kinds = drawing.rooms[0]?.drawing.objects.map((object) => object.kind) ?? [];
+    expect(kinds.indexOf("display")).toBeGreaterThan(kinds.indexOf("desk"));
+  });
+
+  it("draws no objects of a room that does not close", () => {
+    const bed: DraftObject = { ...listedObjects(drafts()[3] ?? A)[0]!.object, key: "o1" };
+    const furnished = (room: Draft): Draft => ({ ...room, sides: room.sides.map((side, index) => (index === 0 ? { ...side, objects: [bed] } : side)) });
+    const open = box("B", ["4", "3", "4", "2"], { 3: [door("f1", "0.5")] });
+    const drawing = draw({ ...PAIR, rooms: [furnished(A), furnished(open)] });
+    expect(drawing.rooms.map((room) => room.drawing.objects.length)).toEqual([1, 0]);
   });
 });
