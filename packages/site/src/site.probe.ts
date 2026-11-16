@@ -33,7 +33,17 @@ click("#details .tool");
 check("the panel goes back to the room", await until(() => text("#details").includes("Floor area")), text("#details"));
 check("no part is selected", $$('.chip[aria-pressed="true"]').length === 0, $$('.chip[aria-pressed="true"]').length);
 
+check("the legend has the sign of each level", $$(".legend-item .level-mark[data-shape]").length === 4, $$(".legend-item").length);
+check("the legend counts the outlets of each level", text('.legend-item[data-level="ok"]').includes("Within its limit: 5") && text('.legend-item[data-level="near"]').includes("Near its limit: 2"), text("#legend"));
+// The plan shows each outlet with the sign of its level. The 3D picture has no elements to examine.
+const plan = $("#viewer svg.plan");
+if (plan !== null) {
+  const signs = (shape: string): number => plan.querySelectorAll(`[data-record^="outlet:"][data-shape="${shape}"]`).length;
+  check("the plan shows the outlets of a circuit near its limit as triangles", signs("triangle") === 2 && signs("disc") === 5, [signs("triangle"), signs("disc")]);
+}
+
 check("each circuit has a meter", $$(".meter").length === 2, $$(".meter").length);
+check("the meter of circuit B has the sign of its level", $('[data-circuit="b"] .level-mark')?.dataset["shape"] === "triangle", $('[data-circuit="b"] .level-mark')?.dataset["shape"]);
 check("the meter of circuit B tells its load and its level in words", text('[data-circuit="b"]').includes("1260 of 1440 W") && text('[data-circuit="b"]').includes("Near its limit"), text('[data-circuit="b"]'));
 click('[data-circuit="b"]');
 check("a click selects a circuit", pressed('[data-circuit="b"]') === "true", pressed('[data-circuit="b"]'));

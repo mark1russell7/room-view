@@ -77,6 +77,8 @@ The model has a range of lengths. A size of 0.001 mm or less is 0 for the checks
 
 `circuitStates` gives the load of each circuit against its limit, with a level: `ok`, `near`, `over` or `unknown`. The loads are input data of the scene. This package does not calculate the power of a computer.
 
+`outletLevels` gives the level of the circuit of each outlet. `levelShape` gives the shape of the sign of a level. The shapes are a disc for `ok`, a triangle for `near`, a square for `over` and a ring for `unknown`. Thus a person who does not see a color reads the level from the shape. `SHAPE_OUTLINES` and `shapeRing` give the outline of each sign, so each drawing shows the same signs.
+
 ## The viewer
 
 The entry `@mark1russell7/room-view/three` shows a scene in a page with three.js. Install `three` 0.187 or later with this package. For the types, install `@types/three` too.
@@ -100,11 +102,15 @@ viewer?.setView("top");
 - The walls between the camera and the room become almost clear.
 - A click selects the record of a solid. `onSelect` gets the kind and the `id` of the record.
 - With the keyboard, the arrow keys turn the model, and `+` and `-` change the distance. `Home` shows the first view, and `T` shows the plan.
+- Each outlet has a marker with the color and the shape of the level of its circuit. A marker keeps its size in the picture.
+- A marker behind a wall or a machine stays in the picture, and it is less clear.
 - `highlight` and `select` mark records from your page: the outlets of a circuit, or the row of a table.
+- A marked outlet or object shows a line from the outlet to each object that takes its power from it.
+- The option `loads` has the options of `circuitStates`, for example the part of the limit where the level `near` starts.
 - The viewer draws a frame only after a change.
 - `createRoomViewer` gives `undefined` in a browser with no WebGL 2. It does not throw.
 
-`LIGHT_THEME` and `DARK_THEME` are the colors, and a theme is plain data. `solidGeometry` gives the three.js geometry of one solid, for your own three.js scene.
+`LIGHT_THEME` and `DARK_THEME` are the colors, and a theme is plain data. The field `levels` of a theme has the color of each level. `solidGeometry` gives the three.js geometry of one solid, for your own three.js scene.
 
 ## The plan
 

@@ -1,7 +1,7 @@
 import { sceneSolids, type Scene } from "@mark1russell7/room-view";
 import { SAMPLE_SCENE } from "@mark1russell7/room-view/sample";
 import { describe, expect, it } from "vitest";
-import { circuitRows, detailsOf, formatArea, formatLength, formatNumber, partGroups, partKey, partName, recordText, roomDetails } from "./details.ts";
+import { circuitRows, detailsOf, formatArea, formatLength, formatNumber, legendRows, partGroups, partKey, partName, recordText, roomDetails } from "./details.ts";
 
 const rowsOf = (kind: "floor" | "wall" | "glass" | "outlet" | "object", source: string): Readonly<Record<string, string>> =>
   Object.fromEntries((detailsOf(SAMPLE_SCENE, { kind, source })?.rows ?? []).map((row) => [row.label, row.value]));
@@ -140,5 +140,25 @@ describe("partGroups", () => {
   it("has no group for a kind with no part", () => {
     const bare: Scene = { schema: "scene/1", room: { schema: "room/1", unit: "m", height: 2.4, wallThickness: 0.1, walls: [{ id: "a", from: [0, 0], to: [4, 0] }] } };
     expect(partGroups(bare).map((group) => group.title)).toEqual(["Walls"]);
+  });
+});
+
+describe("legendRows", () => {
+  it("gives the sign and the number of the outlets of each level, with the unknown level last", () => {
+    expect(legendRows(SAMPLE_SCENE)).toEqual([
+      { level: "ok", shape: "disc", label: "Within its limit", count: 5 },
+      { level: "near", shape: "triangle", label: "Near its limit", count: 2 },
+      { level: "over", shape: "square", label: "Over its limit", count: 0 },
+      { level: "unknown", shape: "ring", label: "No load value", count: 0 },
+    ]);
+  });
+
+  it("counts an outlet with no circuit, and an outlet of a circuit with no load, as unknown", () => {
+    const outlets = [
+      { id: "free", wall: "south", face: "left" as const, offset: 1, height: 0.3 },
+      { id: "quiet", wall: "south", face: "left" as const, offset: 2, height: 0.3, circuit: "c" },
+    ];
+    const scene: Scene = { ...SAMPLE_SCENE, room: { ...SAMPLE_SCENE.room, outlets, circuits: [{ id: "c", limit: 1440 }] }, objects: [], loads: [] };
+    expect(legendRows(scene).map((row) => row.count)).toEqual([0, 0, 0, 2]);
   });
 });

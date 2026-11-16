@@ -1,8 +1,8 @@
-import { NEAR_LIMIT } from "@mark1russell7/room-view";
+import { levelShape, NEAR_LIMIT } from "@mark1russell7/room-view";
 import { SAMPLE_SCENE } from "@mark1russell7/room-view/sample";
 import type { ViewerPick, ViewerTheme } from "@mark1russell7/room-view/three";
 import { byId, copyText, currentTheme, h, setupTheme } from "@mark1russell7/site-pages/chrome";
-import { circuitRows, detailsOf, partGroups, partKey, partName, roomDetails, type PartRecord } from "./details.ts";
+import { circuitRows, detailsOf, legendRows, partGroups, partKey, partName, roomDetails, type PartRecord } from "./details.ts";
 import { createPlanView, type RoomStage } from "./plan.ts";
 
 const scene = SAMPLE_SCENE;
@@ -109,7 +109,7 @@ function showCircuits(): void {
       "button",
       { class: "meter", type: "button", "data-level": row.level, "data-circuit": row.id, "aria-pressed": "false" },
       h("span", { class: "meter-name" }, row.name),
-      h("span", { class: "meter-status" }, h("span", { class: "level-mark", "aria-hidden": "true" }), row.status),
+      h("span", { class: "meter-status" }, h("span", { class: "level-mark", "data-shape": levelShape(row.level), "aria-hidden": "true" }), row.status),
       track,
       h("span", { class: "meter-figure" }, row.figure),
     );
@@ -119,6 +119,15 @@ function showCircuits(): void {
     marksWhileOn(button, row.records);
     circuitButtons.set(row.id, button);
     list.append(h("li", {}, button));
+  }
+}
+
+/** This function shows the legend of the outlets: the sign of each level, and the number of the outlets with the level. */
+function showLegend(): void {
+  const list = byId("legend");
+  for (const row of legendRows(scene)) {
+    const mark = h("span", { class: "level-mark", "data-shape": row.shape, "aria-hidden": "true" });
+    list.append(h("li", { class: "legend-item", "data-level": row.level, "data-count": String(row.count) }, mark, `${row.label}: ${String(row.count)}`));
   }
 }
 
@@ -187,6 +196,7 @@ copy.addEventListener("click", () => {
 });
 
 showCircuits();
+showLegend();
 showParts();
 showDetails();
 showRoom().catch(() => {

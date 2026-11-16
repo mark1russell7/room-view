@@ -235,8 +235,7 @@ h2 {
   padding: 8px;
 }
 
-.plan path,
-.plan circle {
+.plan path {
   cursor: pointer;
 }
 
@@ -269,6 +268,42 @@ h2 {
 
 .readout:empty {
   display: none;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  border-top: 1px solid var(--line);
+  padding: 8px 12px;
+  font-size: 0.9375rem;
+}
+
+.legend-title {
+  color: var(--quiet);
+}
+
+.legend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  --level: var(--quiet);
+}
+
+/* A level with no outlet in this room stays in the legend, in a quiet color. */
+.legend-item[data-count="0"] {
+  color: var(--quiet);
 }
 
 .view-bar {
@@ -430,15 +465,18 @@ h2 {
   --level: var(--quiet);
 }
 
-.meter[data-level="ok"] {
+.meter[data-level="ok"],
+.legend-item[data-level="ok"] {
   --level: var(--level-ok);
 }
 
-.meter[data-level="near"] {
+.meter[data-level="near"],
+.legend-item[data-level="near"] {
   --level: var(--level-near);
 }
 
-.meter[data-level="over"] {
+.meter[data-level="over"],
+.legend-item[data-level="over"] {
   --level: var(--level-over);
 }
 
@@ -464,7 +502,7 @@ h2 {
   font-weight: 500;
 }
 
-/* The shape of the mark tells the level, so the color is not the only sign. */
+/* The shape of the mark tells the level, so the color is not the only sign. The 3D viewer and the plan show the same shapes. */
 .level-mark {
   flex: none;
   width: 12px;
@@ -473,19 +511,19 @@ h2 {
   border-radius: 50%;
 }
 
-.meter[data-level="near"] .level-mark {
+.level-mark[data-shape="triangle"] {
   border-radius: 0;
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
-.meter[data-level="over"] .level-mark {
+.level-mark[data-shape="square"] {
   border-radius: 0;
-  clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+  scale: 0.9;
 }
 
-.meter[data-level="unknown"] .level-mark {
+.level-mark[data-shape="ring"] {
   background: transparent;
-  border: 2px solid var(--level);
+  border: 3px solid var(--level);
 }
 
 .meter-track {

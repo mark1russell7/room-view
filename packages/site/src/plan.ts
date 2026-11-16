@@ -1,4 +1,4 @@
-import { planShapes, type PlanShape } from "@mark1russell7/room-view";
+import { levelShape, outletLevels, planShapes, SHAPE_OUTLINES, shapeRing, type LevelShape, type PlanShape } from "@mark1russell7/room-view";
 import type { RoomViewer, RoomViewerOptions, ViewerPick, ViewerRecord, ViewerTheme } from "@mark1russell7/room-view/three";
 
 /** The part of a viewer that the page uses. The 3D viewer and the plan have these functions. */
@@ -10,8 +10,11 @@ const CUT = 1.2;
 /** The space around the plan, in meters. */
 const MARGIN = 0.25;
 
-/** The radius of the mark of an outlet, in meters. The plate of an outlet is too small for a plan. */
+/** The radius of the sign of an outlet with a disc, in meters. The plate of an outlet is too small for a plan. */
 const OUTLET_RADIUS = 0.09;
+
+/** The size of the line that marks an outlet, as a factor of the size of its sign. */
+const OUTLET_MARK = 1.5;
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -28,12 +31,16 @@ function pathOf(shape: PlanShape): string {
   return `${shape.ring.map(([x, y], index) => `${index === 0 ? "M" : "L"}${String(x)} ${String(-y)}`).join(" ")} Z`;
 }
 
-/** This function makes the element of a shape: a circle for an outlet, and the outline for each other shape. */
-function elementOf(shape: PlanShape): SVGGeometryElement {
-  if (shape.kind !== "outlet") return svg("path", { d: pathOf(shape) });
-  const x = shape.ring.reduce((sum, point) => sum + point[0], 0) / shape.ring.length;
-  const y = shape.ring.reduce((sum, point) => sum + point[1], 0) / shape.ring.length;
-  return svg("circle", { cx: String(x), cy: String(-y), r: String(OUTLET_RADIUS) });
+/**
+ * This function gives the outline of the sign of an outlet as the data of a path. The center of the sign is the center of the shape.
+ * `factor` changes the size: 1 gives the outline of the sign.
+ */
+export function signPath(shape: PlanShape, sign: LevelShape, factor: number): string {
+  const count = Math.max(shape.ring.length, 1);
+  const x = shape.ring.reduce((sum, point) => sum + point[0], 0) / count;
+  const y = shape.ring.reduce((sum, point) => sum + point[1], 0) / count;
+  const corners = shapeRing(sign, OUTLET_RADIUS * factor);
+  return `${corners.map(([dx, dy], index) => `${index === 0 ? "M" : "L"}${String(x + dx)} ${String(-(y + dy))}`).join(" ")} Z`;
 }
 
 /**
@@ -42,6 +49,8 @@ function elementOf(shape: PlanShape): SVGGeometryElement {
  */
 export function createPlanView(container: HTMLElement, options: RoomViewerOptions & { readonly theme: ViewerTheme }): RoomStage {
   const { scene } = options;
+  const levels = outletLevels(scene, options.loads);
+  const signOf = (shape: PlanShape): LevelShape => levelShape(levels.get(shape.source));
   // An outlet is above each other shape, so that a wall does not hide it.
   const cut = planShapes(scene, { ...options.solids, cut: CUT });
   const shapes = [...cut.filter((shape) => shape.kind !== "outlet"), ...cut.filter((shape) => shape.kind === "outlet")];
@@ -61,9 +70,24 @@ export function createPlanView(container: HTMLElement, options: RoomViewerOption
   picture.append(fills, marks);
 
   const parts = shapes.map((shape) => {
-    const element = elementOf(shape);
+    const element = svg("path", {});
     element.dataset["record"] = keyOf(shape);
-    element.setAttribute("vector-effect", "non-scaling-stroke");
+    if (shape.kind === "outlet") {
+      const sign = signOf(shape);
+      const outline = SHAPE_OUTLINES[sign];
+      // The line of a ring is its sign: it is between the hole and the outline, and its width is in meters.
+      const middle = (1 + outline.hole / outline.radius) / 2;
+      element.setAttribute("d", signPath(shape, sign, outline.hole > 0 ? middle : 1));
+      if (outline.hole > 0) element.setAttribute("stroke-width", String((outline.radius - outline.hole) * OUTLET_RADIUS));
+      element.dataset["shape"] = sign;
+      element.dataset["level"] = levels.get(shape.source) ?? "none";
+    } else {
+      element.setAttribute("d", pathOf(shape));
+    }
+    if (!element.hasAttribute("stroke-width")) {
+      element.setAttribute("stroke-width", shape.kind === "outlet" ? "1.5" : "1");
+      element.setAttribute("vector-effect", "non-scaling-stroke");
+    }
     fills.append(element);
     return { shape, element };
   });
@@ -80,15 +104,22 @@ export function createPlanView(container: HTMLElement, options: RoomViewerOption
     // A wall that the cut goes through is solid, as in a plan on paper. A low part of a wall, below a window, is not.
     if (shape.kind === "wall") return shape.top > CUT ? colors.edge : colors.wall;
     if (shape.kind === "glass") return colors.glass;
-    if (shape.kind === "outlet") return colors.outlet;
     return colors.objects[kindOf(shape.source) ?? ""] ?? colors.object;
   }
 
   function paint(): void {
     for (const { shape, element } of parts) {
+      if (shape.kind === "outlet") {
+        // An outlet has the color and the shape of the level of its circuit, with the color of the page around it or in it.
+        const level = levels.get(shape.source);
+        const color = level === undefined ? theme.outlet : theme.levels[level];
+        const ring = SHAPE_OUTLINES[signOf(shape)].hole > 0;
+        element.setAttribute("fill", ring ? theme.halo : color);
+        element.setAttribute("stroke", ring ? color : theme.halo);
+        continue;
+      }
       element.setAttribute("fill", fillOf(shape, theme));
       element.setAttribute("stroke", shape.kind === "floor" ? "none" : theme.edge);
-      element.setAttribute("stroke-width", "1");
     }
     const strong = selected === undefined ? undefined : keyOf(selected);
     const light = new Set(highlighted.map(keyOf));
@@ -96,9 +127,11 @@ export function createPlanView(container: HTMLElement, options: RoomViewerOption
     for (const { shape } of parts) {
       const key = keyOf(shape);
       if (key !== strong && !light.has(key)) continue;
-      const mark = elementOf(shape);
+      // The mark of an outlet is a line around its sign, so the color of the sign stays.
+      const outlet = shape.kind === "outlet";
+      const mark = svg("path", { d: outlet ? signPath(shape, signOf(shape), OUTLET_MARK) : pathOf(shape) });
       mark.setAttribute("vector-effect", "non-scaling-stroke");
-      mark.setAttribute("fill", theme.accent);
+      mark.setAttribute("fill", outlet ? "none" : theme.accent);
       mark.setAttribute("fill-opacity", key === strong ? "0.55" : "0.3");
       mark.setAttribute("stroke", theme.accent);
       mark.setAttribute("stroke-width", key === strong ? "4" : "2.5");
