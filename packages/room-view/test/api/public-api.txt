@@ -1,0 +1,557 @@
+# The public API of @mark1russell7/room-view
+#
+# The names of each entry of the exports field, and the declaration of each name, without comments
+# and private members. The command `api-report check` compares this file with the built .d.ts files.
+# To accept a change of the API, start the build, then `api-report update`, and review the diff.
+
+## . (build/index.d.ts): names
+
+CheckOptions: build/index.d.ts#CheckOptions
+Circuit: build/room.chunk.d.ts#Circuit
+CircuitLoad: build/room.chunk.d.ts#CircuitLoad
+CircuitState: build/loads.chunk.d.ts#CircuitState
+FINDING_CODES: build/index.d.ts#FINDING_CODES
+FINDING_LEVELS: build/index.d.ts#FINDING_LEVELS
+FLOOR_DEPTH: build/loads.chunk.d.ts#FLOOR_DEPTH
+Finding: build/index.d.ts#Finding
+FindingCode: build/index.d.ts#FindingCode
+FindingLevel: build/index.d.ts#FindingLevel
+Floor: build/room.chunk.d.ts#Floor
+GLASS_THICKNESS: build/loads.chunk.d.ts#GLASS_THICKNESS
+JOIN_TOLERANCE: build/loads.chunk.d.ts#JOIN_TOLERANCE
+JoinOptions: build/loads.chunk.d.ts#JoinOptions
+LARGEST_LENGTH: build/room.chunk.d.ts#LARGEST_LENGTH
+LENGTH_UNITS: build/room.chunk.d.ts#LENGTH_UNITS
+LEVEL_SHAPES: build/loads.chunk.d.ts#LEVEL_SHAPES
+LOAD_LEVELS: build/loads.chunk.d.ts#LOAD_LEVELS
+LengthUnit: build/room.chunk.d.ts#LengthUnit
+LevelShape: build/loads.chunk.d.ts#LevelShape
+LoadLevel: build/loads.chunk.d.ts#LoadLevel
+LoadOptions: build/loads.chunk.d.ts#LoadOptions
+MITER_LIMIT: build/loads.chunk.d.ts#MITER_LIMIT
+NEAR_LIMIT: build/loads.chunk.d.ts#NEAR_LIMIT
+OPENING_KINDS: build/room.chunk.d.ts#OPENING_KINDS
+OUTLET_PLATE: build/loads.chunk.d.ts#OUTLET_PLATE
+Opening: build/room.chunk.d.ts#Opening
+OpeningKind: build/room.chunk.d.ts#OpeningKind
+Outlet: build/room.chunk.d.ts#Outlet
+PlacedBox: build/loads.chunk.d.ts#PlacedBox
+PlacedObject: build/room.chunk.d.ts#PlacedObject
+PlanOptions: build/index.d.ts#PlanOptions
+PlanPoint: build/room.chunk.d.ts#PlanPoint
+PlanShape: build/index.d.ts#PlanShape
+Prism: build/loads.chunk.d.ts#Prism
+RECORD_KINDS: build/index.d.ts#RECORD_KINDS
+ROOM_SCHEMA: build/room.chunk.d.ts#ROOM_SCHEMA
+RecordKind: build/index.d.ts#RecordKind
+Room: build/room.chunk.d.ts#Room
+SCENE_SCHEMA: build/room.chunk.d.ts#SCENE_SCHEMA
+SHAPE_OUTLINES: build/loads.chunk.d.ts#SHAPE_OUTLINES
+SOLID_KINDS: build/loads.chunk.d.ts#SOLID_KINDS
+Scene: build/room.chunk.d.ts#Scene
+ShapeOutline: build/loads.chunk.d.ts#ShapeOutline
+Solid: build/loads.chunk.d.ts#Solid
+SolidKind: build/loads.chunk.d.ts#SolidKind
+SolidOptions: build/loads.chunk.d.ts#SolidOptions
+SolidShape: build/loads.chunk.d.ts#SolidShape
+TO_Y_UP: build/loads.chunk.d.ts#TO_Y_UP
+WALL_FACES: build/room.chunk.d.ts#WALL_FACES
+WALL_SIDES: build/room.chunk.d.ts#WALL_SIDES
+Wall: build/room.chunk.d.ts#Wall
+WallFace: build/room.chunk.d.ts#WallFace
+WallFootprint: build/loads.chunk.d.ts#WallFootprint
+WallFrame: build/loads.chunk.d.ts#WallFrame
+WallSide: build/room.chunk.d.ts#WallSide
+boundsOfSolids: build/loads.chunk.d.ts#boundsOfSolids
+checkRoom: build/index.d.ts#checkRoom
+checkScene: build/index.d.ts#checkScene
+circuitStates: build/loads.chunk.d.ts#circuitStates
+lengthsInRange: build/room.chunk.d.ts#lengthsInRange
+levelShape: build/loads.chunk.d.ts#levelShape
+metersPer: build/room.chunk.d.ts#metersPer
+objectTransforms: build/loads.chunk.d.ts#objectTransforms
+outletLevels: build/loads.chunk.d.ts#outletLevels
+planShape: build/index.d.ts#planShape
+planShapes: build/index.d.ts#planShapes
+roomSolids: build/loads.chunk.d.ts#roomSolids
+sceneSolids: build/loads.chunk.d.ts#sceneSolids
+shapeRing: build/loads.chunk.d.ts#shapeRing
+solidCorners: build/loads.chunk.d.ts#solidCorners
+solidVolume: build/loads.chunk.d.ts#solidVolume
+wallFootprints: build/loads.chunk.d.ts#wallFootprints
+wallFrames: build/loads.chunk.d.ts#wallFrames
+wallHasOutline: build/loads.chunk.d.ts#wallHasOutline
+wallPoint: build/loads.chunk.d.ts#wallPoint
+wallTransform: build/loads.chunk.d.ts#wallTransform
+
+## ./schema (build/schema.d.ts): names
+
+roomSchema: build/schema.d.ts#roomSchema
+sceneSchema: build/schema.d.ts#sceneSchema
+
+## ./sample (build/sample.d.ts): names
+
+SAMPLE_ROOM: build/sample.d.ts#SAMPLE_ROOM
+SAMPLE_SCENE: build/sample.d.ts#SAMPLE_SCENE
+
+## ./three (build/three.d.ts): names
+
+DARK_THEME: build/three.d.ts#DARK_THEME
+LIGHT_THEME: build/three.d.ts#LIGHT_THEME
+type RoomViewer: build/three.d.ts#RoomViewer
+type RoomViewerOptions: build/three.d.ts#RoomViewerOptions
+type SolidPlacement: build/three.d.ts#SolidPlacement
+type ViewName: build/three.d.ts#ViewName
+type ViewerPick: build/three.d.ts#ViewerPick
+type ViewerRecord: build/three.d.ts#ViewerRecord
+type ViewerTheme: build/three.d.ts#ViewerTheme
+createRoomViewer: build/three.d.ts#createRoomViewer
+solidGeometry: build/three.d.ts#solidGeometry
+
+## Declarations
+
+### build/index.d.ts#CheckOptions
+export interface CheckOptions {
+  readonly joins?: JoinOptions | undefined;
+}
+
+### build/index.d.ts#FINDING_CODES
+export declare const FINDING_CODES: readonly ["number-not-finite", "number-too-large", "id-duplicate", "size-not-positive", "wall-length", "wall-short", "wall-overlap", "opening-wall", "opening-range", "opening-height", "opening-overlap", "outlet-wall", "outlet-circuit", "outlet-range", "outlet-in-opening", "floor-ring", "circuit-limit", "object-parent", "object-cycle", "object-outlet", "object-outside", "object-overlap", "object-in-wall", "load-circuit", "load-watts"];
+
+### build/index.d.ts#FINDING_LEVELS
+export declare const FINDING_LEVELS: readonly ["error", "warning"];
+
+### build/index.d.ts#Finding
+export interface Finding {
+  readonly level: FindingLevel;
+  readonly code: FindingCode;
+  readonly record: RecordKind;
+  readonly at: string;
+  readonly message: string;
+}
+
+### build/index.d.ts#FindingCode
+export type FindingCode = (typeof FINDING_CODES)[number];
+
+### build/index.d.ts#FindingLevel
+export type FindingLevel = (typeof FINDING_LEVELS)[number];
+
+### build/index.d.ts#PlanOptions
+export interface PlanOptions extends SolidOptions {
+  readonly cut?: number | undefined;
+}
+
+### build/index.d.ts#PlanShape
+export interface PlanShape {
+  readonly solid: string;
+  readonly kind: SolidKind;
+  readonly source: string;
+  readonly ring: Ring;
+  readonly bottom: number;
+  readonly top: number;
+}
+
+### build/index.d.ts#RECORD_KINDS
+export declare const RECORD_KINDS: readonly ["room", "wall", "opening", "floor", "outlet", "circuit", "object", "load"];
+
+### build/index.d.ts#RecordKind
+export type RecordKind = (typeof RECORD_KINDS)[number];
+
+### build/index.d.ts#checkRoom
+export declare function checkRoom(room: Room, options?: CheckOptions): readonly Finding[];
+
+### build/index.d.ts#checkScene
+export declare function checkScene(scene: Scene, options?: CheckOptions): readonly Finding[];
+
+### build/index.d.ts#planShape
+export declare function planShape(solid: Solid): PlanShape;
+
+### build/index.d.ts#planShapes
+export declare function planShapes(scene: Scene, options?: PlanOptions): readonly PlanShape[];
+
+### build/loads.chunk.d.ts#CircuitState
+interface CircuitState {
+  readonly circuit: string;
+  readonly watts: number;
+  readonly limit: number;
+  readonly ratio: number;
+  readonly level: LoadLevel;
+  readonly outlets: readonly string[];
+  readonly objects: readonly string[];
+}
+
+### build/loads.chunk.d.ts#FLOOR_DEPTH
+declare const FLOOR_DEPTH = .1;
+
+### build/loads.chunk.d.ts#GLASS_THICKNESS
+declare const GLASS_THICKNESS = .02;
+
+### build/loads.chunk.d.ts#JOIN_TOLERANCE
+declare const JOIN_TOLERANCE = 1e-6;
+
+### build/loads.chunk.d.ts#JoinOptions
+interface JoinOptions {
+  readonly tolerance?: number | undefined;
+  readonly miterLimit?: number | undefined;
+}
+
+### build/loads.chunk.d.ts#LEVEL_SHAPES
+declare const LEVEL_SHAPES: readonly ["ring", "disc", "triangle", "square"];
+
+### build/loads.chunk.d.ts#LOAD_LEVELS
+declare const LOAD_LEVELS: readonly ["unknown", "ok", "near", "over"];
+
+### build/loads.chunk.d.ts#LevelShape
+type LevelShape = (typeof LEVEL_SHAPES)[number];
+
+### build/loads.chunk.d.ts#LoadLevel
+type LoadLevel = (typeof LOAD_LEVELS)[number];
+
+### build/loads.chunk.d.ts#LoadOptions
+interface LoadOptions {
+  readonly near?: number | undefined;
+}
+
+### build/loads.chunk.d.ts#MITER_LIMIT
+declare const MITER_LIMIT = 4;
+
+### build/loads.chunk.d.ts#NEAR_LIMIT
+declare const NEAR_LIMIT = .8;
+
+### build/loads.chunk.d.ts#OUTLET_PLATE
+declare const OUTLET_PLATE: {
+  readonly width: number;
+  readonly height: number;
+  readonly depth: number;
+};
+
+### build/loads.chunk.d.ts#PlacedBox
+interface PlacedBox {
+  readonly kind: "box";
+  readonly box: Box3;
+  readonly transform: Transform3;
+}
+
+### build/loads.chunk.d.ts#Prism
+interface Prism {
+  readonly kind: "prism";
+  readonly ring: Ring;
+  readonly z: number;
+  readonly d: number;
+}
+
+### build/loads.chunk.d.ts#SHAPE_OUTLINES
+declare const SHAPE_OUTLINES: Readonly<Record<LevelShape, ShapeOutline>>;
+
+### build/loads.chunk.d.ts#SOLID_KINDS
+declare const SOLID_KINDS: readonly ["floor", "wall", "glass", "outlet", "object"];
+
+### build/loads.chunk.d.ts#ShapeOutline
+interface ShapeOutline {
+  readonly radius: number;
+  readonly sides: number;
+  readonly start: number;
+  readonly hole: number;
+}
+
+### build/loads.chunk.d.ts#Solid
+interface Solid {
+  readonly id: string;
+  readonly kind: SolidKind;
+  readonly source: string;
+  readonly shape: SolidShape;
+}
+
+### build/loads.chunk.d.ts#SolidKind
+type SolidKind = (typeof SOLID_KINDS)[number];
+
+### build/loads.chunk.d.ts#SolidOptions
+interface SolidOptions {
+  readonly floorDepth?: number | undefined;
+  readonly joins?: JoinOptions | undefined;
+}
+
+### build/loads.chunk.d.ts#SolidShape
+type SolidShape = Prism | PlacedBox;
+
+### build/loads.chunk.d.ts#TO_Y_UP
+declare const TO_Y_UP: Transform3;
+
+### build/loads.chunk.d.ts#WallFootprint
+interface WallFootprint {
+  readonly wall: string;
+  readonly ring: Ring;
+  readonly clear: readonly [number, number];
+}
+
+### build/loads.chunk.d.ts#WallFrame
+interface WallFrame {
+  readonly id: string;
+  readonly start: Point;
+  readonly end: Point;
+  readonly along: Point;
+  readonly left: Point;
+  readonly length: number;
+  readonly thickness: number;
+  readonly height: number;
+  readonly leftOffset: number;
+  readonly rightOffset: number;
+}
+
+### build/loads.chunk.d.ts#boundsOfSolids
+declare function boundsOfSolids(solids: readonly Solid[]): Box3 | undefined;
+
+### build/loads.chunk.d.ts#circuitStates
+declare function circuitStates(scene: Scene, options?: LoadOptions): readonly CircuitState[];
+
+### build/loads.chunk.d.ts#levelShape
+declare function levelShape(level: LoadLevel | undefined): LevelShape;
+
+### build/loads.chunk.d.ts#objectTransforms
+declare function objectTransforms(scene: Scene): ReadonlyMap<string, Transform3>;
+
+### build/loads.chunk.d.ts#outletLevels
+declare function outletLevels(scene: Scene, options?: LoadOptions): ReadonlyMap<string, LoadLevel>;
+
+### build/loads.chunk.d.ts#roomSolids
+declare function roomSolids(room: Room, options?: SolidOptions): readonly Solid[];
+
+### build/loads.chunk.d.ts#sceneSolids
+declare function sceneSolids(scene: Scene, options?: SolidOptions): readonly Solid[];
+
+### build/loads.chunk.d.ts#shapeRing
+declare function shapeRing(shape: LevelShape, radius?: number): Ring;
+
+### build/loads.chunk.d.ts#solidCorners
+declare function solidCorners(solid: Solid): readonly Point3[];
+
+### build/loads.chunk.d.ts#solidVolume
+declare function solidVolume(solid: Solid): number;
+
+### build/loads.chunk.d.ts#wallFootprints
+declare function wallFootprints(frames: readonly WallFrame[], options?: JoinOptions): readonly WallFootprint[];
+
+### build/loads.chunk.d.ts#wallFrames
+declare function wallFrames(room: Room): readonly WallFrame[];
+
+### build/loads.chunk.d.ts#wallHasOutline
+declare function wallHasOutline(frame: WallFrame): boolean;
+
+### build/loads.chunk.d.ts#wallPoint
+declare function wallPoint(frame: WallFrame, along: number, across: number): Point;
+
+### build/loads.chunk.d.ts#wallTransform
+declare function wallTransform(frame: WallFrame): Transform3;
+
+### build/room.chunk.d.ts#Circuit
+interface Circuit {
+  readonly id: string;
+  readonly name?: string | undefined;
+  readonly limit: number;
+}
+
+### build/room.chunk.d.ts#CircuitLoad
+interface CircuitLoad {
+  readonly circuit: string;
+  readonly watts: number;
+}
+
+### build/room.chunk.d.ts#Floor
+interface Floor {
+  readonly id: string;
+  readonly name?: string | undefined;
+  readonly ring: Ring;
+}
+
+### build/room.chunk.d.ts#LARGEST_LENGTH
+declare const LARGEST_LENGTH = 1e6;
+
+### build/room.chunk.d.ts#LENGTH_UNITS
+declare const LENGTH_UNITS: readonly ["m", "cm", "mm", "ft", "in"];
+
+### build/room.chunk.d.ts#LengthUnit
+type LengthUnit = (typeof LENGTH_UNITS)[number];
+
+### build/room.chunk.d.ts#OPENING_KINDS
+declare const OPENING_KINDS: readonly ["door", "window", "gap"];
+
+### build/room.chunk.d.ts#Opening
+interface Opening {
+  readonly id: string;
+  readonly wall: string;
+  readonly kind: OpeningKind;
+  readonly offset: number;
+  readonly width: number;
+  readonly sill?: number | undefined;
+  readonly height: number;
+}
+
+### build/room.chunk.d.ts#OpeningKind
+type OpeningKind = (typeof OPENING_KINDS)[number];
+
+### build/room.chunk.d.ts#Outlet
+interface Outlet {
+  readonly id: string;
+  readonly wall: string;
+  readonly face: WallFace;
+  readonly offset: number;
+  readonly height: number;
+  readonly circuit?: string | undefined;
+}
+
+### build/room.chunk.d.ts#PlacedObject
+interface PlacedObject {
+  readonly id: string;
+  readonly kind: string;
+  readonly name?: string | undefined;
+  readonly size: readonly [number, number, number];
+  readonly at: PlanPoint;
+  readonly lift?: number | undefined;
+  readonly turn?: number | undefined;
+  readonly parent?: string | undefined;
+  readonly outlet?: string | undefined;
+}
+
+### build/room.chunk.d.ts#PlanPoint
+type PlanPoint = readonly [number, number];
+
+### build/room.chunk.d.ts#ROOM_SCHEMA
+declare const ROOM_SCHEMA = "room/1";
+
+### build/room.chunk.d.ts#Room
+interface Room {
+  readonly schema: typeof ROOM_SCHEMA;
+  readonly name?: string | undefined;
+  readonly unit: LengthUnit;
+  readonly height: number;
+  readonly wallThickness: number;
+  readonly walls: readonly Wall[];
+  readonly openings?: readonly Opening[] | undefined;
+  readonly floors?: readonly Floor[] | undefined;
+  readonly outlets?: readonly Outlet[] | undefined;
+  readonly circuits?: readonly Circuit[] | undefined;
+}
+
+### build/room.chunk.d.ts#SCENE_SCHEMA
+declare const SCENE_SCHEMA = "scene/1";
+
+### build/room.chunk.d.ts#Scene
+interface Scene {
+  readonly schema: typeof SCENE_SCHEMA;
+  readonly name?: string | undefined;
+  readonly room: Room;
+  readonly objects?: readonly PlacedObject[] | undefined;
+  readonly loads?: readonly CircuitLoad[] | undefined;
+}
+
+### build/room.chunk.d.ts#WALL_FACES
+declare const WALL_FACES: readonly ["left", "right"];
+
+### build/room.chunk.d.ts#WALL_SIDES
+declare const WALL_SIDES: readonly ["center", "left", "right"];
+
+### build/room.chunk.d.ts#Wall
+interface Wall {
+  readonly id: string;
+  readonly from: PlanPoint;
+  readonly to: PlanPoint;
+  readonly thickness?: number | undefined;
+  readonly height?: number | undefined;
+  readonly side?: WallSide | undefined;
+}
+
+### build/room.chunk.d.ts#WallFace
+type WallFace = (typeof WALL_FACES)[number];
+
+### build/room.chunk.d.ts#WallSide
+type WallSide = (typeof WALL_SIDES)[number];
+
+### build/room.chunk.d.ts#lengthsInRange
+declare function lengthsInRange(...meters: readonly number[]): boolean;
+
+### build/room.chunk.d.ts#metersPer
+declare function metersPer(unit: LengthUnit): number;
+
+### build/sample.d.ts#SAMPLE_ROOM
+export declare const SAMPLE_ROOM: Room;
+
+### build/sample.d.ts#SAMPLE_SCENE
+export declare const SAMPLE_SCENE: Scene;
+
+### build/schema.d.ts#roomSchema
+export declare const roomSchema: z.ZodType<Room>;
+
+### build/schema.d.ts#sceneSchema
+export declare const sceneSchema: z.ZodType<Scene>;
+
+### build/three.d.ts#DARK_THEME
+export declare const DARK_THEME: ViewerTheme;
+
+### build/three.d.ts#LIGHT_THEME
+export declare const LIGHT_THEME: ViewerTheme;
+
+### build/three.d.ts#RoomViewer
+interface RoomViewer {
+  readonly canvas: HTMLCanvasElement;
+  setScene(scene: Scene$1): void;
+  setTheme(theme: ViewerTheme): void;
+  setView(view: ViewName): void;
+  highlight(records: readonly ViewerRecord[]): void;
+  select(record: ViewerRecord | undefined): void;
+  dispose(): void;
+}
+
+### build/three.d.ts#RoomViewerOptions
+interface RoomViewerOptions {
+  readonly scene: Scene$1;
+  readonly theme?: ViewerTheme | undefined;
+  readonly solids?: SolidOptions | undefined;
+  readonly loads?: LoadOptions | undefined;
+  readonly label?: string | undefined;
+  readonly onHover?: ((pick: ViewerPick | undefined) => void) | undefined;
+  readonly onSelect?: ((pick: ViewerPick | undefined) => void) | undefined;
+}
+
+### build/three.d.ts#SolidPlacement
+interface SolidPlacement {
+  readonly geometry: BufferGeometry;
+  readonly position: Point3;
+  readonly rotation: Rotation3;
+}
+
+### build/three.d.ts#ViewName
+type ViewName = "home" | "top";
+
+### build/three.d.ts#ViewerPick
+interface ViewerPick extends ViewerRecord {
+  readonly solid: string;
+}
+
+### build/three.d.ts#ViewerRecord
+interface ViewerRecord {
+  readonly kind: SolidKind;
+  readonly source: string;
+}
+
+### build/three.d.ts#ViewerTheme
+interface ViewerTheme {
+  readonly edge: string;
+  readonly accent: string;
+  readonly floor: string;
+  readonly wall: string;
+  readonly glass: string;
+  readonly glassOpacity: number;
+  readonly outlet: string;
+  readonly levels: Readonly<Record<LoadLevel, string>>;
+  readonly halo: string;
+  readonly object: string;
+  readonly objects: Readonly<Record<string, string>>;
+  readonly sky: string;
+  readonly ground: string;
+}
+
+### build/three.d.ts#createRoomViewer
+export declare function createRoomViewer(container: HTMLElement, options: RoomViewerOptions): RoomViewer | undefined;
+
+### build/three.d.ts#solidGeometry
+export declare function solidGeometry(solid: Solid): SolidPlacement;

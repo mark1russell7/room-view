@@ -2,7 +2,15 @@
 
 The room format, the scene format and the 3D model of a room. A room is measurements, and the code makes the model from them.
 
-The entry `/three` shows the model in a page with three.js. This package is not on npm yet: [the roadmap](../../docs/ROADMAP.md) has the next steps.
+The entry `/three` shows the model in a page with three.js. [The demo page](https://mark1russell7.github.io/room-view/) shows a sample room.
+
+## Install
+
+```sh
+npm install @mark1russell7/room-view
+```
+
+The entry `/three` needs the package `three`, version 0.187.0 or later. The other entries do not need it.
 
 ## A room is measurements
 
