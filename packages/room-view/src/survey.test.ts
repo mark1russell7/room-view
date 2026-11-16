@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { checkRoom } from "./check.ts";
 import type { PlanPoint, Wall } from "./room.ts";
 import { SAMPLE_ROOM, SAMPLE_SURVEY } from "./sample.ts";
-import { CLOSURE_LIMIT, expandSurvey, SQUARE_TURNS, SURVEY_SCHEMA, type Survey, type SurveyResult, type SurveySide, type SurveyTurn } from "./survey.ts";
+import { CLOSURE_LIMIT, convertSurvey, expandSurvey, SQUARE_TURNS, SURVEY_SCHEMA, type Survey, type SurveyResult, type SurveySide, type SurveyTurn } from "./survey.ts";
+import { LENGTH_UNITS, metersPer, unitsPer } from "./units.ts";
 
 /** The sides `s0`, `s1` and so on, from a list of lengths and a list of turns. */
 function sides(lengths: readonly number[], turns: readonly SurveyTurn[]): SurveySide[] {
@@ -450,5 +451,87 @@ describe("expandSurvey, the laws", () => {
         expect(large.corners).toEqual(small.corners.map(([x, y]) => [x * 2, y * 2]));
       }),
     );
+  });
+});
+
+describe("convertSurvey", () => {
+  it("has the factor between two units", () => {
+    expect(unitsPer("ft", "in")).toBe(12);
+    expect(unitsPer("m", "mm")).toBe(1000);
+    expect(unitsPer("in", "mm")).toBe(25.4);
+    expect(unitsPer("m", "m")).toBe(1);
+    for (const unit of LENGTH_UNITS) expect(unitsPer(unit, "m"), unit).toBe(metersPer(unit));
+  });
+
+  it("gives the same record for the same unit", () => {
+    expect(convertSurvey(SAMPLE_SURVEY, "m")).toBe(SAMPLE_SURVEY);
+  });
+
+  it("changes each length, and keeps each turn, each angle, each `id` and each circuit", () => {
+    const feet = survey(
+      [
+        { id: "a", length: 12.5, turn: "left", thickness: 0.5, height: 7.5 },
+        { id: "b", length: 6.5, turn: 60 },
+      ],
+      {
+        name: "Study",
+        unit: "ft",
+        height: 8,
+        wallThickness: 0.5,
+        start: [1.5, -2],
+        heading: 30,
+        checks: [{ id: "d", from: "a", to: "b", length: 0.75 }],
+        openings: [
+          { id: "w", wall: "a", kind: "window", offset: 1.5, width: 3, sill: 2.5, height: 4 },
+          { id: "g", wall: "b", kind: "gap", offset: 0.5, width: 3, height: 6.5 },
+        ],
+        outlets: [{ id: "o", wall: "a", offset: 2, height: 1.5, circuit: "c" }],
+        circuits: [{ id: "c", name: "C", limit: 1800 }],
+      },
+    );
+    expect(convertSurvey(feet, "in")).toEqual({
+      schema: "survey/1",
+      name: "Study",
+      unit: "in",
+      height: 96,
+      wallThickness: 6,
+      sides: [
+        { id: "a", length: 150, turn: "left", thickness: 6, height: 90 },
+        { id: "b", length: 78, turn: 60 },
+      ],
+      start: [18, -24],
+      heading: 30,
+      checks: [{ id: "d", from: "a", to: "b", length: 9 }],
+      openings: [
+        { id: "w", wall: "a", kind: "window", offset: 18, width: 36, sill: 30, height: 48 },
+        { id: "g", wall: "b", kind: "gap", offset: 6, width: 36, height: 78 },
+      ],
+      outlets: [{ id: "o", wall: "a", offset: 24, height: 18, circuit: "c" }],
+      circuits: [{ id: "c", name: "C", limit: 1800 }],
+    });
+  });
+
+  it("does not add a field that the survey does not have", () => {
+    const small = survey(sides([3, 3], ["left", "left"]));
+    const changed = convertSurvey(small, "cm");
+    expect(Object.keys(changed)).toEqual(Object.keys(small));
+    expect(Object.keys(changed.sides[0] ?? {})).toEqual(["id", "length", "turn"]);
+    expect(changed.sides.map((side) => side.length)).toEqual([300, 300]);
+  });
+
+  it("does not change the survey", () => {
+    const text = JSON.stringify(SAMPLE_SURVEY);
+    convertSurvey(SAMPLE_SURVEY, "in");
+    expect(JSON.stringify(SAMPLE_SURVEY)).toBe(text);
+  });
+
+  it("gives the same room in the different unit", () => {
+    const own = expandSurvey(SAMPLE_SURVEY);
+    const other = expandSurvey(convertSurvey(SAMPLE_SURVEY, "mm"));
+    expect(other.room.unit).toBe("mm");
+    expect(other.closure.closed).toBe(true);
+    expect(other.corners).toHaveLength(own.corners.length);
+    own.corners.forEach(([x, y], index) => expectPoint(other.corners[index], x * 1000, y * 1000, 6));
+    expect(checkRoom(other.room)).toEqual([]);
   });
 });

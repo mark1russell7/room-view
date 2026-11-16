@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { SAMPLE_ROOM, SAMPLE_SCENE, SAMPLE_SURVEY } from "./sample.ts";
-import { roomSchema, sceneSchema, surveySchema } from "./schema.ts";
+import { expandLevel } from "./level.ts";
+import { SAMPLE_LEVEL, SAMPLE_ROOM, SAMPLE_SCENE, SAMPLE_SURVEY } from "./sample.ts";
+import { levelSchema, roomSchema, sceneSchema, surveySchema } from "./schema.ts";
 import { expandSurvey } from "./survey.ts";
 
 type Data = Record<string, unknown>;
@@ -215,6 +216,81 @@ describe("surveySchema", () => {
   it("gives a survey whose room record has the form of the room format", () => {
     for (const record of [survey, SAMPLE_SURVEY, { ...survey, sides: survey.sides.slice(0, 2) }]) {
       const result = expandSurvey(surveySchema.parse(record));
+      expect(roomSchema.parse(result.room)).toEqual(result.room);
+    }
+  });
+});
+
+describe("levelSchema", () => {
+  const room = {
+    schema: "survey/1",
+    unit: "m",
+    height: 2.4,
+    wallThickness: 0.1,
+    sides: [{ id: "a", length: 3, turn: "left" }],
+    openings: [{ id: "door", wall: "a", kind: "door", offset: 1, width: 0.9, height: 2 }],
+  };
+  const link = { id: "door", from: { room: "hall", opening: "door" }, to: { room: "study", opening: "door" }, thickness: 0.12 };
+  const level = {
+    schema: "level/1",
+    name: "Home",
+    unit: "m",
+    rooms: [
+      { id: "hall", survey: room },
+      { id: "study", survey: { ...room, unit: "ft" } },
+    ],
+    connections: [link],
+    circuits: [{ id: "a", name: "Circuit A", limit: 1800 }],
+  };
+  const levelAccepts = (more: Data): boolean => levelSchema.safeParse({ ...level, ...more }).success;
+
+  it("accepts a level, also after a change to JSON text and back", () => {
+    expect(levelSchema.parse(level)).toEqual(level);
+    expect(levelSchema.parse(JSON.parse(JSON.stringify(level)))).toEqual(level);
+    expect(levelSchema.parse(SAMPLE_LEVEL)).toEqual(SAMPLE_LEVEL);
+    expect(levelSchema.parse(JSON.parse(JSON.stringify(SAMPLE_LEVEL)))).toEqual(SAMPLE_LEVEL);
+  });
+
+  it("accepts a level with only its necessary fields", () => {
+    const small = { schema: "level/1", unit: "m", rooms: [] };
+    expect(levelSchema.parse(small)).toEqual(small);
+    expect(levelAccepts({ connections: [{ id: "door", from: link.from, to: link.to }] })).toBe(true);
+  });
+
+  it("refuses a record with a fault in its form", () => {
+    expect(levelAccepts({})).toBe(true);
+    expect(levelAccepts({ schema: "level/2" })).toBe(false);
+    expect(levelAccepts({ unit: "yd" })).toBe(false);
+    expect(levelAccepts({ color: "red" })).toBe(false);
+    expect(levelAccepts({ rooms: undefined })).toBe(false);
+    expect(levelAccepts({ rooms: [{ survey: room }] })).toBe(false);
+    expect(levelAccepts({ rooms: [{ id: "", survey: room }] })).toBe(false);
+    expect(levelAccepts({ rooms: [{ id: "hall" }] })).toBe(false);
+    expect(levelAccepts({ rooms: [{ id: "hall", survey: room, floor: 2 }] })).toBe(false);
+    expect(levelAccepts({ rooms: [{ id: "hall", survey: { ...room, schema: "survey/2" } }] })).toBe(false);
+    expect(levelAccepts({ rooms: [{ id: "hall", survey: { ...room, sides: [{ id: "a", length: 3 }] } }] })).toBe(false);
+    expect(levelAccepts({ connections: [{ id: "door", from: link.from }] })).toBe(false);
+    expect(levelAccepts({ connections: [{ from: link.from, to: link.to }] })).toBe(false);
+    expect(levelAccepts({ connections: [{ ...link, to: { ...link.to, wall: "a" } }] })).toBe(false);
+    expect(levelAccepts({ connections: [{ ...link, to: { room: "", opening: "door" } }] })).toBe(false);
+    expect(levelAccepts({ connections: [{ ...link, to: { room: "study" } }] })).toBe(false);
+    expect(levelAccepts({ connections: [{ ...link, thickness: "thin" }] })).toBe(false);
+    expect(levelAccepts({ connections: [{ ...link, thickness: Number.NaN }] })).toBe(false);
+    expect(levelAccepts({ connections: [{ ...link, note: "x" }] })).toBe(false);
+    expect(levelAccepts({ circuits: [{ id: "a" }] })).toBe(false);
+  });
+
+  it("does not examine the meaning of a record", () => {
+    // The expansion tells a connection to a room that the level does not have, and it uses the default for a thickness below 0.
+    expect(levelAccepts({ connections: [{ ...link, to: { room: "none", opening: "none" } }] })).toBe(true);
+    expect(levelAccepts({ connections: [{ ...link, thickness: -1 }] })).toBe(true);
+    // The checks of the room record tell two rooms with one `id`.
+    expect(levelAccepts({ rooms: [level.rooms[0], level.rooms[0]] })).toBe(true);
+  });
+
+  it("gives a level whose room record has the form of the room format", () => {
+    for (const record of [level, SAMPLE_LEVEL, { schema: "level/1", unit: "in", rooms: [] }]) {
+      const result = expandLevel(levelSchema.parse(record));
       expect(roomSchema.parse(result.room)).toEqual(result.room);
     }
   });

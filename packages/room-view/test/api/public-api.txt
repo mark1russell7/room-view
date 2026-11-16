@@ -6,11 +6,17 @@
 
 ## . (build/index.d.ts): names
 
-CLOSURE_LIMIT: build/survey.chunk.d.ts#CLOSURE_LIMIT
+CLOSURE_LIMIT: build/level.chunk.d.ts#CLOSURE_LIMIT
+CONNECTION_FAULTS: build/level.chunk.d.ts#CONNECTION_FAULTS
+CONNECTION_TURN_LIMIT: build/level.chunk.d.ts#CONNECTION_TURN_LIMIT
+CONNECTION_USES: build/level.chunk.d.ts#CONNECTION_USES
 CheckOptions: build/index.d.ts#CheckOptions
 Circuit: build/room.chunk.d.ts#Circuit
 CircuitLoad: build/room.chunk.d.ts#CircuitLoad
 CircuitState: build/loads.chunk.d.ts#CircuitState
+ConnectionEnd: build/level.chunk.d.ts#ConnectionEnd
+ConnectionFault: build/level.chunk.d.ts#ConnectionFault
+ConnectionUse: build/level.chunk.d.ts#ConnectionUse
 FINDING_CODES: build/index.d.ts#FINDING_CODES
 FINDING_LEVELS: build/index.d.ts#FINDING_LEVELS
 FLOOR_DEPTH: build/loads.chunk.d.ts#FLOOR_DEPTH
@@ -23,9 +29,17 @@ JOIN_TOLERANCE: build/loads.chunk.d.ts#JOIN_TOLERANCE
 JoinOptions: build/loads.chunk.d.ts#JoinOptions
 LARGEST_LENGTH: build/room.chunk.d.ts#LARGEST_LENGTH
 LENGTH_UNITS: build/room.chunk.d.ts#LENGTH_UNITS
+LEVEL_SCHEMA: build/level.chunk.d.ts#LEVEL_SCHEMA
 LEVEL_SHAPES: build/loads.chunk.d.ts#LEVEL_SHAPES
 LOAD_LEVELS: build/loads.chunk.d.ts#LOAD_LEVELS
 LengthUnit: build/room.chunk.d.ts#LengthUnit
+Level: build/level.chunk.d.ts#Level
+LevelConnection: build/level.chunk.d.ts#LevelConnection
+LevelConnectionResult: build/level.chunk.d.ts#LevelConnectionResult
+LevelOptions: build/level.chunk.d.ts#LevelOptions
+LevelResult: build/level.chunk.d.ts#LevelResult
+LevelRoom: build/level.chunk.d.ts#LevelRoom
+LevelRoomResult: build/level.chunk.d.ts#LevelRoomResult
 LevelShape: build/loads.chunk.d.ts#LevelShape
 LoadLevel: build/loads.chunk.d.ts#LoadLevel
 LoadOptions: build/loads.chunk.d.ts#LoadOptions
@@ -43,29 +57,31 @@ PlanPoint: build/room.chunk.d.ts#PlanPoint
 PlanShape: build/index.d.ts#PlanShape
 Prism: build/loads.chunk.d.ts#Prism
 RECORD_KINDS: build/index.d.ts#RECORD_KINDS
+ROOM_PLACES: build/level.chunk.d.ts#ROOM_PLACES
 ROOM_SCHEMA: build/room.chunk.d.ts#ROOM_SCHEMA
 RecordKind: build/index.d.ts#RecordKind
 Room: build/room.chunk.d.ts#Room
+RoomPlace: build/level.chunk.d.ts#RoomPlace
 SCENE_SCHEMA: build/room.chunk.d.ts#SCENE_SCHEMA
 SHAPE_OUTLINES: build/loads.chunk.d.ts#SHAPE_OUTLINES
 SOLID_KINDS: build/loads.chunk.d.ts#SOLID_KINDS
-SQUARE_TURNS: build/survey.chunk.d.ts#SQUARE_TURNS
-SURVEY_SCHEMA: build/survey.chunk.d.ts#SURVEY_SCHEMA
+SQUARE_TURNS: build/level.chunk.d.ts#SQUARE_TURNS
+SURVEY_SCHEMA: build/level.chunk.d.ts#SURVEY_SCHEMA
 Scene: build/room.chunk.d.ts#Scene
 ShapeOutline: build/loads.chunk.d.ts#ShapeOutline
 Solid: build/loads.chunk.d.ts#Solid
 SolidKind: build/loads.chunk.d.ts#SolidKind
 SolidOptions: build/loads.chunk.d.ts#SolidOptions
 SolidShape: build/loads.chunk.d.ts#SolidShape
-Survey: build/survey.chunk.d.ts#Survey
-SurveyCheck: build/survey.chunk.d.ts#SurveyCheck
-SurveyCheckResult: build/survey.chunk.d.ts#SurveyCheckResult
-SurveyClosure: build/survey.chunk.d.ts#SurveyClosure
-SurveyOptions: build/survey.chunk.d.ts#SurveyOptions
-SurveyOutlet: build/survey.chunk.d.ts#SurveyOutlet
-SurveyResult: build/survey.chunk.d.ts#SurveyResult
-SurveySide: build/survey.chunk.d.ts#SurveySide
-SurveyTurn: build/survey.chunk.d.ts#SurveyTurn
+Survey: build/level.chunk.d.ts#Survey
+SurveyCheck: build/level.chunk.d.ts#SurveyCheck
+SurveyCheckResult: build/level.chunk.d.ts#SurveyCheckResult
+SurveyClosure: build/level.chunk.d.ts#SurveyClosure
+SurveyOptions: build/level.chunk.d.ts#SurveyOptions
+SurveyOutlet: build/level.chunk.d.ts#SurveyOutlet
+SurveyResult: build/level.chunk.d.ts#SurveyResult
+SurveySide: build/level.chunk.d.ts#SurveySide
+SurveyTurn: build/level.chunk.d.ts#SurveyTurn
 TO_Y_UP: build/loads.chunk.d.ts#TO_Y_UP
 WALL_FACES: build/room.chunk.d.ts#WALL_FACES
 WALL_SIDES: build/room.chunk.d.ts#WALL_SIDES
@@ -78,7 +94,9 @@ boundsOfSolids: build/loads.chunk.d.ts#boundsOfSolids
 checkRoom: build/index.d.ts#checkRoom
 checkScene: build/index.d.ts#checkScene
 circuitStates: build/loads.chunk.d.ts#circuitStates
-expandSurvey: build/survey.chunk.d.ts#expandSurvey
+convertSurvey: build/level.chunk.d.ts#convertSurvey
+expandLevel: build/level.chunk.d.ts#expandLevel
+expandSurvey: build/level.chunk.d.ts#expandSurvey
 lengthsInRange: build/room.chunk.d.ts#lengthsInRange
 levelShape: build/loads.chunk.d.ts#levelShape
 metersPer: build/room.chunk.d.ts#metersPer
@@ -91,6 +109,7 @@ sceneSolids: build/loads.chunk.d.ts#sceneSolids
 shapeRing: build/loads.chunk.d.ts#shapeRing
 solidCorners: build/loads.chunk.d.ts#solidCorners
 solidVolume: build/loads.chunk.d.ts#solidVolume
+unitsPer: build/room.chunk.d.ts#unitsPer
 wallFootprints: build/loads.chunk.d.ts#wallFootprints
 wallFrames: build/loads.chunk.d.ts#wallFrames
 wallHasOutline: build/loads.chunk.d.ts#wallHasOutline
@@ -99,12 +118,14 @@ wallTransform: build/loads.chunk.d.ts#wallTransform
 
 ## ./schema (build/schema.d.ts): names
 
+levelSchema: build/schema.d.ts#levelSchema
 roomSchema: build/schema.d.ts#roomSchema
 sceneSchema: build/schema.d.ts#sceneSchema
 surveySchema: build/schema.d.ts#surveySchema
 
 ## ./sample (build/sample.d.ts): names
 
+SAMPLE_LEVEL: build/sample.d.ts#SAMPLE_LEVEL
 SAMPLE_ROOM: build/sample.d.ts#SAMPLE_ROOM
 SAMPLE_SCENE: build/sample.d.ts#SAMPLE_SCENE
 SAMPLE_SURVEY: build/sample.d.ts#SAMPLE_SURVEY
@@ -183,6 +204,180 @@ export declare function planShape(solid: Solid): PlanShape;
 
 ### build/index.d.ts#planShapes
 export declare function planShapes(scene: Scene, options?: PlanOptions): readonly PlanShape[];
+
+### build/level.chunk.d.ts#CLOSURE_LIMIT
+declare const CLOSURE_LIMIT = .01;
+
+### build/level.chunk.d.ts#CONNECTION_FAULTS
+declare const CONNECTION_FAULTS: readonly ["room", "opening", "one-room"];
+
+### build/level.chunk.d.ts#CONNECTION_TURN_LIMIT
+declare const CONNECTION_TURN_LIMIT = 2;
+
+### build/level.chunk.d.ts#CONNECTION_USES
+declare const CONNECTION_USES: readonly ["place", "check", "none"];
+
+### build/level.chunk.d.ts#ConnectionEnd
+interface ConnectionEnd {
+  readonly room: string;
+  readonly opening: string;
+}
+
+### build/level.chunk.d.ts#ConnectionFault
+type ConnectionFault = (typeof CONNECTION_FAULTS)[number];
+
+### build/level.chunk.d.ts#ConnectionUse
+type ConnectionUse = (typeof CONNECTION_USES)[number];
+
+### build/level.chunk.d.ts#LEVEL_SCHEMA
+declare const LEVEL_SCHEMA = "level/1";
+
+### build/level.chunk.d.ts#Level
+interface Level {
+  readonly schema: typeof LEVEL_SCHEMA;
+  readonly name?: string | undefined;
+  readonly unit: LengthUnit;
+  readonly rooms: readonly LevelRoom[];
+  readonly connections?: readonly LevelConnection[] | undefined;
+  readonly circuits?: readonly Circuit[] | undefined;
+}
+
+### build/level.chunk.d.ts#LevelConnection
+interface LevelConnection {
+  readonly id: string;
+  readonly from: ConnectionEnd;
+  readonly to: ConnectionEnd;
+  readonly thickness?: number | undefined;
+}
+
+### build/level.chunk.d.ts#LevelConnectionResult
+interface LevelConnectionResult {
+  readonly id: string;
+  readonly use: ConnectionUse;
+  readonly fault?: ConnectionFault | undefined;
+  readonly gap: number | undefined;
+  readonly ratio: number | undefined;
+  readonly turn: number | undefined;
+  readonly width: number | undefined;
+  readonly fits: boolean;
+}
+
+### build/level.chunk.d.ts#LevelOptions
+interface LevelOptions extends SurveyOptions {
+  readonly groupGap?: number | undefined;
+}
+
+### build/level.chunk.d.ts#LevelResult
+interface LevelResult {
+  readonly room: Room;
+  readonly rooms: readonly LevelRoomResult[];
+  readonly connections: readonly LevelConnectionResult[];
+}
+
+### build/level.chunk.d.ts#LevelRoom
+interface LevelRoom {
+  readonly id: string;
+  readonly survey: Survey;
+}
+
+### build/level.chunk.d.ts#LevelRoomResult
+interface LevelRoomResult {
+  readonly id: string;
+  readonly place: RoomPlace;
+  readonly group: number;
+  readonly survey: Survey;
+  readonly result: SurveyResult;
+}
+
+### build/level.chunk.d.ts#ROOM_PLACES
+declare const ROOM_PLACES: readonly ["first", "connection", "apart"];
+
+### build/level.chunk.d.ts#RoomPlace
+type RoomPlace = (typeof ROOM_PLACES)[number];
+
+### build/level.chunk.d.ts#SQUARE_TURNS
+declare const SQUARE_TURNS: readonly ["left", "right"];
+
+### build/level.chunk.d.ts#SURVEY_SCHEMA
+declare const SURVEY_SCHEMA = "survey/1";
+
+### build/level.chunk.d.ts#Survey
+interface Survey {
+  readonly schema: typeof SURVEY_SCHEMA;
+  readonly name?: string | undefined;
+  readonly unit: LengthUnit;
+  readonly height: number;
+  readonly wallThickness: number;
+  readonly sides: readonly SurveySide[];
+  readonly start?: PlanPoint | undefined;
+  readonly heading?: number | undefined;
+  readonly checks?: readonly SurveyCheck[] | undefined;
+  readonly openings?: readonly Opening[] | undefined;
+  readonly outlets?: readonly SurveyOutlet[] | undefined;
+  readonly circuits?: readonly Circuit[] | undefined;
+}
+
+### build/level.chunk.d.ts#SurveyCheck
+interface SurveyCheck {
+  readonly id: string;
+  readonly from: string;
+  readonly to: string;
+  readonly length: number;
+}
+
+### build/level.chunk.d.ts#SurveyCheckResult
+interface SurveyCheckResult {
+  readonly id: string;
+  readonly measured: number;
+  readonly model: number | undefined;
+  readonly difference: number | undefined;
+}
+
+### build/level.chunk.d.ts#SurveyClosure
+interface SurveyClosure {
+  readonly gap: number;
+  readonly ratio: number;
+  readonly turn: number;
+  readonly closed: boolean;
+}
+
+### build/level.chunk.d.ts#SurveyOptions
+interface SurveyOptions {
+  readonly limit?: number | undefined;
+}
+
+### build/level.chunk.d.ts#SurveyOutlet
+type SurveyOutlet = Omit<Outlet, "face">;
+
+### build/level.chunk.d.ts#SurveyResult
+interface SurveyResult {
+  readonly room: Room;
+  readonly corners: readonly PlanPoint[];
+  readonly walk: readonly PlanPoint[];
+  readonly closure: SurveyClosure;
+  readonly checks: readonly SurveyCheckResult[];
+}
+
+### build/level.chunk.d.ts#SurveySide
+interface SurveySide {
+  readonly id: string;
+  readonly length: number;
+  readonly turn: SurveyTurn;
+  readonly thickness?: number | undefined;
+  readonly height?: number | undefined;
+}
+
+### build/level.chunk.d.ts#SurveyTurn
+type SurveyTurn = (typeof SQUARE_TURNS)[number] | number;
+
+### build/level.chunk.d.ts#convertSurvey
+declare function convertSurvey(survey: Survey, unit: LengthUnit): Survey;
+
+### build/level.chunk.d.ts#expandLevel
+declare function expandLevel(level: Level, options?: LevelOptions): LevelResult;
+
+### build/level.chunk.d.ts#expandSurvey
+declare function expandSurvey(survey: Survey, options?: SurveyOptions): SurveyResult;
 
 ### build/loads.chunk.d.ts#CircuitState
 interface CircuitState {
@@ -487,6 +682,12 @@ declare function lengthsInRange(...meters: readonly number[]): boolean;
 ### build/room.chunk.d.ts#metersPer
 declare function metersPer(unit: LengthUnit): number;
 
+### build/room.chunk.d.ts#unitsPer
+declare function unitsPer(unit: LengthUnit, other: LengthUnit): number;
+
+### build/sample.d.ts#SAMPLE_LEVEL
+export declare const SAMPLE_LEVEL: Level;
+
 ### build/sample.d.ts#SAMPLE_ROOM
 export declare const SAMPLE_ROOM: Room;
 
@@ -496,6 +697,9 @@ export declare const SAMPLE_SCENE: Scene;
 ### build/sample.d.ts#SAMPLE_SURVEY
 export declare const SAMPLE_SURVEY: Survey;
 
+### build/schema.d.ts#levelSchema
+export declare const levelSchema: z.ZodType<Level>;
+
 ### build/schema.d.ts#roomSchema
 export declare const roomSchema: z.ZodType<Room>;
 
@@ -504,87 +708,6 @@ export declare const sceneSchema: z.ZodType<Scene>;
 
 ### build/schema.d.ts#surveySchema
 export declare const surveySchema: z.ZodType<Survey>;
-
-### build/survey.chunk.d.ts#CLOSURE_LIMIT
-declare const CLOSURE_LIMIT = .01;
-
-### build/survey.chunk.d.ts#SQUARE_TURNS
-declare const SQUARE_TURNS: readonly ["left", "right"];
-
-### build/survey.chunk.d.ts#SURVEY_SCHEMA
-declare const SURVEY_SCHEMA = "survey/1";
-
-### build/survey.chunk.d.ts#Survey
-interface Survey {
-  readonly schema: typeof SURVEY_SCHEMA;
-  readonly name?: string | undefined;
-  readonly unit: LengthUnit;
-  readonly height: number;
-  readonly wallThickness: number;
-  readonly sides: readonly SurveySide[];
-  readonly start?: PlanPoint | undefined;
-  readonly heading?: number | undefined;
-  readonly checks?: readonly SurveyCheck[] | undefined;
-  readonly openings?: readonly Opening[] | undefined;
-  readonly outlets?: readonly SurveyOutlet[] | undefined;
-  readonly circuits?: readonly Circuit[] | undefined;
-}
-
-### build/survey.chunk.d.ts#SurveyCheck
-interface SurveyCheck {
-  readonly id: string;
-  readonly from: string;
-  readonly to: string;
-  readonly length: number;
-}
-
-### build/survey.chunk.d.ts#SurveyCheckResult
-interface SurveyCheckResult {
-  readonly id: string;
-  readonly measured: number;
-  readonly model: number | undefined;
-  readonly difference: number | undefined;
-}
-
-### build/survey.chunk.d.ts#SurveyClosure
-interface SurveyClosure {
-  readonly gap: number;
-  readonly ratio: number;
-  readonly turn: number;
-  readonly closed: boolean;
-}
-
-### build/survey.chunk.d.ts#SurveyOptions
-interface SurveyOptions {
-  readonly limit?: number | undefined;
-}
-
-### build/survey.chunk.d.ts#SurveyOutlet
-type SurveyOutlet = Omit<Outlet, "face">;
-
-### build/survey.chunk.d.ts#SurveyResult
-interface SurveyResult {
-  readonly room: Room;
-  readonly corners: readonly PlanPoint[];
-  readonly walk: readonly PlanPoint[];
-  readonly closure: SurveyClosure;
-  readonly checks: readonly SurveyCheckResult[];
-}
-
-### build/survey.chunk.d.ts#SurveySide
-interface SurveySide {
-  readonly id: string;
-  readonly length: number;
-  readonly turn: SurveyTurn;
-  readonly thickness?: number | undefined;
-  readonly height?: number | undefined;
-}
-
-### build/survey.chunk.d.ts#SurveyTurn
-type SurveyTurn = (typeof SQUARE_TURNS)[number] | number;
-
-### build/survey.chunk.d.ts#expandSurvey
-declare function expandSurvey(survey: Survey, options?: SurveyOptions): SurveyResult;
 
 ### build/three.d.ts#DARK_THEME
 export declare const DARK_THEME: ViewerTheme;
