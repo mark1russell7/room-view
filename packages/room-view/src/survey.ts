@@ -164,6 +164,9 @@ function directionOf(degrees: number): PlanPoint {
  *    This is the transit rule of land survey. A side along an axis stays along that axis, so a room with square corners keeps them.
  *    Then the last wall ends exactly at the first corner, and the room gets a floor.
  *
+ * An opening and an outlet keep their place on a side that changes its length: each `offset` and each `width` changes in the same proportion.
+ * Thus an opening that fits in its measured side fits in its wall, and two openings that do not overlap stay apart.
+ *
  * A walk that is not closed gets no correction of the gap: its walls follow the walk, and the room has no floor.
  * Thus the record of a survey in progress shows the walls that the person measured.
  *
@@ -250,6 +253,19 @@ export function expandSurvey(survey: Survey, options: SurveyOptions = {}): Surve
     return { id: check.id, measured: check.length, model, difference: model === undefined ? undefined : check.length - model };
   });
 
+  // A side that shares the gap changes its length. The length of its wall, as a part of the measured length, is the factor of the side.
+  const shared = closed && gap > 0;
+  const factorOf = new Map<string, number>();
+  sides.forEach((side, index) => {
+    if (!shared || factorOf.has(side.id) || !(lengths[index]! > 0)) return;
+    const { from, to } = walls[index]!;
+    factorOf.set(side.id, Math.hypot(to[0] - from[0], to[1] - from[1]) / lengths[index]!);
+  });
+  const openings = survey.openings?.map((opening): Opening => {
+    const factor = factorOf.get(opening.wall) ?? 1;
+    return factor === 1 ? opening : { ...opening, offset: opening.offset * factor, width: opening.width * factor };
+  });
+
   const face = toLeft ? "left" : "right";
   const room: Room = {
     schema: ROOM_SCHEMA,
@@ -258,10 +274,11 @@ export function expandSurvey(survey: Survey, options: SurveyOptions = {}): Surve
     height: survey.height,
     wallThickness: survey.wallThickness,
     walls,
-    ...(survey.openings === undefined ? {} : { openings: survey.openings }),
+    // A walk with no shared gap keeps the list of the survey.
+    ...(survey.openings === undefined || openings === undefined ? {} : { openings: shared ? openings : survey.openings }),
     // A floor has a counter-clockwise outline.
     ...(closed ? { floors: [{ id: "floor", ...(survey.name === undefined ? {} : { name: survey.name }), ring: toLeft ? corners : [...corners].reverse() }] } : {}),
-    ...(survey.outlets === undefined ? {} : { outlets: survey.outlets.map((outlet): Outlet => ({ ...outlet, face })) }),
+    ...(survey.outlets === undefined ? {} : { outlets: survey.outlets.map((outlet): Outlet => ({ ...outlet, offset: outlet.offset * (factorOf.get(outlet.wall) ?? 1), face })) }),
     ...(survey.circuits === undefined ? {} : { circuits: survey.circuits }),
   };
   return { room, corners, walk, closure: { gap, ratio, turn: error, closed }, checks };

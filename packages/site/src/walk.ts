@@ -1,4 +1,5 @@
 import type { PlanPoint, SurveyResult } from "@mark1russell7/room-view";
+import type { FeatureKind, FeatureSpan } from "./draft.ts";
 
 // The drawing of a walk for the page "Measure a room", as data. Each position is in pixels of the picture.
 // The y axis of a plan points up, and that of a picture points down.
@@ -29,9 +30,30 @@ export interface WalkLabel {
   readonly text: string;
 }
 
+/** A door, a window, an opening or an outlet of a wall of the drawing. */
+export interface WalkFeature {
+  /** The position of the wall in the walk, from 0. */
+  readonly side: number;
+  /** The key of the feature in the page. */
+  readonly key: string;
+  readonly kind: FeatureKind;
+  /** The edge of the feature that is nearer to the start of its wall. An outlet has its center. */
+  readonly from: Pixel;
+  /** The edge of the feature that is nearer to the end of its wall. An outlet has its center. */
+  readonly to: Pixel;
+  /** The direction from the wall into the room: a vector with a length of 1. */
+  readonly inner: Pixel;
+  /** The measured distance: the line from a corner of the wall to the near edge of the feature. */
+  readonly reach: readonly [corner: Pixel, edge: Pixel];
+  /** The level of the fault of the place of the feature. */
+  readonly fault: "error" | "warning" | undefined;
+}
+
 /** The drawing of a walk. */
 export interface WalkDrawing {
   readonly walls: readonly WalkWall[];
+  /** The features of the walls. A feature on a wall with no length is not in the drawing. */
+  readonly features: readonly WalkFeature[];
   /** The outline of the floor of a closed room. An open walk has no floor. */
   readonly floor: readonly Pixel[] | undefined;
   readonly labels: readonly WalkLabel[];
@@ -55,8 +77,11 @@ const SHORTEST_LABEL = 26;
 /** The gap of a walk below this number of pixels has no line. */
 const SMALLEST_GAP = 3;
 
-/** This function gives the drawing of the result of a survey in a picture. `texts` has the label of each wall, and a wall with `undefined` has none. */
-export function drawWalk(result: SurveyResult, size: PictureSize, texts: readonly (string | undefined)[]): WalkDrawing {
+/**
+ * This function gives the drawing of the result of a survey in a picture. `texts` has the label of each wall, and a wall with `undefined` has none.
+ * `spans` has the place of each feature along its wall.
+ */
+export function drawWalk(result: SurveyResult, size: PictureSize, texts: readonly (string | undefined)[], spans: readonly FeatureSpan[] = []): WalkDrawing {
   const closed = result.closure.closed;
   const count = result.room.walls.length;
   const points: readonly PlanPoint[] = closed ? result.corners : result.walk;
@@ -96,6 +121,21 @@ export function drawWalk(result: SurveyResult, size: PictureSize, texts: readonl
     return [{ side: wall.side, at, anchor: nx > 0.5 ? "start" : nx < -0.5 ? "end" : "middle", text }];
   });
 
+  // The room is on the side of a wall that is opposite to its labels.
+  const features = spans.flatMap((span): WalkFeature[] => {
+    const wall = walls[span.side];
+    if (wall === undefined) return [];
+    const dx = wall.to[0] - wall.from[0];
+    const dy = wall.to[1] - wall.from[1];
+    const length = Math.hypot(dx, dy);
+    if (!(length > 0)) return [];
+    const at = (part: number): Pixel => [wall.from[0] + dx * part, wall.from[1] + dy * part];
+    const from = at(span.from);
+    const to = at(span.to);
+    const inner: Pixel = [(outer * dy) / length, (outer * (0 - dx)) / length];
+    return [{ side: span.side, key: span.key, kind: span.kind, from, to, inner, reach: span.corner === "start" ? [wall.from, from] : [wall.to, to], fault: span.fault }];
+  });
+
   const start = pixel(first);
   const lead = walls.find((wall) => Math.hypot(wall.to[0] - wall.from[0], wall.to[1] - wall.from[1]) > 0);
   const heading = lead === undefined || lead.side !== 0 ? undefined : unit(lead);
@@ -103,7 +143,7 @@ export function drawWalk(result: SurveyResult, size: PictureSize, texts: readonl
   const open = !closed && Math.hypot(end[0] - start[0], end[1] - start[1]) >= SMALLEST_GAP;
   const gap = open ? { from: end, to: start, at: [(end[0] + start[0]) / 2, (end[1] + start[1]) / 2] as const } : undefined;
 
-  return { walls, floor: closed ? result.corners.map(pixel) : undefined, labels, start, heading, gap };
+  return { walls, features, floor: closed ? result.corners.map(pixel) : undefined, labels, start, heading, gap };
 }
 
 function unit(wall: WalkWall): Pixel {
