@@ -12,10 +12,10 @@ import {
   type Ring,
   type Transform3,
 } from "@mark1russell7/layout-contract";
-import { wallFrames, wallTransform, type WallFrame } from "./frames.ts";
+import { wallFrames, wallHasOutline, wallTransform, type WallFrame } from "./frames.ts";
 import { wallFootprints, type JoinOptions, type WallFootprint } from "./joins.ts";
 import type { OpeningKind, PlacedObject, Room, Scene } from "./room.ts";
-import { metersPer } from "./units.ts";
+import { LARGEST_LENGTH, lengthsInRange, metersPer } from "./units.ts";
 
 /** These are the kinds of a solid. */
 export const SOLID_KINDS: readonly ["floor", "wall", "glass", "outlet", "object"] = ["floor", "wall", "glass", "outlet", "object"];
@@ -43,7 +43,7 @@ export type SolidShape = Prism | PlacedBox;
 
 /**
  * A solid: one part of the 3D model of a room. The x and y axes are the axes of the plan, and the z axis points up.
- * The floor is at the height 0, and each length is in meters.
+ * The floor is at the height 0, and each length is in meters. Each number of a solid is finite, and its volume is above 0.
  */
 export interface Solid {
   /** The name of the solid. Each solid of a model has a different name. */
@@ -56,7 +56,7 @@ export interface Solid {
 
 /** The options of the model of a room. */
 export interface SolidOptions {
-  /** The depth of the floor below the height 0, in meters. The walls go down by the same depth. The default is 0.1. */
+  /** The depth of the floor below the height 0, in meters. The walls go down by the same depth. The default is 0.1. A value that is not finite gives the default. */
   readonly floorDepth?: number | undefined;
   /** The options of the corners of the walls. */
   readonly joins?: JoinOptions | undefined;
@@ -77,8 +77,22 @@ export const OUTLET_PLATE: { readonly width: number; readonly height: number; re
  */
 export const TO_Y_UP: Transform3 = { position: { x: 0, y: 0, z: 0 }, rotation: { x: -Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 } };
 
-/** A length in meters, or an area in square meters, at this value or less is empty. */
+/** A length in meters at this value or less is empty: the model does not make a part of this size. */
 const EMPTY = 1e-9;
+
+/** An area in square meters at this value or less is empty. */
+const EMPTY_AREA = 1e-12;
+
+/** This function gives an outline, or an empty ring when the outline has no area or a number that is not finite. */
+function solidRing(ring: Ring): Ring {
+  if (ring.length < 3 || !ring.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y))) return [];
+  return regionArea({ kind: "polygon", points: ring }) > EMPTY_AREA ? ring : [];
+}
+
+/** This function tells if the model makes a wall: the wall has an outline in the plan, and its height is above 0 and in the range of the model. */
+function isMade(frame: WallFrame): boolean {
+  return wallHasOutline(frame) && frame.height > 0 && lengthsInRange(frame.height);
+}
 
 /** An opening of a wall, in meters, in the frame of the wall. */
 interface Hole {
@@ -135,13 +149,12 @@ function slice(frame: WallFrame, ring: Ring, from: number, to: number): Ring {
   let part = ring;
   if (Number.isFinite(from)) part = clipRing(part, 0 - frame.along.x, 0 - frame.along.y, 0 - (base + from));
   if (Number.isFinite(to)) part = clipRing(part, frame.along.x, frame.along.y, base + to);
-  part = withoutRepeats(part);
-  return part.length >= 3 && regionArea({ kind: "polygon", points: part }) > EMPTY ? part : [];
+  return solidRing(withoutRepeats(part));
 }
 
 /** This function gives the solids of one wall: the parts between its openings, the part below and above each opening, and the glass of each window. */
 function wallSolids(room: Room, frame: WallFrame, footprint: WallFootprint, scale: number, depth: number): readonly Solid[] {
-  if (footprint.ring.length < 3 || !(frame.height > 0)) return [];
+  if (footprint.ring.length < 3 || !isMade(frame)) return [];
   const walls: Solid[] = [];
   const glass: Solid[] = [];
   const add = (ring: Ring, z: number, top: number): void => {
@@ -182,17 +195,19 @@ function wallSolids(room: Room, frame: WallFrame, footprint: WallFootprint, scal
  * This function gives the 3D model of a room as a list of solids: the floors, the walls with their openings, the glass of the windows and the outlets.
  *
  * The function does not stop for a record with a fault. It skips each part that it cannot make: for example, a wall with no length,
- * or an opening on a wall that the room does not have. `checkRoom` tells each fault.
+ * a part with a number that is not finite or not in the range of the model (`LARGEST_LENGTH`), or an opening on a wall
+ * that the room does not have. `checkRoom` tells each fault.
  */
 export function roomSolids(room: Room, options: SolidOptions = {}): readonly Solid[] {
   const scale = metersPer(room.unit);
-  const depth = Math.max(0, options.floorDepth ?? FLOOR_DEPTH);
+  const given = options.floorDepth ?? FLOOR_DEPTH;
+  const depth = Number.isFinite(given) ? Math.min(Math.max(given, 0), LARGEST_LENGTH) : FLOOR_DEPTH;
   const frames = wallFrames(room);
   const footprints = wallFootprints(frames, options.joins);
   const solids: Solid[] = [];
   for (const floor of room.floors ?? []) {
-    if (floor.ring.length < 3 || depth <= EMPTY) continue;
-    const ring = floor.ring.map(([x, y]) => [x * scale, y * scale] as const);
+    const ring = solidRing(floor.ring.map(([x, y]) => [x * scale, y * scale] as const));
+    if (ring.length < 3 || depth <= EMPTY || !ring.every(([x, y]) => lengthsInRange(x, y))) continue;
     solids.push({ id: `floor:${floor.id}`, kind: "floor", source: floor.id, shape: { kind: "prism", ring, z: 0 - depth, d: depth } });
   }
   frames.forEach((frame, index) => {
@@ -201,10 +216,10 @@ export function roomSolids(room: Room, options: SolidOptions = {}): readonly Sol
   const byId = new Map(frames.map((frame) => [frame.id, frame] as const));
   for (const outlet of room.outlets ?? []) {
     const frame = byId.get(outlet.wall);
-    if (frame === undefined || !(frame.length > 0)) continue;
+    if (frame === undefined || !isMade(frame)) continue;
     const along = outlet.offset * scale;
     const height = outlet.height * scale;
-    if (!Number.isFinite(along) || !Number.isFinite(height)) continue;
+    if (!lengthsInRange(along, height)) continue;
     solids.push({
       id: `outlet:${outlet.id}`,
       kind: "outlet",
@@ -229,7 +244,8 @@ export function roomSolids(room: Room, options: SolidOptions = {}): readonly Sol
 /**
  * This function gives the transform of each placed object of a scene, from the frame of the object to the room, in meters.
  * The origin of the frame of an object is the center of its bottom. An object with a parent gets the transform of the parent first.
- * An object has no transform when a parent is not in the scene, when its parents make a loop, or when a number of its place is not finite.
+ * An object has no transform when a parent is not in the scene, when its parents make a loop,
+ * or when a number of its place is not finite or not in the range of the model.
  */
 export function objectTransforms(scene: Scene): ReadonlyMap<string, Transform3> {
   const scale = metersPer(scene.room.unit);
@@ -242,8 +258,9 @@ export function objectTransforms(scene: Scene): ReadonlyMap<string, Transform3> 
     if (open.has(object.id)) return undefined;
     const turn = object.turn ?? 0;
     const position = { x: object.at[0] * scale, y: object.at[1] * scale, z: (object.lift ?? 0) * scale };
-    if (![turn, position.x, position.y, position.z].every((value) => Number.isFinite(value))) return undefined;
-    const local: Transform3 = { position, rotation: rotationAbout({ x: 0, y: 0, z: 1 }, (turn * Math.PI) / 180) };
+    if (!Number.isFinite(turn) || !lengthsInRange(position.x, position.y, position.z)) return undefined;
+    // The remainder is exact. Thus a very large turn does not make an angle that is not finite.
+    const local: Transform3 = { position, rotation: rotationAbout({ x: 0, y: 0, z: 1 }, ((turn % 360) * Math.PI) / 180) };
     let world: Transform3 | undefined = local;
     if (object.parent !== undefined) {
       open.add(object.id);
@@ -261,7 +278,7 @@ export function objectTransforms(scene: Scene): ReadonlyMap<string, Transform3> 
 
 /**
  * This function gives the 3D model of a scene: the solids of its room, then one box for each placed object.
- * It skips an object that has no transform or no size. `checkScene` tells each fault.
+ * It skips an object that has no transform, no size, or a size that is not in the range of the model. `checkScene` tells each fault.
  */
 export function sceneSolids(scene: Scene, options: SolidOptions = {}): readonly Solid[] {
   const scale = metersPer(scene.room.unit);
@@ -272,7 +289,7 @@ export function sceneSolids(scene: Scene, options: SolidOptions = {}): readonly 
     const w = object.size[0] * scale;
     const h = object.size[1] * scale;
     const d = object.size[2] * scale;
-    if (transform === undefined || !(w > 0 && h > 0 && d > 0)) continue;
+    if (transform === undefined || ![w, h, d].every((size) => size > EMPTY && size <= LARGEST_LENGTH)) continue;
     solids.push({
       id: `object:${object.id}`,
       kind: "object",

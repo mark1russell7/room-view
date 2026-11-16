@@ -71,6 +71,8 @@ Each finding has a code, the kind and the `id` of the record, and a message with
 
 The model does not stop on a record with faults. It does not make the solids that it cannot make, and the checks tell why.
 
+The model has a range of lengths. A size of 0.001 mm or less is 0 for the checks. A length above 1 000 km (`LARGEST_LENGTH`) is a fault, and the model does not make a part with such a length. Thus each number of the model is finite.
+
 ## The loads of the circuits
 
 `circuitStates` gives the load of each circuit against its limit, with a level: `ok`, `near`, `over` or `unknown`. The loads are input data of the scene. This package does not calculate the power of a computer.

@@ -4,7 +4,7 @@ import { checkRoom, checkScene, FINDING_CODES, type Finding } from "./check.ts";
 import { circuitStates } from "./loads.ts";
 import { OPENING_KINDS, ROOM_SCHEMA, SCENE_SCHEMA, WALL_FACES, WALL_SIDES, type Room, type Scene } from "./room.ts";
 import { SAMPLE_SCENE } from "./sample.ts";
-import { boundsOfSolids, sceneSolids, solidVolume } from "./solids.ts";
+import { boundsOfSolids, sceneSolids, solidCorners, solidVolume } from "./solids.ts";
 import { LENGTH_UNITS } from "./units.ts";
 
 /** One wall along the x axis, 4 long, 0.2 thick and 2.4 high. */
@@ -33,6 +33,25 @@ describe("checkRoom", () => {
     expect(found(checkRoom(room({ height: Infinity })))).toEqual(["error/number-not-finite/room/"]);
     expect(found(checkRoom(room({ walls: [{ id: "a", from: [0, 0], to: [Number.NaN, 0] }] })))).toEqual(["error/number-not-finite/wall/a", "error/wall-length/wall/a"]);
     expect(found(checkRoom(room({ circuits: [{ id: "c", limit: Infinity }] })))).toEqual(["error/number-not-finite/circuit/c"]);
+  });
+
+  it("tells a length above the largest length of the model", () => {
+    expect(found(checkRoom(room({ height: 2e6 })))).toEqual(["error/number-too-large/room/"]);
+    expect(found(checkRoom(room({ walls: [{ id: "a", from: [0, 0], to: [4e6, 0] }] })))).toEqual(["error/number-too-large/wall/a"]);
+    // The limit is a length in meters: 4 000 000 mm are 4 km.
+    expect(checkRoom(room({ unit: "mm", height: 2400, wallThickness: 200, walls: [{ id: "a", from: [0, 0], to: [4e6, 0] }] }))).toEqual([]);
+    // The limit of a circuit is a power, so it has no such limit.
+    expect(checkRoom(room({ circuits: [{ id: "c", limit: 5e6 }] }))).toEqual([]);
+    expect(found(checkScene(scene({ objects: [{ ...box, id: "o", at: [2, 3e6] }] })))).toEqual(["error/number-too-large/object/o"]);
+    // The turn of an object is an angle, so it has no such limit.
+    expect(checkScene(scene({ objects: [{ ...box, id: "o", at: [2, 3], turn: 3e6 }] }))).toEqual([]);
+  });
+
+  it("tells a size that is too small for the model", () => {
+    // A length of 1 micrometer or less is 0 for the checks.
+    expect(found(checkRoom(room({ wallThickness: 1e-7 })))).toEqual(["error/size-not-positive/room/"]);
+    expect(checkRoom(room({ wallThickness: 1e-5 }))).toEqual([]);
+    expect(found(checkScene(scene({ objects: [{ kind: "box", size: [1, 1, 1e-300], id: "o", at: [2, 3] }] })))).toEqual(["error/size-not-positive/object/o"]);
   });
 
   it("tells an id that two records of one kind have", () => {
@@ -346,22 +365,66 @@ describe("a record with faults", () => {
       fc.property(anyScene, (record) => {
         const findings = checkScene(record);
         for (const finding of findings) expect(FINDING_CODES).toContain(finding.code);
+        // Each solid of the model has a volume above 0 and finite corners, also when the record has faults.
         const solids = sceneSolids(record);
-        expect(new Set(solids.map((solid) => solid.id)).size).toBeLessThanOrEqual(solids.length);
-        solids.forEach((solid) => solidVolume(solid));
-        boundsOfSolids(solids);
+        for (const solid of solids) {
+          expect(solidVolume(solid), solid.id).toBeGreaterThan(0);
+          for (const corner of solidCorners(solid)) expect(Number.isFinite(corner.x + corner.y + corner.z), solid.id).toBe(true);
+        }
+        expect(boundsOfSolids(solids) === undefined).toBe(solids.length === 0);
         expect(circuitStates(record)).toHaveLength(record.room.circuits?.length ?? 0);
       }),
     );
   });
 
-  it("gives a model with volumes above 0 when the checks find no error", () => {
-    fc.assert(
-      fc.property(anyScene, (record) => {
-        fc.pre(checkScene(record).every((finding) => finding.level !== "error"));
-        for (const solid of sceneSolids(record)) expect(solidVolume(solid)).toBeGreaterThan(0);
-      }),
-      { numRuns: 30, maxSkipsPerRun: 2000 },
-    );
+  it("does not stop for a wall to infinity with an outlet", () => {
+    const record = scene({}, { walls: [{ id: "c", from: [0, 0], to: [0, -Infinity] }], outlets: [{ id: "a", wall: "c", face: "left", offset: 0, height: 0 }] });
+    expect(found(checkScene(record))).toContain("error/number-not-finite/wall/c");
+    expect(sceneSolids(record)).toEqual([]);
   });
+
+  it("does not stop for an object with a very large turn", () => {
+    // In radians, this turn is not a finite number. The model uses its remainder after full turns.
+    const record = scene({ objects: [{ ...box, id: "o", at: [2, 3], turn: -5.722234971514057e307 }] });
+    expect(checkScene(record)).toEqual([]);
+    const solid = sceneSolids(record).find((item) => item.id === "object:o")!;
+    expect(solidVolume(solid)).toBeCloseTo(1, 12);
+    for (const corner of solidCorners(solid)) expect(Math.hypot(corner.x - 2, corner.y - 3)).toBeCloseTo(Math.SQRT1_2, 9);
+  });
+
+  it("makes each part of a record with no error", () => {
+    // Lengths on a grid of quarters make records with common ends, lines that cross and parts with the size 0.
+    const quarters = (min: number, max: number): fc.Arbitrary<number> => fc.integer({ min, max }).map((steps) => steps / 4);
+    const spot = fc.tuple(quarters(-8, 24), quarters(-8, 24));
+    const size = quarters(0, 8);
+    const each = <T extends { readonly id: string }>(item: fc.Arbitrary<T>, maxLength: number): fc.Arbitrary<T[]> => fc.uniqueArray(item, { maxLength, selector: (value) => value.id });
+    const plainRoom: fc.Arbitrary<Room> = fc.record({
+      schema: fc.constant(ROOM_SCHEMA),
+      unit: fc.constantFrom(...LENGTH_UNITS),
+      height: fc.constantFrom(2, 3),
+      wallThickness: fc.constantFrom(0.25, 0.5),
+      walls: each(fc.record({ id, from: spot, to: spot }), 3),
+      floors: each(fc.record({ id, ring: fc.array(spot, { minLength: 3, maxLength: 5 }) }), 2),
+      outlets: each(fc.record({ id, wall: id, face: fc.constantFrom(...WALL_FACES), offset: quarters(-1, 8), height: quarters(-1, 8) }), 2),
+    });
+    const plainScene: fc.Arbitrary<Scene> = fc.record({
+      schema: fc.constant(SCENE_SCHEMA),
+      room: plainRoom,
+      objects: each(fc.record({ id, kind: fc.constant("box"), size: fc.tuple(size, size, size), at: spot, lift: maybe(size), turn: maybe(fc.integer({ min: -720, max: 720 })), parent: maybe(id) }), 3),
+    });
+    fc.assert(
+      fc.property(plainScene, (record) => {
+        const findings = checkScene(record);
+        fc.pre(findings.every((finding) => finding.level !== "error"));
+        const made = new Set(sceneSolids(record).map((solid) => `${solid.kind}:${solid.source}`));
+        // The corners of a wall can remove the wall. The warning wall-short tells such a wall.
+        const short = new Set(findings.filter((finding) => finding.code === "wall-short").map((finding) => finding.at));
+        for (const wall of record.room.walls) if (!short.has(wall.id)) expect(made).toContain(`wall:${wall.id}`);
+        for (const floor of record.room.floors ?? []) expect(made).toContain(`floor:${floor.id}`);
+        for (const outlet of record.room.outlets ?? []) expect(made).toContain(`outlet:${outlet.id}`);
+        for (const object of record.objects ?? []) expect(made).toContain(`object:${object.id}`);
+      }),
+      { numRuns: 60, maxSkipsPerRun: 2000 },
+    );
+  }, 30_000);
 });

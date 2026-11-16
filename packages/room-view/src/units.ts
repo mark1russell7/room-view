@@ -10,3 +10,14 @@ export type LengthUnit = (typeof LENGTH_UNITS)[number];
 export function metersPer(unit: LengthUnit): number {
   return valueIn(quantity(1, unit), "m");
 }
+
+/**
+ * The largest length in meters that the model can use: 1 000 km. A larger number in a room record is a mistake.
+ * With this limit, each calculation of the model gives a finite number.
+ */
+export const LARGEST_LENGTH = 1e6;
+
+/** This function tells if each value is a length that the model can use: a finite number of meters, with a size of `LARGEST_LENGTH` or less. */
+export function lengthsInRange(...meters: readonly number[]): boolean {
+  return meters.every((value) => Math.abs(value) <= LARGEST_LENGTH);
+}

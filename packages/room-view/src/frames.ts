@@ -1,6 +1,6 @@
 import { rotationAbout, type Point, type Transform3 } from "@mark1russell7/layout-contract";
 import type { Room, Wall } from "./room.ts";
-import { metersPer } from "./units.ts";
+import { lengthsInRange, metersPer } from "./units.ts";
 
 /**
  * The frame of a wall, in meters. A point of the wall has a distance along the line and a distance across it.
@@ -11,7 +11,7 @@ export interface WallFrame {
   readonly id: string;
   readonly start: Point;
   readonly end: Point;
-  /** The unit vector from the start to the end. A wall of length 0 has the vector (1, 0). */
+  /** The unit vector from the start to the end. A wall with the length 0, or with a length that is not finite, has the vector (1, 0). */
   readonly along: Point;
   /** The unit vector to the left of `along`. */
   readonly left: Point;
@@ -29,7 +29,7 @@ function frameOf(room: Room, wall: Wall, scale: number): WallFrame {
   const start = { x: wall.from[0] * scale, y: wall.from[1] * scale };
   const end = { x: wall.to[0] * scale, y: wall.to[1] * scale };
   const length = Math.hypot(end.x - start.x, end.y - start.y);
-  const along = length > 0 ? { x: (end.x - start.x) / length, y: (end.y - start.y) / length } : { x: 1, y: 0 };
+  const along = length > 0 && Number.isFinite(length) ? { x: (end.x - start.x) / length, y: (end.y - start.y) / length } : { x: 1, y: 0 };
   const thickness = (wall.thickness ?? room.wallThickness) * scale;
   const side = wall.side ?? "center";
   const leftOffset = side === "left" ? thickness : side === "right" ? 0 : thickness / 2;
@@ -51,6 +51,14 @@ function frameOf(room: Room, wall: Wall, scale: number): WallFrame {
 export function wallFrames(room: Room): readonly WallFrame[] {
   const scale = metersPer(room.unit);
   return room.walls.map((wall) => frameOf(room, wall, scale));
+}
+
+/**
+ * This function tells if a wall has an outline in the plan. Its ends and its thickness must be lengths in the range of the model,
+ * and its length and its thickness must be above 0. Only such a wall makes a corner, and the model makes only such a wall.
+ */
+export function wallHasOutline(frame: WallFrame): boolean {
+  return lengthsInRange(frame.start.x, frame.start.y, frame.end.x, frame.end.y, frame.thickness) && frame.length > 0 && frame.thickness > 0;
 }
 
 /** This function gives the point of the plan at a distance along a wall and a distance across it, in meters. */

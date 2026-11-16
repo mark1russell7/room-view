@@ -189,6 +189,30 @@ describe("wallFootprints", () => {
     ]);
   });
 
+  it("gives no outline to a wall with a number that is not finite or not in the range of the model", () => {
+    const good: Wall = { id: "good", from: [0, 0], to: [4, 0] };
+    const ends: readonly Wall["to"][] = [
+      [0, -Infinity],
+      [Number.NaN, 1],
+      [0, 2e6],
+    ];
+    for (const to of ends) {
+      const [bad, kept] = footprintsOf(roomOf([{ id: "bad", from: [0, 0], to }, good]));
+      expect(bad).toEqual({ wall: "bad", ring: [], clear: [0, 0] });
+      // The wall with the fault makes no corner, so the other wall keeps its square end.
+      expect(kept!.ring).toHaveLength(4);
+      expect(areaOf(kept!.ring)).toBeCloseTo(4 * 0.2, 12);
+    }
+  });
+
+  it("uses the default for an option that is not finite", () => {
+    const walls: readonly Wall[] = [
+      { id: "a", from: [0, 0], to: [4, 0] },
+      { id: "b", from: [4, 0], to: [4, 3] },
+    ];
+    expect(footprintsOf(roomOf(walls), { tolerance: Number.NaN, miterLimit: Infinity })).toEqual(footprintsOf(roomOf(walls)));
+  });
+
   it("gives outlines that are convex and counter-clockwise, and that do not overlap, for the sample room", () => {
     const footprints = footprintsOf(SAMPLE_ROOM);
     for (const footprint of footprints) expect(leastTurn(footprint.ring)).toBeGreaterThan(0);

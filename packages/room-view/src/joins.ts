@@ -1,11 +1,11 @@
 import { clipRing, type Point, type Ring } from "@mark1russell7/layout-contract";
-import { wallPoint, type WallFrame } from "./frames.ts";
+import { wallHasOutline, wallPoint, type WallFrame } from "./frames.ts";
 
 /** The outline of one wall in the plan, after its corners with the other walls. */
 export interface WallFootprint {
   /** The `id` of the wall. */
   readonly wall: string;
-  /** The outline in meters, counter-clockwise and convex. It is empty when the wall has no area. */
+  /** The outline in meters, counter-clockwise and convex. It is empty for a wall with no outline (`wallHasOutline`) and for a wall that its corners remove. */
   readonly ring: Ring;
   /**
    * The part of the wall that has its full thickness: two distances along the wall, in meters.
@@ -16,11 +16,11 @@ export interface WallFootprint {
 
 /** The options of the corners of the walls. */
 export interface JoinOptions {
-  /** Two ends of walls at this distance or less make one corner. The unit is the meter, and the default is 1e-6. */
+  /** Two ends of walls at this distance or less make one corner. The unit is the meter, and the default is 1e-6. A value that is not finite gives the default. */
   readonly tolerance?: number | undefined;
   /**
    * The limit of a sharp corner. The faces of two walls meet at a point. When that point is farther from the corner
-   * than this number of thicknesses, the two walls get square ends. The default is 4.
+   * than this number of thicknesses, the two walls get square ends. The default is 4. A value that is not finite gives the default.
    */
   readonly miterLimit?: number | undefined;
 }
@@ -56,6 +56,11 @@ interface End {
   lowPoint: Point;
   /** This value tells if the end makes a corner with a different end. */
   joined: boolean;
+}
+
+/** This function gives an option, or its default when the option has no value or a value that is not finite. */
+function finiteOr(value: number | undefined, fallback: number): number {
+  return value !== undefined && Number.isFinite(value) ? value : fallback;
 }
 
 /** This function gives the point at a distance across from the point of an end. */
@@ -164,11 +169,12 @@ function faceRange(frame: WallFrame, ring: Ring, offset: number): readonly [numb
  * Two or more ends of walls at one point make a corner. At a corner, the faces of the walls that are adjacent meet at a point,
  * and each wall ends at the lines from the corner to those points. Thus two walls make a miter, and the walls of a corner do not overlap.
  * An end with no other end at its point is square. An end on the face of a different wall is also square: the two walls touch.
+ * A wall with no outline (`wallHasOutline`) gets an empty outline, and it makes no corner.
  */
 export function wallFootprints(frames: readonly WallFrame[], options: JoinOptions = {}): readonly WallFootprint[] {
-  const tolerance = options.tolerance ?? JOIN_TOLERANCE;
-  const miterLimit = options.miterLimit ?? MITER_LIMIT;
-  const pairs = frames.map((frame) => (frame.length > 0 && frame.thickness > 0 ? endsOf(frame) : undefined));
+  const tolerance = finiteOr(options.tolerance, JOIN_TOLERANCE);
+  const miterLimit = Math.max(finiteOr(options.miterLimit, MITER_LIMIT), 0);
+  const pairs = frames.map((frame) => (wallHasOutline(frame) ? endsOf(frame) : undefined));
   const corners: End[][] = [];
   for (const pair of pairs) {
     for (const end of pair ?? []) {
@@ -181,8 +187,8 @@ export function wallFootprints(frames: readonly WallFrame[], options: JoinOption
     ends.sort((a, b) => Math.atan2(a.out.y, a.out.x) - Math.atan2(b.out.y, b.out.x));
     joinEnds(ends, miterLimit);
   }
-  const thickest = frames.reduce((most, frame) => Math.max(most, frame.thickness), 0);
-  const reach = (Math.max(miterLimit, 0) + 1) * thickest;
+  const thickest = frames.reduce((most, frame, index) => (pairs[index] === undefined ? most : Math.max(most, frame.thickness)), 0);
+  const reach = (miterLimit + 1) * thickest;
   return frames.map((frame, index): WallFootprint => {
     const pair = pairs[index];
     if (pair === undefined) return { wall: frame.id, ring: [], clear: [0, 0] };
@@ -193,6 +199,8 @@ export function wallFootprints(frames: readonly WallFrame[], options: JoinOption
       wallPoint(frame, 0 - reach, frame.leftOffset),
     ].map((point) => [point.x, point.y] as const);
     const ring = withoutFlat(cut(cut(strip, pair[0]), pair[1]));
+    // A very large limit of a sharp corner can make numbers that are not finite. Such an outline is no outline.
+    if (!ring.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y))) return { wall: frame.id, ring: [], clear: [0, 0] };
     const leftFace = faceRange(frame, ring, frame.leftOffset);
     const rightFace = faceRange(frame, ring, frame.rightOffset);
     const from = Math.max(leftFace[0], rightFace[0]);

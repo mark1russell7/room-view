@@ -259,6 +259,50 @@ describe("sceneSolids", () => {
     expect(solidVolume(objects[0]!)).toBeCloseTo(6, 12);
     expect(boxOf(objects[0]!)).toEqual({ min: close([-0.5, 1, 0]), max: close([0.5, 3, 3]) });
   });
+
+  it("skips a part with a number that is not finite or not in the range of the model", () => {
+    const solids = sceneSolids({
+      schema: "scene/1",
+      room: {
+        ...oneWall(),
+        walls: [
+          { id: "a", from: [0, 0], to: [4, 0] },
+          { id: "far", from: [0, 2], to: [3e6, 2] },
+          { id: "tall", from: [0, 4], to: [4, 4], height: Infinity },
+        ],
+        floors: [
+          {
+            id: "wide",
+            ring: [
+              [0, 0],
+              [2e6, 0],
+              [0, 4],
+            ],
+          },
+          {
+            id: "none",
+            ring: [
+              [0, 0],
+              [Number.NaN, 0],
+              [0, 4],
+            ],
+          },
+        ],
+        outlets: [
+          { id: "on-far", wall: "far", face: "left", offset: 1, height: 0.3 },
+          { id: "high", wall: "a", face: "left", offset: 1, height: 5e6 },
+        ],
+      },
+      objects: [
+        { id: "away", kind: "box", size: [1, 1, 1], at: [0, 7e6] },
+        { id: "huge", kind: "box", size: [1, 4e6, 1], at: [0, 2] },
+        { id: "spun", kind: "box", size: [1, 1, 1], at: [0, 2], turn: Infinity },
+      ],
+    });
+    expect(solids.map((solid) => solid.id)).toEqual(["wall:a:0"]);
+    // The options of the model have the same rule: a value that is not finite gives the default.
+    expect(roomSolids(oneWall(), { floorDepth: Number.NaN })).toEqual(roomSolids(oneWall()));
+  });
 });
 
 describe("TO_Y_UP", () => {

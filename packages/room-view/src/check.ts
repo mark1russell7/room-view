@@ -1,9 +1,9 @@
 import { convexOverlap, pointInRing, regionArea, transformPoint3, type Ring, type Transform3 } from "@mark1russell7/layout-contract";
-import { wallFrames } from "./frames.ts";
+import { wallFrames, wallHasOutline } from "./frames.ts";
 import { wallFootprints, type JoinOptions } from "./joins.ts";
 import type { PlacedObject, Room, Scene } from "./room.ts";
 import { objectTransforms } from "./solids.ts";
-import { metersPer } from "./units.ts";
+import { LARGEST_LENGTH, metersPer } from "./units.ts";
 
 /** These are the levels of a finding. An error is a fault that the model cannot show. A warning is a fault that the model can show. */
 export const FINDING_LEVELS: readonly ["error", "warning"] = ["error", "warning"];
@@ -29,6 +29,7 @@ export type RecordKind = (typeof RECORD_KINDS)[number];
 /** These are the codes of the findings. */
 export const FINDING_CODES: readonly [
   "number-not-finite",
+  "number-too-large",
   "id-duplicate",
   "size-not-positive",
   "wall-length",
@@ -54,6 +55,7 @@ export const FINDING_CODES: readonly [
   "load-watts",
 ] = [
   "number-not-finite",
+  "number-too-large",
   "id-duplicate",
   "size-not-positive",
   "wall-length",
@@ -100,7 +102,7 @@ export interface CheckOptions {
   readonly joins?: JoinOptions | undefined;
 }
 
-/** A length in meters at this value or less is 0 for the checks. */
+/** A length in meters at this value or less is 0 for the checks: a size must be above it. */
 const SMALL = 1e-6;
 
 /** This function gives a number with 3 decimals at most. */
@@ -113,6 +115,14 @@ function holdsBadNumber(value: unknown): boolean {
   if (typeof value === "number") return !Number.isFinite(value);
   if (Array.isArray(value)) return value.some((item) => holdsBadNumber(item));
   if (typeof value === "object" && value !== null) return Object.values(value).some((item) => holdsBadNumber(item));
+  return false;
+}
+
+/** This function tells if a value is a finite number with a size above a limit, or if it holds such a number. */
+function holdsLargeNumber(value: unknown, limit: number): boolean {
+  if (typeof value === "number") return Number.isFinite(value) && Math.abs(value) > limit;
+  if (Array.isArray(value)) return value.some((item) => holdsLargeNumber(item, limit));
+  if (typeof value === "object" && value !== null) return Object.values(value).some((item) => holdsLargeNumber(item, limit));
   return false;
 }
 
@@ -141,12 +151,17 @@ export function checkRoom(room: Room, options: CheckOptions = {}): readonly Find
     findings.push({ level: "warning", code, record, at, message });
   };
   const scale = metersPer(room.unit);
+  /** The largest length of the model, in the unit of the room. */
+  const largest = LARGEST_LENGTH / scale;
+  /** This function tells if a size of the record is 0 for the checks. */
+  const none = (size: number): boolean => !(size * scale > SMALL);
   const openings = room.openings ?? [];
   const outlets = room.outlets ?? [];
   const circuits = room.circuits ?? [];
   const floors = room.floors ?? [];
 
   if (holdsBadNumber([room.height, room.wallThickness])) error("number-not-finite", "room", "", "The height or the wall thickness of the room is not a finite number.");
+  if (holdsLargeNumber([room.height, room.wallThickness], largest)) error("number-too-large", "room", "", `The height or the wall thickness of the room is above 1 000 km, the largest length of the model.`);
   const lists: readonly (readonly [RecordKind, readonly { readonly id: string }[]])[] = [
     ["wall", room.walls],
     ["opening", openings],
@@ -157,22 +172,24 @@ export function checkRoom(room: Room, options: CheckOptions = {}): readonly Find
   for (const [record, list] of lists) {
     for (const item of list) {
       if (holdsBadNumber(item)) error("number-not-finite", record, item.id, `A number of the ${record} "${item.id}" is not finite.`);
+      // The limit of a circuit is a power, not a length.
+      if (record !== "circuit" && holdsLargeNumber(item, largest)) error("number-too-large", record, item.id, `A length of the ${record} "${item.id}" is above 1 000 km, the largest length of the model.`);
     }
     for (const id of repeated(list.map((item) => item.id))) error("id-duplicate", record, id, `Two or more records of the kind ${record} have the id "${id}".`);
   }
 
-  if (!(room.height > 0)) error("size-not-positive", "room", "", `The height of the room is ${show(room.height)}. It must be above 0.`);
-  if (!(room.wallThickness > 0)) error("size-not-positive", "room", "", `The wall thickness of the room is ${show(room.wallThickness)}. It must be above 0.`);
+  if (none(room.height)) error("size-not-positive", "room", "", `The height of the room is ${show(room.height)}. It must be above 0.`);
+  if (none(room.wallThickness)) error("size-not-positive", "room", "", `The wall thickness of the room is ${show(room.wallThickness)}. It must be above 0.`);
 
   const frames = wallFrames(room);
   const footprints = wallFootprints(frames, options.joins);
   frames.forEach((frame, index) => {
     const wall = room.walls[index]!;
-    if (wall.thickness !== undefined && !(wall.thickness > 0)) error("size-not-positive", "wall", wall.id, `The thickness of the wall "${wall.id}" is ${show(wall.thickness)}. It must be above 0.`);
-    if (wall.height !== undefined && !(wall.height > 0)) error("size-not-positive", "wall", wall.id, `The height of the wall "${wall.id}" is ${show(wall.height)}. It must be above 0.`);
+    if (wall.thickness !== undefined && none(wall.thickness)) error("size-not-positive", "wall", wall.id, `The thickness of the wall "${wall.id}" is ${show(wall.thickness)}. It must be above 0.`);
+    if (wall.height !== undefined && none(wall.height)) error("size-not-positive", "wall", wall.id, `The height of the wall "${wall.id}" is ${show(wall.height)}. It must be above 0.`);
     const [clearFrom, clearTo] = footprints[index]!.clear;
     if (!(frame.length > SMALL)) error("wall-length", "wall", wall.id, `The wall "${wall.id}" has the length 0: its two ends are one point.`);
-    else if (frame.thickness > 0 && !(clearTo - clearFrom > SMALL)) warning("wall-short", "wall", wall.id, `The wall "${wall.id}" is too short for the corners at its ends: no part of it has its full thickness.`);
+    else if (wallHasOutline(frame) && !(clearTo - clearFrom > SMALL)) warning("wall-short", "wall", wall.id, `The wall "${wall.id}" is too short for the corners at its ends: no part of it has its full thickness.`);
   });
   for (let i = 0; i < footprints.length; i++) {
     for (let j = i + 1; j < footprints.length; j++) {
@@ -191,9 +208,9 @@ export function checkRoom(room: Room, options: CheckOptions = {}): readonly Find
       error("opening-wall", "opening", opening.id, `The opening "${opening.id}" is on the wall "${opening.wall}", which the room does not have.`);
       continue;
     }
-    if (!(opening.width > 0)) error("size-not-positive", "opening", opening.id, `The width of the opening "${opening.id}" is ${show(opening.width)}. It must be above 0.`);
-    if (!(opening.height > 0)) error("size-not-positive", "opening", opening.id, `The height of the opening "${opening.id}" is ${show(opening.height)}. It must be above 0.`);
-    if (!(opening.width > 0) || !(opening.height > 0)) continue;
+    if (none(opening.width)) error("size-not-positive", "opening", opening.id, `The width of the opening "${opening.id}" is ${show(opening.width)}. It must be above 0.`);
+    if (none(opening.height)) error("size-not-positive", "opening", opening.id, `The height of the opening "${opening.id}" is ${show(opening.height)}. It must be above 0.`);
+    if (none(opening.width) || none(opening.height)) continue;
     const from = opening.offset * scale;
     const to = (opening.offset + opening.width) * scale;
     const sill = (opening.sill ?? 0) * scale;
@@ -305,6 +322,8 @@ export function checkScene(scene: Scene, options: CheckOptions = {}): readonly F
   const byId = new Map(objects.map((object) => [object.id, object] as const));
   const outletIds = new Set((room.outlets ?? []).map((outlet) => outlet.id));
   const circuitIds = new Set((room.circuits ?? []).map((circuit) => circuit.id));
+  /** This function tells if each size of an object is above 0 for the checks. */
+  const hasSize = (object: PlacedObject): boolean => object.size.every((size) => size * scale > SMALL);
 
   for (const id of repeated(objects.map((object) => object.id))) error("id-duplicate", "object", id, `Two or more records of the kind object have the id "${id}".`);
 
@@ -324,7 +343,9 @@ export function checkScene(scene: Scene, options: CheckOptions = {}): readonly F
 
   for (const object of objects) {
     if (holdsBadNumber(object)) error("number-not-finite", "object", object.id, `A number of the object "${object.id}" is not finite.`);
-    if (!object.size.every((size) => size > 0)) error("size-not-positive", "object", object.id, `The size of the object "${object.id}" is ${object.size.map(show).join(" by ")}. Each number must be above 0.`);
+    // The turn of an object is an angle, so it has no such limit.
+    if (holdsLargeNumber([object.size, object.at, object.lift], LARGEST_LENGTH / scale)) error("number-too-large", "object", object.id, `A length of the object "${object.id}" is above 1 000 km, the largest length of the model.`);
+    if (!hasSize(object)) error("size-not-positive", "object", object.id, `The size of the object "${object.id}" is ${object.size.map(show).join(" by ")}. Each number must be above 0.`);
     if (object.parent !== undefined && !byId.has(object.parent)) error("object-parent", "object", object.id, `The object "${object.id}" is on the object "${object.parent}", which the scene does not have.`);
     else if (holders(object) === undefined) error("object-cycle", "object", object.id, `The parents of the object "${object.id}" make a loop.`);
     if (object.outlet !== undefined && !outletIds.has(object.outlet)) error("object-outlet", "object", object.id, `The object "${object.id}" uses the outlet "${object.outlet}", which the room does not have.`);
@@ -334,7 +355,7 @@ export function checkScene(scene: Scene, options: CheckOptions = {}): readonly F
   const extents: Extent[] = [];
   for (const object of objects) {
     const transform = transforms.get(object.id);
-    if (transform !== undefined && object.size.every((size) => size > 0)) extents.push(extentOf(object, transform, scale));
+    if (transform !== undefined && hasSize(object)) extents.push(extentOf(object, transform, scale));
   }
 
   const floors = (room.floors ?? []).filter((floor) => floor.ring.length >= 3).map((floor) => floor.ring.map(([x, y]) => [x * scale, y * scale] as const));
