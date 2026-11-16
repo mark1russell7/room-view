@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { LEVEL_SCHEMA, type Level } from "./level.ts";
-import { OPENING_KINDS, ROOM_SCHEMA, SCENE_SCHEMA, WALL_FACES, WALL_SIDES, type Room, type Scene } from "./room.ts";
+import { isLayerName, OPENING_KINDS, ROOM_SCHEMA, SCENE_SCHEMA, WALL_FACES, WALL_SIDES, type Room, type Scene } from "./room.ts";
 import { SQUARE_TURNS, SURVEY_SCHEMA, type Survey } from "./survey.ts";
 import { LENGTH_UNITS } from "./units.ts";
 
@@ -91,6 +91,8 @@ export const sceneSchema: z.ZodType<Scene> = z.strictObject({
   room: roomSchema,
   objects: z.array(placedObject).readonly().optional(),
   loads: z.array(circuitLoad).readonly().optional(),
+  // The core does not read a layer, so it keeps each value. The add-on of a layer examines its form.
+  layers: z.record(z.string().refine(isLayerName, "A layer name is a word, a slash and a version, for example electrical/1."), z.unknown()).readonly().optional(),
 });
 
 const surveySide = z.strictObject({

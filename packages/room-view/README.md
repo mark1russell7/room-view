@@ -229,6 +229,30 @@ The model does not stop on a record with faults. It does not make the solids tha
 
 The model has a range of lengths. A size of 0.001 mm or less is 0 for the checks. A length above 1 000 km (`LARGEST_LENGTH`) is a fault, and the model does not make a part with such a length. Thus each number of the model is finite.
 
+## Anchors and layers
+
+An add-on puts the records of one topic on the core, for example the outlets of an electrical add-on. The core names no topic.
+
+- `Scene.layers` keeps the records of each add-on, by the name of the format of its layer, for example `electrical/1`. The core does not read a layer.
+- An anchor is a place for a record: on a face of a wall, on the floor, on the ceiling or on a placed object.
+- `sceneSpace` gives the space of a scene. Its function `frame` gives the point of an anchor and the direction out of its surface, in meters.
+- `checkAnchor` gives the faults of an anchor. An error tells that the anchor has no position. A warning tells a fault that the model can show.
+
+An add-on is an `AddOn` value: the name of the format of its layer, and the functions `parse`, `anchors`, `withAnchors` and `check`. `checkLayers` examines the layers of a scene with a list of add-ons:
+
+```ts
+import { checkLayers } from "@mark1russell7/room-view";
+
+const findings = checkLayers(scene, addOns);
+```
+
+- Each layer gets the faults of its form, of each anchor and of the meaning of its records.
+- A layer of no add-on of the list gets a warning, and the scene keeps the layer.
+- The findings are in the order of the layer keys, then of the record keys. Thus equal inputs give equal findings.
+- The add-ons do not know each other. Two add-ons can put records on one object.
+
+`ANCHOR_CODES` and `LAYER_CODES` have the codes of the core. The design of the add-ons is in `docs/ADD-ONS.md` of the repository.
+
 ## The loads of the circuits
 
 `circuitStates` gives the load of each circuit against its limit, with a level: `ok`, `near`, `over` or `unknown`. The loads are input data of the scene. This package does not calculate the power of a computer.

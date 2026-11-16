@@ -6,5 +6,7 @@ export * from "./solids.ts";
 export * from "./loads.ts";
 export * from "./plan.ts";
 export * from "./check.ts";
+export * from "./anchors.ts";
+export * from "./layers.ts";
 export * from "./survey.ts";
 export * from "./level.ts";
