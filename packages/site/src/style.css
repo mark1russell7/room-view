@@ -657,6 +657,85 @@ a.tool {
   text-underline-offset: 0.3em;
 }
 
+/* The page "Measure a room": one button for each room, with the state of its walk. */
+
+.rooms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.room-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.room {
+  --level: var(--quiet);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--panel);
+  padding: 5px 12px 5px 8px;
+  font-family: var(--display);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.room:hover {
+  border-color: var(--ink);
+}
+
+/* The room that the page shows has the line of the accent, as the page of the site in the top bar. */
+.room[aria-current="true"] {
+  border-color: var(--ink);
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+.room[data-state="open"],
+.room[data-state="fault"] {
+  --level: var(--level-near);
+}
+
+.room[data-state="closed"] {
+  --level: var(--level-ok);
+}
+
+.room-sign {
+  display: grid;
+  flex: none;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--level);
+  color: var(--panel);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.room-name {
+  overflow: hidden;
+  max-width: 16ch;
+  text-overflow: ellipsis;
+}
+
+.room-add {
+  flex: none;
+  min-height: 36px;
+}
+
 /* The page "Measure a room": the drawing of the walk, and the list of the walls. */
 
 .bench {

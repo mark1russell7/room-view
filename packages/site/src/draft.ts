@@ -874,3 +874,52 @@ export function fileName(draft: Draft, kind: "survey" | "room"): string {
   const words = draft.name.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
   return `${words.length === 0 ? "room" : words.join("-")}.${kind}.json`;
 }
+
+/** The largest number of rooms of a store. */
+export const MOST_ROOMS: number = LIMITS.rooms;
+
+/** This function gives the name of a room in the list of the rooms: its name, or its number when it has no name. */
+export function roomName(draft: Draft, index: number): string {
+  const name = draft.name.trim();
+  return name === "" ? `Room ${String(index + 1)}` : name;
+}
+
+/** The state of a room in the list of the rooms. The state `fault` is a closed room with a fault of a feature. */
+export type RoomState = StatusLevel | "fault";
+
+/** This function gives the state of a room from its status. */
+export function roomState(status: Status): RoomState {
+  return status.level === "closed" && status.feature !== undefined ? "fault" : status.level;
+}
+
+/**
+ * This function adds a room at the end of the rooms of a store, and the store shows it.
+ * The example room is not a room of the visitor, so a store with only the example room gets the new room in its place.
+ * With `overEmpty`, the same rule applies to a store with only an empty room. A store with the largest number of rooms does not change.
+ */
+export function withNewRoom(store: Store, room: Draft, overEmpty = false): Store {
+  const only = store.rooms.length === 1 ? store.rooms[0] : undefined;
+  if (only !== undefined && (sameDraft(only, exampleDraft(only.mode)) || (overEmpty && sameDraft(only, emptyDraft(only.mode))))) {
+    return { ...store, rooms: [room], active: 0 };
+  }
+  if (store.rooms.length >= LIMITS.rooms) return store;
+  return { ...store, rooms: [...store.rooms, room], active: store.rooms.length };
+}
+
+/**
+ * This function removes the room at a position. The store then shows the room that follows, or the last room.
+ * A store has one room or more, so the only room of a store becomes an empty room.
+ */
+export function withoutRoom(store: Store, index: number): Store {
+  const room = store.rooms[index];
+  if (room === undefined) return store;
+  if (store.rooms.length === 1) return { ...store, rooms: [emptyDraft(room.mode)], active: 0 };
+  const rooms = store.rooms.filter((_, position) => position !== index);
+  const active = store.active > index ? store.active - 1 : Math.min(store.active, rooms.length - 1);
+  return { ...store, rooms, active };
+}
+
+/** This function shows the room at a position. A position with no room gives the same store. */
+export function withActive(store: Store, index: number): Store {
+  return store.rooms[index] === undefined || index === store.active ? store : { ...store, active: index };
+}

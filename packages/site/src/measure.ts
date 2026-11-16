@@ -22,9 +22,12 @@ import {
   LENGTH_MODES,
   lengthText,
   MODE_NAMES,
+  MOST_ROOMS,
   parseStore,
   placedFeatures,
   readLength,
+  roomName,
+  roomState,
   sameDraft,
   shownRoom,
   statusOf,
@@ -32,11 +35,14 @@ import {
   surveyOf,
   typedOf,
   usualOf,
+  withActive,
   withFeature,
   withMode,
   withNewFeature,
+  withNewRoom,
   withNewSide,
   withoutFeature,
+  withoutRoom,
   withoutSide,
   withSide,
   type Corner,
@@ -47,6 +53,7 @@ import {
   type FeatureField,
   type FeatureKind,
   type PlacedFeature,
+  type RoomState,
   type Status,
   type StatusLevel,
   type Store,
@@ -83,6 +90,16 @@ let result: SurveyResult = expandSurvey(surveyOf(draft));
 /** The faults of the doors, the windows, the openings and the outlets. */
 let faults: readonly FeatureFault[] = featureFaults(draft, result);
 let status: Status = statusOf(draft, result, faults);
+
+/** This function gives the state of a room for the list of the rooms. */
+function stateOf(room: Draft): RoomState {
+  return roomState(statusOf(room, expandSurvey(surveyOf(room))));
+}
+
+/** The state of each room of the store. A change of a room calculates only the state of that room. */
+let states: RoomState[] = store.rooms.map(stateOf);
+/** The names, the states and the active room of the list of the rooms at its last drawing. */
+let shownRooms = "";
 /** The position of the wall whose field has the focus. */
 let activeSide: number | undefined;
 /** The key of the feature whose field has the focus. */
@@ -104,8 +121,44 @@ const roomButton = byId<HTMLButtonElement>("view-room");
 const nameField = byId<HTMLInputElement>("name");
 const modeField = byId<HTMLSelectElement>("mode");
 const keepNote = byId("keep-note");
+const roomList = byId("room-list");
+const addRoom = byId<HTMLButtonElement>("add-room");
 
 const SIGNS: Readonly<Record<StatusLevel, string>> = { typing: "…", open: "!", closed: "✓" };
+
+/** The sign and the words of each state of a room in the list of the rooms. */
+const ROOM_STATES: Readonly<Record<RoomState, readonly [sign: string, words: string]>> = {
+  typing: ["…", "needs a number"],
+  open: ["!", "the walk does not close"],
+  fault: ["!", "a door, a window or an outlet is not ready"],
+  closed: ["✓", "the walk closes"],
+};
+
+/**
+ * This function shows one button for each room of the store, with the name and the state of the room.
+ * It makes the buttons again only when a name, a state or the active room changes. Thus a button keeps the focus while a person types.
+ */
+function renderRooms(): void {
+  const rooms = store.rooms.map((room, index) => ({ name: roomName(room, index), state: states[index] ?? "typing" }));
+  const next = JSON.stringify([store.active, rooms]);
+  if (next === shownRooms) return;
+  shownRooms = next;
+  const focus = roomList.contains(document.activeElement);
+  roomList.replaceChildren(
+    ...rooms.map(({ name, state }, index) => {
+      const [sign, words] = ROOM_STATES[state];
+      const button = h(
+        "button",
+        { class: "room", type: "button", "data-room": String(index), "data-state": state, "aria-current": index === store.active ? "true" : null, "aria-label": `${name}: ${words}` },
+        h("span", { class: "room-sign", "aria-hidden": "true" }, sign),
+        h("span", { class: "room-name" }, name),
+      );
+      return h("li", {}, button);
+    }),
+  );
+  addRoom.disabled = store.rooms.length >= MOST_ROOMS;
+  if (focus) roomList.querySelector<HTMLElement>('button[aria-current="true"]')?.focus();
+}
 
 /**
  * This function gives the fields of a length to a box: feet and inches, or one number with its unit.
@@ -495,6 +548,8 @@ function refresh(): void {
   result = expandSurvey(surveyOf(draft));
   faults = featureFaults(draft, result);
   status = statusOf(draft, result, faults);
+  states[store.active] = roomState(status);
+  renderRooms();
   showStatus();
   showFacts();
   showFaults();
@@ -505,22 +560,38 @@ function refresh(): void {
   byId<HTMLButtonElement>("save-room").disabled = status.level !== "closed";
 }
 
+/** This function keeps the store in the browser. */
+function keep(): void {
+  try {
+    localStorage.setItem(STORE_KEY, storeText(store));
+  } catch {
+    // A browser with no storage keeps the rooms only while the page is open.
+  }
+}
+
 /** This function makes a change of the draft: the page keeps it in the browser and shows it. */
 function change(next: Draft): void {
   draft = next;
   typed = next;
   store = { ...store, rooms: store.rooms.map((room, index) => (index === store.active ? next : room)) };
-  try {
-    localStorage.setItem(STORE_KEY, storeText(store));
-  } catch {
-    // A browser with no storage keeps the room only while the page is open.
-  }
+  keep();
   refresh();
 }
 
 /** This function replaces the room of the page. */
 function load(next: Draft): void {
   change(next);
+  renderForm();
+}
+
+/** This function replaces the rooms of the page, and shows the active room of the new store. */
+function show(next: Store): void {
+  store = next;
+  states = store.rooms.map(stateOf);
+  draft = store.rooms[store.active] ?? emptyDraft(draft.mode);
+  typed = draft;
+  keep();
+  refresh();
   renderForm();
 }
 
@@ -746,10 +817,30 @@ byId("confirm-yes").addEventListener("click", () => {
 byId("confirm-no").addEventListener("click", closeConfirm);
 
 byId("clear").addEventListener("click", () => {
-  replaceRoom("This removes each number of the room from the page.", "Remove the numbers", () => {
-    load(emptyDraft(draft.mode));
-    lengthField(0)?.focus();
+  replaceRoom(`This removes the room "${roomName(draft, store.active)}" and each of its numbers from the page.`, "Remove the room", () => {
+    const only = store.rooms.length === 1;
+    show(withoutRoom(store, store.active));
+    // The only room of the page becomes an empty room, and a person types its first wall.
+    if (only) lengthField(0)?.focus();
+    else roomList.querySelector<HTMLElement>('button[aria-current="true"]')?.focus();
   });
+});
+
+roomList.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target.closest<HTMLElement>("button[data-room]") : null;
+  if (target === null) return;
+  const next = withActive(store, Number(target.dataset["room"]));
+  if (next === store) return;
+  closeConfirm();
+  keepNote.textContent = "";
+  show(next);
+});
+
+addRoom.addEventListener("click", () => {
+  closeConfirm();
+  keepNote.textContent = "";
+  show(withNewRoom(store, emptyDraft(draft.mode)));
+  nameField.focus();
 });
 
 const fileField = byId<HTMLInputElement>("open-file");
@@ -758,7 +849,7 @@ byId("open-survey").addEventListener("click", () => {
   fileField.click();
 });
 
-/** This function reads a file of measurements and shows its room. */
+/** This function reads a file of measurements and adds its room to the rooms of the page. No room of the visitor goes away. */
 async function openFile(file: File): Promise<void> {
   const refuse = "This file is not a file of measurements.";
   if (file.size > LARGEST_FILE) {
@@ -779,10 +870,14 @@ async function openFile(file: File): Promise<void> {
     return;
   }
   const survey = parsed.data;
-  replaceRoom("This replaces the room of the page with the room of the file.", "Replace the room", () => {
-    load(draftOf(survey));
-    keepNote.textContent = hasMore(survey) ? "The page shows the walls, the doors, the windows and the outlets of the file. It does not keep the other data of the file yet." : "The page shows the room of the file.";
-  });
+  const next = withNewRoom(store, draftOf(survey), true);
+  if (next === store) {
+    keepNote.textContent = `The page keeps ${String(MOST_ROOMS)} rooms at most. Remove a room, then open the file again.`;
+    return;
+  }
+  closeConfirm();
+  show(next);
+  keepNote.textContent = hasMore(survey) ? "The page shows the walls, the doors, the windows and the outlets of the file. It does not keep the other data of the file yet." : "The page shows the room of the file.";
 }
 
 fileField.addEventListener("change", () => {

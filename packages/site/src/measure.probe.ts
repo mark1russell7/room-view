@@ -24,6 +24,22 @@ const featureField = (kind: string, of: string): HTMLInputElement | null => docu
 /** This function gives the features of a kind in the drawing. */
 const marks = (kind: string): HTMLElement[] => $$(`#plan-box .walk-feature[data-kind="${kind}"]`);
 
+/** The buttons of the rooms of the page. */
+const rooms = (): HTMLElement[] => $$("#room-list button[data-room]");
+/** This function gives the name and the state of each room of the list. A star is the room that the page shows. */
+const roomNames = (): string =>
+  rooms()
+    .map((room) => `${room.querySelector(".room-name")?.textContent ?? ""}:${room.dataset["state"] ?? ""}${room.getAttribute("aria-current") === "true" ? "*" : ""}`)
+    .join(",");
+/** This function gives the number of rooms that the browser keeps. */
+const keptRooms = (): number => {
+  try {
+    return (JSON.parse(localStorage.getItem(STORE_KEY) ?? "null") as { readonly rooms?: readonly unknown[] } | null)?.rooms?.length ?? 0;
+  } catch {
+    return 0;
+  }
+};
+
 /** This function clicks a control. A page with no such control fails a check, and the probe continues. */
 const press = (selector: string): void => {
   const element = $(selector);
@@ -58,11 +74,13 @@ check(
   features() === 3 && $$("#plan-box .walk-feature").length === 3 && fact("Doors") === "1" && fact("Windows") === "1" && fact("Outlets") === "1",
   [features(), $$("#plan-box .walk-feature").length, text("#facts")],
 );
+check("the list of the rooms has the example room, and its walk closes", roomNames() === "Room 1:closed*" && !disabled("#add-room"), roomNames());
 
-// A new room in meters: four walls with no lengths. The page asks first when a room has numbers from an earlier view.
+// An empty room in meters: four walls with no lengths. The page asks first when a room has numbers from an earlier view.
 press("#clear");
 if ($("#confirm")?.hidden === false) press("#confirm-yes");
 setUnits("m");
+check("the removal of the only room gives one empty room", roomNames() === "Room 1:typing*", roomNames());
 check("a new room has four walls and asks for the first length", walls() === 4 && level() === "typing" && title() === "Type the length of wall 1.", status());
 check("a new room has no door, no window and no outlet", features() === 0 && $$("#plan-box .walk-feature").length === 0 && fact("Doors") === "", [features(), text("#facts")]);
 check("a length in meters has one field", fieldsOf(0) === "1" && text('#sides li[data-side="0"] .unit') === "m", fieldsOf(0));
@@ -236,14 +254,58 @@ check("the page keeps the door and the outlet with their walls", keptKinds() ===
 press(`${door} [data-action="remove-feature"]`);
 check("the removal of a door removes its fields, its symbol and its number", features() === 1 && marks("door").length === 0 && marks("outlet").length === 1 && fact("Doors") === "" && keptKinds() === ",outlet,,,,", [features(), text("#facts"), keptKinds()]);
 
-// A new room removes typed numbers, so the page asks first.
+// The rooms of the page: a person adds a room, goes from room to room, and removes a room.
+const nameField = document.querySelector<HTMLInputElement>("#name");
+// A closed room whose status tells a feature has the state `fault` in the list.
+const firstState = level() === "closed" && !text("#status-text").startsWith("The walk ends") ? "fault" : level();
+check("the list of the rooms shows the name and the state of the room", roomNames() === `Main bedroom:${firstState}*`, roomNames());
+press("#add-room");
+check(
+  "the button Add a room gives a second room with no numbers, and the page shows it",
+  roomNames() === `Main bedroom:${firstState},Room 2:typing*` && walls() === 4 && features() === 0 && lengthField(0)?.value === "" && nameField?.value === "" && level() === "typing",
+  [roomNames(), walls(), features(), status()],
+);
+check("the name of a new room has the focus", document.activeElement !== null && document.activeElement === nameField, document.activeElement?.id);
+check("the drawing shows no feature of the first room", $$("#plan-box .walk-feature").length === 0 && fact("Outlets") === "", [$$("#plan-box .walk-feature").length, text("#facts")]);
+enter(nameField, "Hall");
+check("the list of the rooms shows a name while a person types it", roomNames() === `Main bedroom:${firstState},Hall:typing*`, roomNames());
+check("the page keeps the two rooms in the browser", keptRooms() === 2 && keptRoom()?.name === "Main bedroom" && keptKinds() === ",outlet,,,,", [keptRooms(), keptKinds()]);
+// A person with a keyboard goes to the room with the key Tab, so the button has the focus before the click.
+rooms()[0]?.focus();
+press('#room-list button[data-room="0"]');
+check(
+  "a click on a room of the list shows its numbers again",
+  roomNames() === `Main bedroom:${firstState}*,Hall:typing` && walls() === 6 && features() === 1 && lengthField(0)?.value === "5" && nameField?.value === "Main bedroom" && marks("outlet").length === 1,
+  [roomNames(), walls(), features(), lengthField(0)?.value],
+);
+check("the list makes its buttons again, and the room keeps the focus", document.activeElement !== null && document.activeElement === rooms()[0], document.activeElement?.className);
+
+// The removal of a room removes typed numbers, so the page asks first.
+press('#room-list button[data-room="1"]');
+check("the page shows the second room again", roomNames() === `Main bedroom:${firstState},Hall:typing*` && walls() === 4 && nameField?.value === "Hall", [roomNames(), walls()]);
 press("#clear");
-check("a new room asks before it removes the numbers", $("#confirm")?.hidden === false && text("#confirm-text").includes("removes each number") && text("#confirm-yes") === "Remove the numbers", text("#confirm"));
-press("#confirm-no");
-check("the answer no keeps the numbers", $("#confirm")?.hidden === true && walls() === 6 && lengthField(0)?.value === "5", [walls(), lengthField(0)?.value]);
+check("the removal of a room asks first, and it names the room", $("#confirm")?.hidden === false && text("#confirm-text").includes('removes the room "Hall"') && text("#confirm-yes") === "Remove the room", text("#confirm"));
+press('#room-list button[data-room="0"]');
+check("a different room closes the question", $("#confirm")?.hidden === true && rooms().length === 2 && walls() === 6, [rooms().length, walls()]);
+press('#room-list button[data-room="1"]');
 press("#clear");
 press("#confirm-yes");
-check("the answer yes gives a new room", $("#confirm")?.hidden === true && walls() === 4 && features() === 0 && lengthField(0)?.value === "" && level() === "typing", [walls(), features(), status()]);
+check(
+  "the answer yes removes the room, and the page shows the room before it",
+  $("#confirm")?.hidden === true && roomNames() === `Main bedroom:${firstState}*` && walls() === 6 && lengthField(0)?.value === "5" && keptRooms() === 1,
+  [roomNames(), walls(), keptRooms()],
+);
+press("#clear");
+check("the removal of the only room asks first", $("#confirm")?.hidden === false && text("#confirm-text").includes('removes the room "Main bedroom"'), text("#confirm"));
+press("#confirm-no");
+check("the answer no keeps the room", $("#confirm")?.hidden === true && walls() === 6 && lengthField(0)?.value === "5", [walls(), lengthField(0)?.value]);
+press("#clear");
+press("#confirm-yes");
+check(
+  "the answer yes gives one empty room",
+  $("#confirm")?.hidden === true && roomNames() === "Room 1:typing*" && walls() === 4 && features() === 0 && lengthField(0)?.value === "" && level() === "typing",
+  [roomNames(), walls(), features(), status()],
+);
 
 // The next view of the check starts as a first visit, with the example room.
 localStorage.removeItem(STORE_KEY);
