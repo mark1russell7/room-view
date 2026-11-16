@@ -22,11 +22,14 @@ function scene(more: Partial<Scene> = {}, roomMore: Partial<Room> = {}): Scene {
   return { schema: "scene/1", room: room(roomMore), objects: [{ id: "desk", kind: "desk", size: [2, 1, 0.75], at: [2, 1.5], turn: 90 }], ...more };
 }
 
+/** A point or a direction of a frame. */
+type Point = { readonly x: number; readonly y: number; readonly z: number };
+
 /** The frame with each number rounded to 6 decimals, and 0 for -0. */
-function rounded(frame: AnchorFrame | undefined): unknown {
+function rounded(frame: AnchorFrame | undefined): { readonly at: Point; readonly out: Point } | undefined {
   if (frame === undefined) return undefined;
   const round = (value: number): number => Math.round(value * 1e6) / 1e6 + 0;
-  const point = (p: { x: number; y: number; z: number }) => ({ x: round(p.x), y: round(p.y), z: round(p.z) });
+  const point = (p: Point): Point => ({ x: round(p.x), y: round(p.y), z: round(p.z) });
   return { at: point(frame.at), out: point(frame.out) };
 }
 
