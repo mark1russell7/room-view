@@ -81,8 +81,9 @@ export function readLayer<Layer>(scene: Scene, addOn: AddOn<Layer>): LayerParse<
 /**
  * This function gives the findings of the layers of a scene, with a list of add-ons.
  * Each layer gets the faults of its form, of each anchor and of the meaning of its records. A layer of no add-on of the list gets a warning.
- * The name of the record of a finding is `recordName(finding.layer, finding.at)`, so a finding selects its mark.
  * The findings are in the order of the layer keys, then of the record keys. Thus equal inputs give equal findings.
+ *
+ * The name of the record of a finding is `recordName(finding.layer, finding.at)`, so a finding selects its mark.
  * `checkScene` examines the core, and this function examines the layers.
  */
 export function checkLayers(scene: Scene, addOns: readonly AddOn<unknown>[]): readonly LayerFinding[] {
