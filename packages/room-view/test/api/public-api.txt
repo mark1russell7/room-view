@@ -143,6 +143,7 @@ wallTransform: build/loads.chunk.d.ts#wallTransform
 
 ## ./schema (build/schema.d.ts): names
 
+anchorSchema: build/schema.d.ts#anchorSchema
 levelSchema: build/schema.d.ts#levelSchema
 roomSchema: build/schema.d.ts#roomSchema
 sceneSchema: build/schema.d.ts#sceneSchema
@@ -878,6 +879,9 @@ export declare const SAMPLE_SCENE: Scene;
 
 ### build/sample.d.ts#SAMPLE_SURVEY
 export declare const SAMPLE_SURVEY: Survey;
+
+### build/schema.d.ts#anchorSchema
+export declare const anchorSchema: z.ZodType<Anchor>;
 
 ### build/schema.d.ts#levelSchema
 export declare const levelSchema: z.ZodType<Level>;
