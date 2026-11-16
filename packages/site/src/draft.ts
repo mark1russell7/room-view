@@ -366,6 +366,19 @@ const NO_TEXT: TypedLength = { value: "", inches: "" };
  * The features of a wall are in the sequence of their distances from its start. The draft has no circuits and no checks.
  */
 export function draftOf(survey: Survey): Draft {
+  return draftKeys(survey).draft;
+}
+
+/** The draft of a survey record, and the key of the feature of each opening of the record. */
+export interface DraftKeys {
+  readonly draft: Draft;
+  /** The key of the feature of the draft for the `id` of each opening of the survey. Two openings with one `id` give the key of the first one. */
+  readonly keys: ReadonlyMap<string, string>;
+}
+
+/** This function makes the draft of a survey record, as `draftOf` does. It also tells which feature of the draft is each opening of the record. */
+export function draftKeys(survey: Survey): DraftKeys {
+  const keys = new Map<string, string>();
   const mode = modeOf(survey.unit);
   const factor = metersPer(survey.unit) / metersPer(unitOf(mode));
   const typed = (value: number): TypedLength => (Number.isFinite(value) && value > 0 ? typedOf(value * factor, mode) : NO_TEXT);
@@ -375,40 +388,44 @@ export function draftOf(survey: Survey): Draft {
   const toRight = survey.sides.reduce((sum, side) => sum + degreesOf(side.turn), 0) < 0;
   const seen = new Set<string>();
   let count = 0;
-  return {
+  const draft: Draft = {
     name: survey.name ?? "",
     mode,
     height: typed(survey.height),
     thickness: typed(survey.wallThickness),
-    sides: survey.sides.map((side, index) => {
+    sides: survey.sides.map((side, index): DraftSide => {
       // A survey gives the features of an `id` to the first side with that `id`.
       const first = !seen.has(side.id);
       seen.add(side.id);
       const openings = first ? (survey.openings ?? []).filter((item) => item.wall === side.id) : [];
       const outlets = first ? (survey.outlets ?? []).filter((item) => item.wall === side.id) : [];
-      const features = [
+      const features: readonly { readonly at: number; readonly id: string | undefined; readonly kind: FeatureKind; readonly offset: TypedLength; readonly width: TypedLength; readonly height: TypedLength; readonly sill: TypedLength }[] = [
         ...openings.map((item) => ({
           at: item.offset,
+          id: item.id,
           kind: item.kind,
           offset: typedFrom0(item.offset),
           width: typed(item.width),
           height: typed(item.height),
           sill: item.kind === "window" ? typedFrom0(item.sill ?? 0) : NO_TEXT,
         })),
-        ...outlets.map((item) => ({ at: item.offset, kind: "outlet" as const, offset: typedFrom0(item.offset), width: NO_TEXT, height: typedFrom0(item.height), sill: NO_TEXT })),
+        ...outlets.map((item) => ({ at: item.offset, id: undefined, kind: "outlet" as const, offset: typedFrom0(item.offset), width: NO_TEXT, height: typedFrom0(item.height), sill: NO_TEXT })),
       ].sort((a, b) => a.at - b.at);
       return {
         key: `s${String(index + 1)}`,
         length: typed(side.length),
         corner: typeof side.turn === "number" ? "angle" : side.turn,
         angle: typeof side.turn === "number" && Number.isFinite(side.turn) ? angleText(side.turn, toRight) : "",
-        features: features.map(({ kind, offset, width, height, sill }): DraftFeature => {
+        features: features.map(({ id, kind, offset, width, height, sill }): DraftFeature => {
           count += 1;
-          return { key: `f${String(count)}`, kind, from: "start", offset, width, height, sill };
+          const key = `f${String(count)}`;
+          if (id !== undefined && !keys.has(id)) keys.set(id, key);
+          return { key, kind, from: "start", offset, width, height, sill };
         }),
       };
     }),
   };
+  return { draft, keys };
 }
 
 /**
@@ -781,16 +798,44 @@ export function statusOf(draft: Draft, result: SurveyResult, faults?: readonly F
   return { level: "open", title: `The walk ends ${gap} from its start.`, text: `This is ${percent} of its length, and the limit is 1%. A length is wrong, or a wall is missing.` };
 }
 
+/** One end of a connection of the store: a door, a window or an opening of a room. */
+export interface DraftEnd {
+  /** The position of the room in the rooms of the store, from 0. */
+  readonly room: number;
+  /** The key of the feature in that room. */
+  readonly feature: string;
+}
+
+/**
+ * A connection of the store: one hole through the wall between two rooms, for example a door.
+ * A person measures the hole in each room, so each of the two rooms has it as a feature.
+ */
+export interface DraftConnection {
+  readonly from: DraftEnd;
+  readonly to: DraftEnd;
+}
+
 /** The rooms that the page keeps in the browser. */
 export interface Store {
   readonly version: 1;
   readonly rooms: readonly Draft[];
+  /** The connections between the rooms. A feature is an end of one connection at most. */
+  readonly connections: readonly DraftConnection[];
   /** The position of the room that the page shows. */
   readonly active: number;
 }
 
-/** The largest number of characters of a text of the store, of walls of a room, of features of a wall, and of rooms. A larger store is not a store of this page. */
-const LIMITS = { text: 80, sides: 200, features: 100, rooms: 100 };
+/** This function gives a store with rooms and with no connection. */
+export function storeOf(rooms: readonly Draft[], active = 0): Store {
+  return { version: 1, rooms, connections: [], active };
+}
+
+/**
+ * The largest number of each part of a store.
+ * The parts are the characters of a text, the walls, the features of a wall, the rooms and the connections.
+ * A larger store is not a store of this page.
+ */
+const LIMITS = { text: 80, sides: 200, features: 100, rooms: 100, connections: 2000 };
 
 const isObject = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === "object" && value !== null && !Array.isArray(value);
 const isText = (value: unknown): value is string => typeof value === "string" && value.length <= LIMITS.text;
@@ -858,7 +903,79 @@ export function parseStore(text: string | null): Store | undefined {
   const list = rooms.map(draftFrom);
   if (list.some((room) => room === undefined)) return undefined;
   if (typeof active !== "number" || !Number.isInteger(active) || active < 0 || active >= list.length) return undefined;
-  return { version: 1, rooms: list.filter((room) => room !== undefined), active };
+  const drafts = list.filter((room) => room !== undefined);
+  // A store from before the connections has no list of them. A connection that the rooms cannot have goes away, and the rooms stay.
+  const given: readonly unknown[] = Array.isArray(value["connections"]) ? value["connections"].slice(0, LIMITS.connections) : [];
+  const connections = given.flatMap((item): DraftConnection[] => {
+    const from = isObject(item) ? endFrom(item["from"]) : undefined;
+    const to = isObject(item) ? endFrom(item["to"]) : undefined;
+    return from === undefined || to === undefined ? [] : [{ from, to }];
+  });
+  return { version: 1, rooms: drafts, connections: validConnections(drafts, connections), active };
+}
+
+function endFrom(value: unknown): DraftEnd | undefined {
+  if (!isObject(value)) return undefined;
+  const { room, feature } = value;
+  return typeof room === "number" && Number.isInteger(room) && room >= 0 && isText(feature) ? { room, feature } : undefined;
+}
+
+/**
+ * This function gives the door, the window or the opening at an end of a connection.
+ * An end with no room or with no feature gives `undefined`. An outlet is not a hole, so it gives `undefined` too.
+ */
+export function featureAt(rooms: readonly Draft[], end: DraftEnd): DraftFeature | undefined {
+  const room = rooms[end.room];
+  const feature = room === undefined ? undefined : featureOf(room, end.feature);
+  return feature === undefined || feature.kind === "outlet" ? undefined : feature;
+}
+
+const endKey = (end: DraftEnd): string => `${String(end.room)}:${end.feature}`;
+
+/**
+ * This function gives the connections that the rooms can have, in their sequence.
+ * Each end of such a connection is a door, a window or an opening, and its two rooms are different.
+ * A feature has one connection at most: its first connection stays. The function gives the same list when each connection stays.
+ */
+export function validConnections(rooms: readonly Draft[], connections: readonly DraftConnection[]): readonly DraftConnection[] {
+  const used = new Set<string>();
+  const valid = connections.filter(({ from, to }) => {
+    if (from.room === to.room || featureAt(rooms, from) === undefined || featureAt(rooms, to) === undefined) return false;
+    if (used.has(endKey(from)) || used.has(endKey(to))) return false;
+    used.add(endKey(from));
+    used.add(endKey(to));
+    return true;
+  });
+  return valid.length === connections.length ? connections : valid;
+}
+
+/** This function gives the other end of the connection of a feature. A feature with no connection gives `undefined`. */
+export function joinedTo(store: Store, end: DraftEnd): DraftEnd | undefined {
+  const key = endKey(end);
+  for (const { from, to } of store.connections) {
+    if (endKey(from) === key) return to;
+    if (endKey(to) === key) return from;
+  }
+  return undefined;
+}
+
+/**
+ * This function joins the feature at `from` to the feature at `to`: the two features are one hole.
+ * The old connection of each of the two features goes away. With no `to`, the feature at `from` has no connection.
+ * A connection that the rooms cannot have does not go into the store.
+ */
+export function withConnection(store: Store, from: DraftEnd, to?: DraftEnd): Store {
+  const ends = new Set([endKey(from), ...(to === undefined ? [] : [endKey(to)])]);
+  const kept = store.connections.filter((item) => !ends.has(endKey(item.from)) && !ends.has(endKey(item.to)));
+  if (to === undefined) return kept.length === store.connections.length ? store : { ...store, connections: kept };
+  return { ...store, connections: validConnections(store.rooms, [...kept, { from, to }]) };
+}
+
+/** This function replaces the room at a position. A connection of a feature that the new room does not have goes away. */
+export function withRoom(store: Store, index: number, room: Draft): Store {
+  if (store.rooms[index] === undefined) return store;
+  const rooms = store.rooms.map((item, position) => (position === index ? room : item));
+  return { ...store, rooms, connections: validConnections(rooms, store.connections) };
 }
 
 /** This function gives the text of a store. */
@@ -871,8 +988,13 @@ export function storeText(store: Store): string {
  * The name has the letters and digits of the name of the room in small letters, with a hyphen between the words.
  */
 export function fileName(draft: Draft, kind: "survey" | "room"): string {
-  const words = draft.name.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const words = nameWords(draft.name);
   return `${words.length === 0 ? "room" : words.join("-")}.${kind}.json`;
+}
+
+/** This function gives the words of a name in small letters: each group of letters and digits. */
+export function nameWords(name: string): readonly string[] {
+  return name.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
 /** The largest number of rooms of a store. */
@@ -898,25 +1020,39 @@ export function roomState(status: Status): RoomState {
  * With `overEmpty`, the same rule applies to a store with only an empty room. A store with the largest number of rooms does not change.
  */
 export function withNewRoom(store: Store, room: Draft, overEmpty = false): Store {
-  const only = store.rooms.length === 1 ? store.rooms[0] : undefined;
-  if (only !== undefined && (sameDraft(only, exampleDraft(only.mode)) || (overEmpty && sameDraft(only, emptyDraft(only.mode))))) {
-    return { ...store, rooms: [room], active: 0 };
-  }
-  if (store.rooms.length >= LIMITS.rooms) return store;
-  return { ...store, rooms: [...store.rooms, room], active: store.rooms.length };
+  return withNewRooms(store, [room], [], overEmpty);
 }
 
 /**
- * This function removes the room at a position. The store then shows the room that follows, or the last room.
+ * This function adds rooms at the end of the rooms of a store, with the connections between them. The store shows the first new room.
+ * The position of a room in an end of `connections` is its position in `rooms`.
+ * The rules of `withNewRoom` apply. A store that cannot keep each new room does not change.
+ */
+export function withNewRooms(store: Store, rooms: readonly Draft[], connections: readonly DraftConnection[], overEmpty = false): Store {
+  if (rooms.length === 0) return store;
+  const only = store.rooms.length === 1 ? store.rooms[0] : undefined;
+  const fresh = only !== undefined && (sameDraft(only, exampleDraft(only.mode)) || (overEmpty && sameDraft(only, emptyDraft(only.mode))));
+  const before = fresh ? [] : store.rooms;
+  if (before.length + rooms.length > LIMITS.rooms) return store;
+  const all = [...before, ...rooms];
+  const moved = connections.map(({ from, to }): DraftConnection => ({ from: { ...from, room: from.room + before.length }, to: { ...to, room: to.room + before.length } }));
+  return { ...store, rooms: all, connections: validConnections(all, [...(fresh ? [] : store.connections), ...moved]), active: before.length };
+}
+
+/**
+ * This function removes the room at a position, with its connections. The store then shows the room that follows, or the last room.
  * A store has one room or more, so the only room of a store becomes an empty room.
  */
 export function withoutRoom(store: Store, index: number): Store {
   const room = store.rooms[index];
   if (room === undefined) return store;
-  if (store.rooms.length === 1) return { ...store, rooms: [emptyDraft(room.mode)], active: 0 };
+  if (store.rooms.length === 1) return { ...store, rooms: [emptyDraft(room.mode)], connections: [], active: 0 };
   const rooms = store.rooms.filter((_, position) => position !== index);
   const active = store.active > index ? store.active - 1 : Math.min(store.active, rooms.length - 1);
-  return { ...store, rooms, active };
+  // Each room after the removed room moves one position.
+  const moved = (end: DraftEnd): DraftEnd => (end.room > index ? { ...end, room: end.room - 1 } : end);
+  const connections = store.connections.filter(({ from, to }) => from.room !== index && to.room !== index).map(({ from, to }): DraftConnection => ({ from: moved(from), to: moved(to) }));
+  return { ...store, rooms, connections, active };
 }
 
 /** This function shows the room at a position. A position with no room gives the same store. */

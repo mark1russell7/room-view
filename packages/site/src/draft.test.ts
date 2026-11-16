@@ -7,18 +7,22 @@ import {
   convertTyped,
   defaultMode,
   dimensionText,
+  draftKeys,
   draftOf,
   emptyDraft,
   exampleDraft,
+  featureAt,
   featureFaults,
   featureOf,
   featureSpans,
   fieldsOf,
   fileName,
   hasMore,
+  joinedTo,
   LENGTH_MODES,
   lengthText,
   MOST_ROOMS,
+  nameWords,
   numberOf,
   parseStore,
   placedFeatures,
@@ -29,6 +33,7 @@ import {
   sameDraft,
   shownRoom,
   statusOf,
+  storeOf,
   storeText,
   surveyOf,
   turnOf,
@@ -36,17 +41,22 @@ import {
   usualOf,
   walksRight,
   withActive,
+  withConnection,
   withFeature,
   withMode,
   withNewFeature,
   withNewRoom,
+  withNewRooms,
   withNewSide,
   withoutFeature,
   withoutRoom,
   withoutSide,
+  withRoom,
   withSide,
   type Corner,
   type Draft,
+  type DraftConnection,
+  type DraftEnd,
   type DraftFeature,
   type DraftSide,
   type FeatureEnd,
@@ -892,7 +902,12 @@ describe("statusOf", () => {
 });
 
 describe("the store", () => {
-  const store: Store = { version: 1, rooms: [exampleDraft("ft-in"), room("m", TRIANGLE)], active: 1 };
+  const store: Store = storeOf([exampleDraft("ft-in"), room("m", TRIANGLE)], 1);
+
+  it("starts with no connection", () => {
+    expect(store).toEqual({ version: 1, rooms: [exampleDraft("ft-in"), room("m", TRIANGLE)], connections: [], active: 1 });
+    expect(storeOf([BOX]).active).toBe(0);
+  });
 
   it("reads its own text", () => {
     expect(parseStore(storeText(store))).toEqual(store);
@@ -924,18 +939,18 @@ describe("the store", () => {
 
   it("keeps only the fields of a draft", () => {
     const text = JSON.stringify({ ...store, rooms: [{ ...exampleDraft("m"), more: true }], active: 0, other: 1 });
-    expect(parseStore(text)).toEqual({ version: 1, rooms: [exampleDraft("m")], active: 0 });
+    expect(parseStore(text)).toEqual(storeOf([exampleDraft("m")]));
   });
 
   it("keeps the features of each wall", () => {
     const draft = onWall(BOX, 0, [feature("f1", "door", { offset: "1", width: "1" }, "end"), feature("f2", "outlet", { offset: "3" })]);
-    const withFeatures: Store = { version: 1, rooms: [draft], active: 0 };
+    const withFeatures = storeOf([draft]);
     expect(parseStore(storeText(withFeatures))).toEqual(withFeatures);
   });
 
   it("reads a room from before the features: each of its walls has no feature", () => {
     const sides = BOX.sides.map((side) => ({ key: side.key, length: side.length, corner: side.corner, angle: side.angle }));
-    expect(parseStore(JSON.stringify({ version: 1, rooms: [{ ...BOX, sides }], active: 0 }))).toEqual({ version: 1, rooms: [BOX], active: 0 });
+    expect(parseStore(JSON.stringify({ version: 1, rooms: [{ ...BOX, sides }], active: 0 }))).toEqual(storeOf([BOX]));
   });
 
   it("refuses a feature that is not a feature of the page, and two features with one key", () => {
@@ -956,7 +971,165 @@ describe("the store", () => {
       withFirst(Array.from({ length: 101 }, (_, index) => ({ ...door, key: `f${String(index)}` }))),
     ];
     for (const [index, item] of rooms.entries()) expect(parseStore(JSON.stringify({ version: 1, rooms: [item], active: 0 })), String(index)).toBeUndefined();
-    expect(parseStore(JSON.stringify({ version: 1, rooms: [withFirst([door])], active: 0 }))).toEqual({ version: 1, rooms: [onWall(BOX, 0, [door])], active: 0 });
+    expect(parseStore(JSON.stringify({ version: 1, rooms: [withFirst([door])], active: 0 }))).toEqual(storeOf([onWall(BOX, 0, [door])]));
+  });
+});
+
+describe("the connections of a store", () => {
+  const door = (key: string): DraftFeature => feature(key, "door", { offset: "1", width: "0.9" });
+  const named = (name: string, features: readonly DraftFeature[]): Draft => ({ ...onWall(BOX, 0, features), name });
+  // Room A has two doors and an outlet. Room B has a door and a window. Room C has one door.
+  const A = named("A", [door("f1"), door("f2"), feature("f3", "outlet", { offset: "3.5" })]);
+  const B = named("B", [door("f1"), feature("f2", "window", { offset: "2.5", width: "1" })]);
+  const C = named("C", [door("f1")]);
+  const end = (at: number, key: string): DraftEnd => ({ room: at, feature: key });
+  const tie = (from: DraftEnd, to: DraftEnd): DraftConnection => ({ from, to });
+  const base = storeOf([A, B, C]);
+  const joined = withConnection(base, end(0, "f1"), end(1, "f1"));
+
+  it("gives the door, the window or the opening at an end, and nothing for an outlet", () => {
+    expect(featureAt(base.rooms, end(0, "f2"))).toEqual(door("f2"));
+    expect(featureAt(base.rooms, end(1, "f2"))?.kind).toBe("window");
+    expect(featureAt(base.rooms, end(0, "f3"))).toBeUndefined();
+    expect(featureAt(base.rooms, end(0, "f9"))).toBeUndefined();
+    expect(featureAt(base.rooms, end(3, "f1"))).toBeUndefined();
+  });
+
+  it("joins two features of two rooms, and gives each end from the other", () => {
+    expect(joined.connections).toEqual([tie(end(0, "f1"), end(1, "f1"))]);
+    expect(joined.rooms).toBe(base.rooms);
+    expect(joinedTo(joined, end(0, "f1"))).toEqual(end(1, "f1"));
+    expect(joinedTo(joined, end(1, "f1"))).toEqual(end(0, "f1"));
+    expect(joinedTo(joined, end(0, "f2"))).toBeUndefined();
+    expect(joinedTo(base, end(0, "f1"))).toBeUndefined();
+  });
+
+  it("removes the old connection of each of the two features", () => {
+    expect(withConnection(joined, end(0, "f1"), end(2, "f1")).connections).toEqual([tie(end(0, "f1"), end(2, "f1"))]);
+    expect(withConnection(joined, end(2, "f1"), end(1, "f1")).connections).toEqual([tie(end(2, "f1"), end(1, "f1"))]);
+    const two = withConnection(joined, end(0, "f2"), end(2, "f1"));
+    expect(two.connections).toHaveLength(2);
+    expect(withConnection(two, end(0, "f1"), end(2, "f1")).connections).toEqual([tie(end(0, "f1"), end(2, "f1"))]);
+  });
+
+  it("removes the connection of a feature when it gets no other end", () => {
+    expect(withConnection(joined, end(1, "f1")).connections).toEqual([]);
+    expect(withConnection(joined, end(0, "f1")).connections).toEqual([]);
+    expect(withConnection(joined, end(0, "f2"))).toBe(joined);
+  });
+
+  it("does not join a feature to its own room, to an outlet or to nothing", () => {
+    const ends: readonly DraftEnd[] = [end(0, "f2"), end(0, "f3"), end(1, "f9"), end(5, "f1"), end(-1, "f1")];
+    for (const to of ends) expect(withConnection(base, end(0, "f1"), to).connections, JSON.stringify(to)).toEqual([]);
+    expect(withConnection(base, end(0, "f3"), end(1, "f1")).connections).toEqual([]);
+    // A door can go to a window: the page gives the choices, and the store keeps each hole.
+    expect(withConnection(base, end(0, "f1"), end(1, "f2")).connections).toHaveLength(1);
+  });
+
+  it("reads its own text", () => {
+    const two = withConnection(joined, end(0, "f2"), end(2, "f1"));
+    expect(parseStore(storeText(two))).toEqual(two);
+  });
+
+  it("reads a store with a connection that its rooms cannot have, without that connection", () => {
+    const good = tie(end(0, "f1"), end(1, "f1"));
+    const others: readonly unknown[] = [
+      null,
+      "f1",
+      { from: end(0, "f1") },
+      { from: end(0, "f2"), to: { room: "2", feature: "f1" } },
+      { from: end(0, "f2"), to: { room: 0.5, feature: "f1" } },
+      { from: end(0, "f2"), to: { room: 2, feature: 1 } },
+      tie(end(0, "f2"), end(0, "f1")),
+      tie(end(0, "f3"), end(2, "f1")),
+      tie(end(0, "f2"), end(3, "f1")),
+      tie(end(0, "f2"), end(2, "f9")),
+      // The door of room B has a connection already.
+      tie(end(2, "f1"), end(1, "f1")),
+    ];
+    for (const [index, other] of others.entries()) {
+      const text = JSON.stringify({ ...base, connections: [good, other] });
+      expect(parseStore(text), String(index)).toEqual(joined);
+    }
+    expect(parseStore(JSON.stringify({ ...base, connections: "none" }))).toEqual(base);
+    expect(parseStore(JSON.stringify({ ...base, connections: [{ ...good, more: true }] }))).toEqual(joined);
+  });
+
+  it("replaces a room, and removes the connection of a feature that the new room does not have", () => {
+    const wider = withFeature(A, "f1", { width: { value: "1", inches: "" } });
+    const kept = withRoom(joined, 0, wider);
+    expect(kept.rooms).toEqual([wider, B, C]);
+    expect(kept.connections).toBe(joined.connections);
+    expect(kept.active).toBe(0);
+    expect(withRoom(joined, 0, withoutFeature(A, "f1")).connections).toEqual([]);
+    expect(withRoom(joined, 2, emptyDraft("m")).connections).toBe(joined.connections);
+    for (const position of [3, -1, 0.5]) expect(withRoom(joined, position, C), String(position)).toBe(joined);
+  });
+
+  it("removes a room with its connections, and moves the positions of the rooms after it", () => {
+    const two = withConnection(joined, end(0, "f2"), end(2, "f1"));
+    expect(withoutRoom(two, 1)).toEqual({ ...storeOf([A, C]), connections: [tie(end(0, "f2"), end(1, "f1"))] });
+    expect(withoutRoom(two, 0)).toEqual(storeOf([B, C]));
+    expect(withoutRoom(two, 2)).toEqual({ ...storeOf([A, B]), connections: [tie(end(0, "f1"), end(1, "f1"))] });
+    expect(withoutRoom({ ...storeOf([A]), connections: [] }, 0).connections).toEqual([]);
+  });
+
+  it("adds rooms with the connections between them, and shows the first of them", () => {
+    const next = withNewRooms(joined, [B, C], [tie(end(0, "f1"), end(1, "f1"))]);
+    expect(next.rooms).toEqual([A, B, C, B, C]);
+    expect(next.active).toBe(3);
+    expect(next.connections).toEqual([tie(end(0, "f1"), end(1, "f1")), tie(end(3, "f1"), end(4, "f1"))]);
+    // A connection that the new rooms cannot have does not go into the store.
+    expect(withNewRooms(base, [B, C], [tie(end(0, "f1"), end(2, "f1"))]).connections).toEqual([]);
+    expect(withNewRooms(joined, [], [])).toBe(joined);
+  });
+
+  it("puts new rooms in the place of the example room or of the only empty room", () => {
+    const fresh = withNewRooms(storeOf([exampleDraft("ft-in")]), [A, B], [tie(end(0, "f1"), end(1, "f1"))]);
+    expect(fresh).toEqual({ ...storeOf([A, B]), connections: [tie(end(0, "f1"), end(1, "f1"))] });
+    expect(withNewRooms(storeOf([emptyDraft("m")]), [A, B], []).rooms).toHaveLength(3);
+    expect(withNewRooms(storeOf([emptyDraft("m")]), [A, B], [], true)).toEqual(storeOf([A, B]));
+  });
+
+  it("does not add rooms to a store that cannot keep each of them", () => {
+    const most = storeOf(Array.from({ length: MOST_ROOMS - 1 }, () => C));
+    expect(withNewRooms(most, [A, B], [])).toBe(most);
+    expect(withNewRooms(most, [A], []).rooms).toHaveLength(MOST_ROOMS);
+  });
+});
+
+describe("draftKeys", () => {
+  it("gives the feature of the draft for each opening of the survey, and no key for an outlet", () => {
+    const features = [feature("a", "window", { offset: "2.5", width: "1" }), feature("b", "outlet", { offset: "2" }), feature("c", "door", { offset: "0.5", width: "0.9" })];
+    const survey = surveyOf(onWall(onWall(BOX, 0, features), 2, [feature("d", "door", { offset: "1", width: "0.9" })]));
+    const { draft, keys } = draftKeys(survey);
+    expect(draft).toEqual(draftOf(survey));
+    expect([...keys.keys()].sort()).toEqual(["door-1", "door-2", "window-1"]);
+    const at = (id: string): DraftFeature | undefined => featureOf(draft, keys.get(id) ?? "");
+    expect(at("window-1")).toMatchObject({ kind: "window", offset: { value: "2.5" } });
+    expect(at("door-1")).toMatchObject({ kind: "door", offset: { value: "0.5" } });
+    expect(at("door-2")).toMatchObject({ kind: "door", offset: { value: "1" } });
+    expect(draft.sides[2]?.features.map((item) => item.key)).toEqual([keys.get("door-2")]);
+  });
+
+  it("gives the first of two openings with one name", () => {
+    const first = SAMPLE_SURVEY.openings?.[0];
+    if (first === undefined) throw new Error("the sample survey has no opening");
+    const survey: Survey = { ...SAMPLE_SURVEY, openings: [first, { ...first, offset: first.offset + first.width }] };
+    const { draft, keys } = draftKeys(survey);
+    expect(keys.size).toBe(1);
+    const key = keys.get(first.id) ?? "";
+    const side = draft.sides.find((item) => item.features.some((entry) => entry.key === key));
+    expect(side?.features[0]?.key).toBe(key);
+  });
+});
+
+describe("nameWords", () => {
+  it("gives the groups of letters and digits of a name in small letters", () => {
+    expect(nameWords("Main Bedroom #2")).toEqual(["main", "bedroom", "2"]);
+    expect(nameWords("Küche")).toEqual(["küche"]);
+    expect(nameWords(" ../.. ")).toEqual([]);
+    expect(nameWords("")).toEqual([]);
   });
 });
 
@@ -974,7 +1147,6 @@ describe("fileName", () => {
 
 describe("the rooms of a store", () => {
   const named = (name: string): Draft => ({ ...BOX, name });
-  const storeOf = (rooms: readonly Draft[], active = 0): Store => ({ version: 1, rooms, active });
   const names = (store: Store): string[] => store.rooms.map((item) => item.name);
 
   it("names a room by its name, or by its number", () => {
