@@ -18,11 +18,14 @@ import {
   hasMore,
   LENGTH_MODES,
   lengthText,
+  MOST_ROOMS,
   numberOf,
   parseStore,
   placedFeatures,
   readFeature,
   readLength,
+  roomName,
+  roomState,
   sameDraft,
   shownRoom,
   statusOf,
@@ -32,11 +35,14 @@ import {
   typedOf,
   usualOf,
   walksRight,
+  withActive,
   withFeature,
   withMode,
   withNewFeature,
+  withNewRoom,
   withNewSide,
   withoutFeature,
+  withoutRoom,
   withoutSide,
   withSide,
   type Corner,
@@ -963,5 +969,88 @@ describe("fileName", () => {
   it("gives a usual name to a room with no name", () => {
     expect(fileName(exampleDraft("m"), "survey")).toBe("room.survey.json");
     expect(fileName({ ...exampleDraft("m"), name: "../.." }, "room")).toBe("room.room.json");
+  });
+});
+
+describe("the rooms of a store", () => {
+  const named = (name: string): Draft => ({ ...BOX, name });
+  const storeOf = (rooms: readonly Draft[], active = 0): Store => ({ version: 1, rooms, active });
+  const names = (store: Store): string[] => store.rooms.map((item) => item.name);
+
+  it("names a room by its name, or by its number", () => {
+    expect(roomName(named("  Kitchen "), 0)).toBe("Kitchen");
+    expect(roomName(named(" "), 2)).toBe("Room 3");
+    expect(roomName(exampleDraft("m"), 0)).toBe("Room 1");
+  });
+
+  it("gives the state of a room from its status", () => {
+    expect(roomState(statusFor(emptyDraft("m")))).toBe("typing");
+    expect(roomState(statusFor(BOX))).toBe("closed");
+    expect(roomState(statusFor(exampleDraft("ft-in")))).toBe("closed");
+    expect(roomState(statusFor(withSide(BOX, "s3", { length: { value: "6", inches: "" } })))).toBe("open");
+    // A feature that needs a number, and a feature with a wrong place.
+    expect(roomState(statusFor(onWall(BOX, 0, [feature("f1", "door")])))).toBe("fault");
+    expect(roomState(statusFor(onWall(BOX, 0, [feature("f1", "door", { offset: "3.5", width: "0.9" })])))).toBe("fault");
+    // An open walk comes before a fault of a feature.
+    expect(roomState(statusFor(withSide(onWall(BOX, 0, [feature("f1", "door")]), "s3", { length: { value: "6", inches: "" } })))).toBe("open");
+  });
+
+  it("adds a room after the rooms, and shows it", () => {
+    const next = withNewRoom(storeOf([named("A"), named("B")], 0), named("C"));
+    expect(names(next)).toEqual(["A", "B", "C"]);
+    expect(next.active).toBe(2);
+  });
+
+  it("puts a new room in the place of the example room, which is not a room of the visitor", () => {
+    expect(withNewRoom(storeOf([exampleDraft("ft-in")]), named("A"))).toEqual(storeOf([named("A")]));
+    // The example room stays when the store has a room of the visitor too.
+    expect(withNewRoom(storeOf([exampleDraft("m"), named("A")], 1), named("B"))).toEqual(storeOf([exampleDraft("m"), named("A"), named("B")], 2));
+  });
+
+  it("puts a room in the place of the only empty room only with overEmpty", () => {
+    expect(withNewRoom(storeOf([emptyDraft("m")]), named("A"))).toEqual(storeOf([emptyDraft("m"), named("A")], 1));
+    expect(withNewRoom(storeOf([emptyDraft("m")]), named("A"), true)).toEqual(storeOf([named("A")]));
+    expect(names(withNewRoom(storeOf([named("A")]), named("B"), true))).toEqual(["A", "B"]);
+    expect(names(withNewRoom(storeOf([emptyDraft("m"), named("A")]), named("B"), true))).toEqual(["", "A", "B"]);
+  });
+
+  it("does not add a room to a store with the largest number of rooms", () => {
+    const full = storeOf(Array.from({ length: MOST_ROOMS }, (_, index) => named(String(index))), 4);
+    expect(withNewRoom(full, named("more"))).toBe(full);
+    expect(withNewRoom(full, named("more"), true)).toBe(full);
+    // The page reads the largest store that it writes.
+    expect(parseStore(storeText(full))).toEqual(full);
+    const last = withNewRoom(storeOf(full.rooms.slice(1)), named("last"));
+    expect(last.rooms).toHaveLength(MOST_ROOMS);
+    expect(last.active).toBe(MOST_ROOMS - 1);
+  });
+
+  it("removes a room, and shows the room that follows or the last room", () => {
+    const three = [named("A"), named("B"), named("C")];
+    expect(withoutRoom(storeOf(three, 1), 1)).toEqual(storeOf([named("A"), named("C")], 1));
+    expect(withoutRoom(storeOf(three, 2), 2)).toEqual(storeOf([named("A"), named("B")], 1));
+    expect(withoutRoom(storeOf(three, 0), 0)).toEqual(storeOf([named("B"), named("C")], 0));
+  });
+
+  it("keeps the shown room when a different room goes away", () => {
+    const three = [named("A"), named("B"), named("C")];
+    expect(withoutRoom(storeOf(three, 2), 0)).toEqual(storeOf([named("B"), named("C")], 1));
+    expect(withoutRoom(storeOf(three, 0), 2)).toEqual(storeOf([named("A"), named("B")], 0));
+    expect(withoutRoom(storeOf(three, 1), 2)).toEqual(storeOf([named("A"), named("B")], 1));
+  });
+
+  it("makes the only room of a store empty, in the units of the room", () => {
+    expect(withoutRoom(storeOf([exampleDraft("ft-in")]), 0)).toEqual(storeOf([emptyDraft("ft-in")]));
+    expect(withoutRoom(storeOf([named("A")]), 0)).toEqual(storeOf([emptyDraft("m")]));
+  });
+
+  it("gives the same store for a position with no room, and for the shown room", () => {
+    const store = storeOf([named("A"), named("B")], 1);
+    for (const position of [2, -1, 0.5, Number.NaN]) {
+      expect(withoutRoom(store, position), String(position)).toBe(store);
+      expect(withActive(store, position), String(position)).toBe(store);
+    }
+    expect(withActive(store, 1)).toBe(store);
+    expect(withActive(store, 0)).toEqual(storeOf([named("A"), named("B")], 0));
   });
 });

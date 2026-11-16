@@ -28,6 +28,11 @@
   <h1>Measure a room</h1>
   <p class="lead">Walk around the room with a tape measure, and keep the wall on your right. Type the length of each wall and the turn at each corner. Then add the doors, the windows and the outlets of each wall. The page draws the room while you type.</p>
 
+  <div class="rooms" role="group" aria-label="The rooms of the page">
+    <ul id="room-list" class="room-list"></ul>
+    <button id="add-room" class="tool room-add" type="button">Add a room</button>
+  </div>
+
   <div class="bench">
     <div class="board-column">
       <section id="board" class="sheet board" aria-label="The drawing of the room">
@@ -82,19 +87,19 @@
   <div class="below">
     <section aria-labelledby="keep-title">
       <h2 id="keep-title">Keep your work</h2>
-      <p class="section-note">The page saves each change in this browser, and it sends your numbers to no server. A file moves the room to a different device or to a program.</p>
+      <p class="section-note">The page saves each change in this browser, and it sends your numbers to no server. A file moves the room that the page shows to a different device or to a program.</p>
       <div class="keep">
         <button id="copy-survey" class="tool" type="button">Copy the measurements</button>
         <button id="save-survey" class="tool" type="button">Download the measurements</button>
         <button id="save-room" class="tool" type="button">Download the room record</button>
         <button id="open-survey" class="tool" type="button">Open a file of measurements</button>
         <input id="open-file" type="file" accept="application/json,.json" hidden>
-        <button id="clear" class="tool" type="button">Start a new room</button>
+        <button id="clear" class="tool" type="button">Remove this room</button>
       </div>
       <div id="confirm" class="confirm" hidden>
         <p id="confirm-text"></p>
         <button id="confirm-yes" class="tool" type="button"></button>
-        <button id="confirm-no" class="tool" type="button">Keep the numbers</button>
+        <button id="confirm-no" class="tool" type="button">Keep the room</button>
       </div>
       <p id="keep-note" class="note" role="status"></p>
     </section>
@@ -109,6 +114,7 @@
         <li>Go to the next corner and turn to the next wall. In most corners you turn left. Around a corner that points into the room, you turn right.</li>
         <li>For a corner that is not square, select Angle. Type the angle inside the room, between the two walls.</li>
         <li>Continue until you are at the first corner again. The page tells if the walk ends where it started.</li>
+        <li>For the next room, select Add a room. The page keeps each room, and the list above the drawing shows them.</li>
       </ol>
       <p class="note">The measurements are a <code>survey/1</code> record, and <a href="https://github.com/mark1russell7/room-view/tree/main/packages/room-view#a-survey-the-room-from-a-tape-measure">the package</a> makes the room from it.</p>
     </section>
