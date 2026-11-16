@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { expandLevel } from "./level.ts";
 import { SAMPLE_LEVEL, SAMPLE_ROOM, SAMPLE_SCENE, SAMPLE_SURVEY } from "./sample.ts";
-import { levelSchema, roomSchema, sceneSchema, surveySchema } from "./schema.ts";
+import { anchorSchema, levelSchema, roomSchema, sceneSchema, surveySchema } from "./schema.ts";
 import { expandSurvey } from "./survey.ts";
 
 type Data = Record<string, unknown>;
@@ -155,6 +155,51 @@ describe("sceneSchema", () => {
     expect(sceneSchema.safeParse({ ...scene, layers: { Mark: {} } }).success).toBe(false);
     expect(sceneSchema.safeParse({ ...scene, layers: { "mark:1/1": {} } }).success).toBe(false);
     expect(sceneSchema.safeParse({ ...scene, layers: "mark/1" }).success).toBe(false);
+  });
+});
+
+describe("anchorSchema", () => {
+  const anchors = [
+    { on: "wall", wall: "a", face: "left", offset: 1, height: 0.3 },
+    { on: "floor", at: [1, 2] },
+    { on: "floor", at: [1, 2], floor: "f" },
+    { on: "ceiling", at: [1, 2] },
+    { on: "ceiling", at: [1, 2], floor: "f" },
+    { on: "object", object: "desk" },
+    { on: "object", object: "desk", at: [0, 0, 0.75], out: [0, 0, 1] },
+  ];
+  const anchorAccepts = (anchor: unknown): boolean => anchorSchema.safeParse(anchor).success;
+
+  it("accepts an anchor on each surface, also after a change to JSON text and back", () => {
+    for (const anchor of anchors) {
+      expect(anchorSchema.parse(anchor)).toEqual(anchor);
+      expect(anchorSchema.parse(JSON.parse(JSON.stringify(anchor)))).toEqual(anchor);
+    }
+  });
+
+  it("refuses an anchor with a fault in its form", () => {
+    expect(anchorAccepts({ on: "door", at: [1, 2] })).toBe(false);
+    expect(anchorAccepts({ at: [1, 2] })).toBe(false);
+    expect(anchorAccepts("wall")).toBe(false);
+    expect(anchorAccepts({ on: "wall", wall: "a", face: "top", offset: 1, height: 0.3 })).toBe(false);
+    expect(anchorAccepts({ on: "wall", wall: "", face: "left", offset: 1, height: 0.3 })).toBe(false);
+    expect(anchorAccepts({ on: "wall", wall: "a", face: "left", offset: 1 })).toBe(false);
+    expect(anchorAccepts({ on: "floor", at: [1, 2, 3] })).toBe(false);
+    expect(anchorAccepts({ on: "floor", at: [1, 2], floor: "" })).toBe(false);
+    expect(anchorAccepts({ on: "ceiling", at: [1, Number.NaN] })).toBe(false);
+    expect(anchorAccepts({ on: "object", object: "desk", at: [0, 0] })).toBe(false);
+    expect(anchorAccepts({ on: "object", object: "desk", out: [0, 0, Number.POSITIVE_INFINITY] })).toBe(false);
+  });
+
+  it("refuses a field that the surface of the anchor does not have", () => {
+    expect(anchorAccepts({ on: "wall", wall: "a", face: "left", offset: 1, height: 0.3, at: [1, 2] })).toBe(false);
+    expect(anchorAccepts({ on: "floor", at: [1, 2], height: 1 })).toBe(false);
+    expect(anchorAccepts({ on: "object", object: "desk", color: "red" })).toBe(false);
+  });
+
+  it("does not examine the meaning of an anchor", () => {
+    expect(anchorAccepts({ on: "wall", wall: "no-wall", face: "left", offset: -5, height: 99 })).toBe(true);
+    expect(anchorAccepts({ on: "object", object: "desk", out: [0, 0, 0] })).toBe(true);
   });
 });
 

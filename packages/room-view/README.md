@@ -303,7 +303,7 @@ The option `cut` gives a floor plan: the plan keeps only the solids that start b
 | Entry | What it has |
 | --- | --- |
 | `@mark1russell7/room-view` | The record types, the model, the plan, the checks, the loads, the survey and the level. It has no schema library. |
-| `@mark1russell7/room-view/schema` | `roomSchema`, `sceneSchema`, `surveySchema` and `levelSchema`: the zod schemas that examine the form of a JSON record. |
+| `@mark1russell7/room-view/schema` | `roomSchema`, `sceneSchema`, `surveySchema`, `levelSchema` and `anchorSchema`: the zod schemas that examine the form of a JSON record. |
 | `@mark1russell7/room-view/sample` | `SAMPLE_ROOM`, `SAMPLE_SCENE`, `SAMPLE_SURVEY` and `SAMPLE_LEVEL`: a room with a rack and an apartment of four rooms, for demos and tests. |
 | `@mark1russell7/room-view/three` | `createRoomViewer`, the themes and `solidGeometry`: the viewer in a page. It needs the package `three`. |
 

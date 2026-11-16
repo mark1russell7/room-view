@@ -44,6 +44,7 @@ type Anchor =
 
 - `sceneSpace(scene)` gives the space of a scene. Its function `frame(anchor)` gives the point and the direction out of the surface, or `undefined`.
 - A frame is in meters, with the z axis up, as the solids. An object anchor with no point is at the center of the top, with the direction up.
+- `anchorSchema` of the entry `/schema` examines the form of an anchor. The schema of an add-on uses it for each record.
 - `checkAnchor(anchor, space)` gives the faults of an anchor. An error tells that the anchor has no position: its wall or object is not in the room, or its point is out of range. A warning tells a point in an opening.
 - The wall anchor is the outlet of today without its circuit. The checks `outlet-wall`, `outlet-range` and `outlet-in-opening` become the anchor checks `anchor-wall`, `anchor-range` and `anchor-in-opening`.
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Anchor } from "./anchors.ts";
 import { LEVEL_SCHEMA, type Level } from "./level.ts";
 import { isLayerName, OPENING_KINDS, ROOM_SCHEMA, SCENE_SCHEMA, WALL_FACES, WALL_SIDES, type Room, type Scene } from "./room.ts";
 import { SQUARE_TURNS, SURVEY_SCHEMA, type Survey } from "./survey.ts";
@@ -6,6 +7,19 @@ import { LENGTH_UNITS } from "./units.ts";
 
 const id = z.string().min(1);
 const planPoint = z.tuple([z.number(), z.number()]).readonly();
+
+const point3 = z.tuple([z.number(), z.number(), z.number()]).readonly();
+
+/**
+ * The schema of an anchor. It examines the form of the record, and it refuses a field that the surface of the anchor does not have.
+ * The schema of an add-on uses it for the anchor of each record. `checkAnchor` examines the meaning of an anchor with a correct form.
+ */
+export const anchorSchema: z.ZodType<Anchor> = z.discriminatedUnion("on", [
+  z.strictObject({ on: z.literal("wall"), wall: id, face: z.enum(WALL_FACES), offset: z.number(), height: z.number() }),
+  z.strictObject({ on: z.literal("floor"), at: planPoint, floor: id.optional() }),
+  z.strictObject({ on: z.literal("ceiling"), at: planPoint, floor: id.optional() }),
+  z.strictObject({ on: z.literal("object"), object: id, at: point3.optional(), out: point3.optional() }),
+]);
 
 const wall = z.strictObject({
   id,
