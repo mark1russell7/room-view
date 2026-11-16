@@ -212,9 +212,23 @@ export function createRoomViewer(container: HTMLElement, options: RoomViewerOpti
     camera.far = far * 8 + 100;
     camera.updateProjectionMatrix();
   };
+  /**
+   * This function stops the turn that continues after a drag. The camera stays where it is.
+   * Without it, the camera continues to turn after a move to a view, and the view is not exact.
+   */
+  const stopDrift = (): void => {
+    if (!controls.enableDamping) return;
+    const now = placeNow();
+    // With no damping, an update of the controls uses all of the turn that remains. The camera then goes back.
+    controls.enableDamping = false;
+    controls.update();
+    controls.enableDamping = true;
+    place(now);
+  };
   const goTo = (name: ViewName, animate: boolean): void => {
     view = name;
     moved = false;
+    stopDrift();
     const to = fit(name);
     if (animate && !lessMotion()) {
       move = { from: placeNow(), to, start: performance.now() };

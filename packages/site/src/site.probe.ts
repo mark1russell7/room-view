@@ -50,4 +50,86 @@ check("a click selects a circuit", pressed('[data-circuit="b"]') === "true", pre
 click('[data-circuit="b"]');
 check("a second click removes the selection of the circuit", pressed('[data-circuit="b"]') === "false", pressed('[data-circuit="b"]'));
 
+// The pointer in the 3D picture. The picture has no elements to examine.
+// So the probe sends pointer events to the canvas, and the page tells the name of the part under each one.
+const canvas = $("#viewer canvas");
+if (canvas !== null) {
+  const GRID = 7;
+  const send = (type: string, x: number, y: number, buttons: number): void => {
+    const button = type === "pointermove" ? -1 : 0;
+    canvas.dispatchEvent(new PointerEvent(type, { pointerId: 1, pointerType: "mouse", isPrimary: true, bubbles: true, cancelable: true, clientX: x, clientY: y, button, buttons }));
+  };
+  const leave = (): void => {
+    send("pointerleave", 0, 0, 0);
+  };
+  // The center of a cell of a grid on the picture, in the coordinates of the window.
+  const cell = (index: number): readonly [number, number] => {
+    const box = canvas.getBoundingClientRect();
+    return [box.left + (box.width * ((index % GRID) + 0.5)) / GRID, box.top + (box.height * (Math.floor(index / GRID) + 0.5)) / GRID];
+  };
+  // The name of the part under each cell. A cell with no part has an empty name.
+  const scan = (): readonly string[] => {
+    const names: string[] = [];
+    for (let index = 0; index < GRID * GRID; index += 1) {
+      const [x, y] = cell(index);
+      send("pointermove", x, y, 0);
+      names.push(text("#readout"));
+    }
+    leave();
+    return names;
+  };
+  // The part of the cells that have the same name in two scans, from 0 to 1.
+  const same = (a: readonly string[], b: readonly string[]): number => a.filter((name, index) => name === b[index]).length / a.length;
+
+  let first: readonly string[] = [];
+  const found = await until(() => {
+    first = scan();
+    return new Set(first.filter((name) => name !== "")).size >= 3;
+  }, 5000);
+  check("the pointer finds the parts of the room in the 3D picture", found, [...new Set(first)]);
+  check("the name goes when the pointer leaves the picture", text("#readout") === "", text("#readout"));
+
+  const at = Math.max(
+    first.findIndex((name) => name !== ""),
+    0,
+  );
+  const part = first[at] ?? "";
+  const [clickX, clickY] = cell(at);
+  send("pointerdown", clickX, clickY, 1);
+  send("pointerup", clickX, clickY, 0);
+  leave();
+  check("a click in the 3D picture selects the part under the pointer", part !== "" && text("#readout") === part && $("#details .tool") !== null, [part, text("#readout")]);
+
+  // The turn of a drag is in proportion to the height of the picture. This distance gives a quarter of a turn.
+  const box = canvas.getBoundingClientRect();
+  const startX = box.left + box.width / 2;
+  const startY = box.top + box.height / 2;
+  const far = box.height * 0.28;
+  send("pointerdown", startX, startY, 1);
+  const cursor = canvas.style.cursor;
+  for (let step = 1; step <= 8; step += 1) send("pointermove", startX + (far * step) / 8, startY, 1);
+  send("pointerup", startX + far, startY, 0);
+  leave();
+  check("the cursor shows a drag, and only during the drag", cursor === "grabbing" && canvas.style.cursor !== "grabbing", [cursor, canvas.style.cursor]);
+  check("a drag keeps the selected part", text("#readout") === part, text("#readout"));
+
+  // The scans compare the pictures with no selected part, because the page names the selected part in an empty cell.
+  click("#details .tool");
+  let turned: readonly string[] = [];
+  const turns = await until(() => {
+    turned = scan();
+    return same(turned, first) < 0.9;
+  }, 5000);
+  check("a drag turns the room", turns, same(turned, first));
+
+  // The room continues to turn for a moment after a drag. The button "Corner view" stops the turn, and the first view comes back.
+  click("#view-home");
+  let back: readonly string[] = [];
+  const returns = await until(() => {
+    back = scan();
+    return same(back, first) >= 0.95;
+  }, 5000);
+  check("the button Corner view brings the first view back after a drag", returns, same(back, first));
+}
+
 export {};
