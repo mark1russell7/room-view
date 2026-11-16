@@ -57,6 +57,7 @@ export function roomIds(rooms: readonly Draft[]): readonly string[] {
  * This function makes the level record of a store. It is total, as `surveyOf` is.
  * Each length of its room record is in the unit of the first room. The record has one connection for each connection of the store, at the same position.
  * A feature that needs a number is not in its survey, so `expandLevel` gives its connection the fault `opening`.
+ *
  * The level record lists the circuits of the store. An outlet of a room names the `id` of its circuit, and the survey of the room lists no circuit.
  */
 export function levelOf(store: Store): Level {

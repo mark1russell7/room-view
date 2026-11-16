@@ -8,19 +8,21 @@ import { idsOf, MOST_CIRCUITS, MOST_TEXT, numberOf, systemOf, type CircuitRecord
 // The limit is the program `CIRCUIT_LIMIT` of `@mark1russell7/cluster-design`, so this page and the cluster design use one formula.
 // Each function of this file is pure, so the tests need no browser.
 
-/** A number of a circuit: the rating of its breaker in amperes, or its voltage in volts. */
+/** One numeric fact of a circuit: the rating of its breaker in amperes, or its voltage in volts. */
 export type CircuitField = "breaker" | "voltage";
 
 /**
  * The usual breaker and voltage of a circuit of a home, for an empty field.
- * A home with feet and inches is in North America: 15 A at 120 V. A home with meters is in most other countries: 16 A at 230 V.
+ *
+ * - A home with feet and inches is in North America, thus 15 A at 120 V.
+ * - A home with meters is in most other countries, thus 16 A at 230 V.
  */
 const USUAL_CIRCUIT: Readonly<Record<System, Readonly<Record<CircuitField, number>>>> = {
   imperial: { breaker: 15, voltage: 120 },
   metric: { breaker: 16, voltage: 230 },
 };
 
-/** This function gives the usual value of a number of a circuit for the units of a mode. The page uses it when the field has no text. */
+/** This function gives the usual breaker or voltage of a circuit for the units of a mode. The page uses it when the field has no text. */
 export function usualCircuit(field: CircuitField, mode: LengthMode): number {
   return USUAL_CIRCUIT[systemOf(mode)][field];
 }
@@ -96,13 +98,15 @@ export interface CircuitDrafts {
   readonly keys: ReadonlyMap<string, string>;
   /**
    * This value is true when the records have data that the store does not keep.
-   * Such data is a second record of an `id` with different data, a circuit past the limit of a store, or a name that is too long.
-   * It is also a limit that is not the limit of the breaker and the voltage of the record.
+   *
+   * - A second record of an `id` has different data.
+   * - A circuit is past the limit of a store, or a name is too long.
+   * - A limit is not the limit of the breaker and the voltage of the record.
    */
   readonly more: boolean;
 }
 
-/** This function gives the text of a number of a circuit record. A number that is not above 0 gives an empty text, and the page uses the usual value. */
+/** This function gives the text of the breaker or the voltage of a circuit record. A value that is not above 0 gives an empty text, and the page uses the usual value. */
 function numberText(value: number | undefined): string {
   return value !== undefined && Number.isFinite(value) && value > 0 ? String(value) : "";
 }

@@ -818,6 +818,7 @@ export function draftKeys(survey: Survey, circuits: ReadonlyMap<string, string> 
  * This data is the checks, the circuit of an outlet that is not in `circuits`, and the height or the thickness of one side.
  * It is also the bottom of a door above the floor, and a feature on a wall that the survey does not have.
  * For the objects, it is an object that the draft does not keep. It is also an outlet that the draft does not have, or a distance below 0.
+ *
  * `circuits` has the `id` of each circuit that the store keeps. By default, it has the circuits of the survey. `circuitDrafts` tells the data of the circuits that a store does not keep.
  */
 export function hasMore(survey: Survey, circuits: ReadonlySet<string> = new Set((survey.circuits ?? []).map((item) => item.id))): boolean {
@@ -1646,7 +1647,7 @@ export function parseStore(text: string | null): Store | undefined {
     if (circuit !== undefined && !circuits.some((other) => other.key === circuit.key)) circuits.push(circuit);
   }
   // An outlet keeps only a circuit of the store.
-  const rooms = drafts.map((room) => withCircuitKeys(room, sameKeys(circuits)));
+  const keyed = drafts.map((room) => withCircuitKeys(room, sameKeys(circuits)));
   // A store from before the connections has no list of them. A connection that the rooms cannot have goes away, and the rooms stay.
   const given: readonly unknown[] = Array.isArray(value["connections"]) ? value["connections"].slice(0, LIMITS.connections) : [];
   const connections = given.flatMap((item): DraftConnection[] => {
@@ -1654,7 +1655,7 @@ export function parseStore(text: string | null): Store | undefined {
     const to = isObject(item) ? endFrom(item["to"]) : undefined;
     return from === undefined || to === undefined ? [] : [{ from, to }];
   });
-  return { version: 1, rooms, connections: validConnections(rooms, connections), circuits, active };
+  return { version: 1, rooms: keyed, connections: validConnections(keyed, connections), circuits, active };
 }
 
 function endFrom(value: unknown): DraftEnd | undefined {
@@ -1803,6 +1804,7 @@ export function withNewRoom(store: Store, room: Draft, overEmpty = false): Store
  * This function adds rooms at the end of the rooms of a store, with the connections between them. The store shows the first new room.
  * The position of a room in an end of `connections` is its position in `rooms`.
  * The rules of `withNewRoom` apply. A store that cannot keep each new room does not change.
+ *
  * The new circuits go at the end of the circuits of the store with new keys, and the outlets of the new rooms keep them.
  * A store that cannot keep each new circuit does not change.
  */

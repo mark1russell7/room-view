@@ -1526,7 +1526,7 @@ function breakerSign(): SVGSVGElement {
   return sign;
 }
 
-/** This function gives the field of a number of a circuit, with its unit. An empty field shows the usual value. */
+/** This function gives the input of the breaker or the voltage of a circuit, with its unit. An empty field shows the usual value. */
 function circuitNumber(circuit: DraftCircuit, field: CircuitField, words: string, unit: string, label: string): HTMLElement {
   const input = h("input", { class: "number-field", type: "text", inputmode: "decimal", enterkeyhint: "next", "data-part": field, "aria-label": `${words} of ${label}`, autocomplete: "off" });
   input.value = circuit[field];
@@ -1559,7 +1559,7 @@ function renderCircuits(): void {
   showCircuits();
 }
 
-/** This function gives a number of watts as text, with no part of a watt above 100 W. */
+/** This function gives a power in watts as text, with no part of a watt above 100 W. */
 function wattText(watts: number): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: watts < 100 ? 1 : 0 }).format(watts);
 }
