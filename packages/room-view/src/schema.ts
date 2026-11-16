@@ -44,6 +44,8 @@ const outlet = z.strictObject({
 const circuit = z.strictObject({
   id,
   name: z.string().optional(),
+  breaker: z.number().optional(),
+  voltage: z.number().optional(),
   limit: z.number(),
 });
 

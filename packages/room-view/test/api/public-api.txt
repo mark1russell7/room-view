@@ -733,6 +733,8 @@ declare function wallTransform(frame: WallFrame): Transform3;
 interface Circuit {
   readonly id: string;
   readonly name?: string | undefined;
+  readonly breaker?: number | undefined;
+  readonly voltage?: number | undefined;
   readonly limit: number;
 }
 

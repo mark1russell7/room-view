@@ -209,6 +209,9 @@ describe("surveySchema", () => {
     expect(surveyAccepts({ checks: [{ id: "d", from: "south", to: "north" }] })).toBe(false);
     expect(surveyAccepts({ openings: [{ id: "door", wall: "south", kind: "arch", offset: 1, width: 3, height: 6.8 }] })).toBe(false);
     expect(surveyAccepts({ circuits: [{ id: "a" }] })).toBe(false);
+    expect(surveyAccepts({ circuits: [{ id: "a", breaker: 15, voltage: 120, limit: 1440 }] })).toBe(true);
+    expect(surveyAccepts({ circuits: [{ id: "a", breaker: "15 A", limit: 1440 }] })).toBe(false);
+    expect(surveyAccepts({ circuits: [{ id: "a", voltage: null, limit: 1440 }] })).toBe(false);
   });
 
   it("refuses an outlet with a face, because the expansion gives the face", () => {

@@ -260,6 +260,9 @@ importers:
       '@fontsource/barlow-semi-condensed':
         specifier: ^5.3.0
         version: 5.3.0
+      '@mark1russell7/cluster-design':
+        specifier: ^0.1.8
+        version: 0.1.8
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
@@ -272,6 +275,12 @@ importers:
       '@mark1russell7/site-pages':
         specifier: ^0.7.0
         version: 0.7.0
+      '@mark1russell7/vex':
+        specifier: ^0.18.0
+        version: 0.18.0
+      '@mark1russell7/vex-domains':
+        specifier: ^0.18.0
+        version: 0.18.0
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.6
@@ -532,6 +541,13 @@ packages:
       dependency-cruiser:
         optional: true
 
+  '@mark1russell7/cluster-design@0.1.8':
+    resolution: {integrity: sha512-uqYn/EB4lF/B+2649g24BiOQm3uM/5kJHfVn//Ruu/rVwk7RbPPsJmt1N748qrCW2L8yp7f7A/lbPzfZ/cHMUA==}
+    engines: {node: '>=22'}
+
+  '@mark1russell7/coeval@0.21.0':
+    resolution: {integrity: sha512-eEotEeFBHfPtrLabaYq/f+C38VAjY5bH4T+1mNqT3kHReIAZlgK1/wHhqkAphy6XCzURx8qNnq274WNNNLkkAQ==}
+
   '@mark1russell7/collections@0.10.2':
     resolution: {integrity: sha512-uOqrK6ZYqgbG8DLchTU2FO8DcNeeeLbNAqR8E3YTe/HKK3rk4ZpR0M0GlYG/7ApiWfrFkVhW1rCF6opaeiL16g==}
     engines: {node: '>=22.12'}
@@ -593,8 +609,16 @@ packages:
     engines: {node: '>=22'}
     hasBin: true
 
+  '@mark1russell7/strategy-search@0.0.3':
+    resolution: {integrity: sha512-wdTXtbd3y35MY5nswHu4LZLohjqxaXgdRcscuL1cw702ldwyNIsuixbU6km01+mCSBPhwu4Eex+wfvEre6GfOQ==}
+    engines: {node: '>=22'}
+
   '@mark1russell7/strategy-space@0.0.5':
     resolution: {integrity: sha512-E3zTfOPDRFE/KdvETa4PqXMu5Vm9eG7Ipy+oMAptB1kDMAQX9y2By+sH17sIezHoqODFWldi2+GwPNMaW301Vg==}
+    engines: {node: '>=22'}
+
+  '@mark1russell7/strategy-space@0.0.7':
+    resolution: {integrity: sha512-8rEQ+nYDlY3ML11qRqHb/WDZcmXhotl5fqtWmCkRoBPK4DjB01eHLWVs2Otuiut5fRxGi1h+LN2X2Jgn77an1w==}
     engines: {node: '>=22'}
 
   '@mark1russell7/template-cli@0.1.9':
@@ -605,6 +629,12 @@ packages:
   '@mark1russell7/typeset@0.5.3':
     resolution: {integrity: sha512-uKmmt2icpkn2k9Wn/y1fRZvBml80dgwRLRhI72e6SkGVSF3UWCiuPZdYTJA2WEstRolq0viSLRJjXb/o8NF8JQ==}
     engines: {node: '>=22.12'}
+
+  '@mark1russell7/vex-domains@0.18.0':
+    resolution: {integrity: sha512-2mzUiJ5LRvGRoZEbsc2FTvAkVyD/hfv+blpb4fALAera5mSQzcWjk1ig8uskZc5WxfLaNFoALrZ7vnYnN2TrLw==}
+
+  '@mark1russell7/vex@0.18.0':
+    resolution: {integrity: sha512-DAhTkMfdt1t64BvTDnUQ+Ta/zxBCZBNCqRvl6vijUtO2rSU6iqcki2NwAMLy/oC+u014bGC9vA7soIiiPa+6DQ==}
 
   '@napi-rs/wasm-runtime@1.2.6':
     resolution: {integrity: sha512-mRyDmEw9/fCDXCGfL1sbgIw/GUK0PVxRW4YwgPN61F3LQ+fSyoBFarJVzgGyhF6kRzEQZ0FejDqm4WLXSeqQmw==}
@@ -1903,6 +1933,18 @@ snapshots:
       '@swc/core': 1.16.22
       dependency-cruiser: 18.7.2
 
+  '@mark1russell7/cluster-design@0.1.8':
+    dependencies:
+      '@mark1russell7/quantity': 0.4.1(zod@4.6.7)
+      '@mark1russell7/rigor-generators': 0.1.16
+      '@mark1russell7/strategy-search': 0.0.3
+      '@mark1russell7/strategy-space': 0.0.7
+      '@mark1russell7/vex': 0.18.0
+      '@mark1russell7/vex-domains': 0.18.0
+      zod: 4.6.7
+
+  '@mark1russell7/coeval@0.21.0': {}
+
   '@mark1russell7/collections@0.10.2(zod@4.6.7)':
     dependencies:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
@@ -1957,10 +1999,20 @@ snapshots:
     dependencies:
       typescript: 6.0.3
 
+  '@mark1russell7/strategy-search@0.0.3':
+    dependencies:
+      '@mark1russell7/rigor-generators': 0.1.16
+      '@mark1russell7/strategy-space': 0.0.7
+
   '@mark1russell7/strategy-space@0.0.5':
     dependencies:
       '@mark1russell7/rigor-generators': 0.1.16
       '@mark1russell7/rigor-statistics': 0.1.29
+
+  '@mark1russell7/strategy-space@0.0.7':
+    dependencies:
+      '@mark1russell7/rigor-generators': 0.1.16
+      '@mark1russell7/rigor-statistics': 0.2.5
 
   '@mark1russell7/template-cli@0.1.9':
     dependencies:
@@ -1972,6 +2024,14 @@ snapshots:
       '@mark1russell7/rigor-generators': 0.1.16
     transitivePeerDependencies:
       - zod
+
+  '@mark1russell7/vex-domains@0.18.0':
+    dependencies:
+      '@mark1russell7/vex': 0.18.0
+
+  '@mark1russell7/vex@0.18.0':
+    dependencies:
+      '@mark1russell7/coeval': 0.21.0
 
   '@napi-rs/wasm-runtime@1.2.6(@emnapi/core@2.0.0-beta.2)(@emnapi/runtime@2.0.0-beta.2)':
     dependencies:

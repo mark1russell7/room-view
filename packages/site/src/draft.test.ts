@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   angleOf,
   areaText,
+  circuitUse,
   convertTyped,
   defaultMode,
   dimensionText,
@@ -24,6 +25,8 @@ import {
   LENGTH_MODES,
   lengthText,
   listedObjects,
+  idsOf,
+  MOST_CIRCUITS,
   MOST_LEVELS,
   MOST_ROOMS,
   nameWords,
@@ -52,17 +55,21 @@ import {
   usualSize,
   walksRight,
   withActive,
+  withCircuit,
   withConnection,
   withExample,
   withFeature,
   withMode,
+  withNewCircuit,
   withNewFeature,
   withNewObject,
   withNewRoom,
   withNewRooms,
   withNewSide,
   withObject,
+  withoutCircuit,
   withoutFeature,
+  withOutletCircuit,
   withoutObject,
   withoutRoom,
   withoutSide,
@@ -70,6 +77,7 @@ import {
   withSide,
   type Corner,
   type Draft,
+  type DraftCircuit,
   type DraftConnection,
   type DraftEnd,
   type DraftFeature,
@@ -433,9 +441,16 @@ describe("hasMore", () => {
     expect(hasMore(surveyOf(BOX))).toBe(false);
   });
 
+  it("is false for the circuits of the survey: the store keeps them, and `circuitDrafts` tells their data that it does not keep", () => {
+    const circuits = [{ id: "a", name: "Circuit A", limit: 1440 }];
+    expect(hasMore({ ...survey, circuits })).toBe(false);
+    const outlets = [{ id: "outlet-1", wall: "wall-2", offset: 1, height: 0.3, circuit: "a" }];
+    expect(hasMore({ ...survey, circuits, outlets })).toBe(false);
+    expect(hasMore({ ...survey, circuits, outlets }, new Set())).toBe(true);
+  });
+
   it("tells each kind of data that a draft does not keep", () => {
     const more: readonly Survey[] = [
-      { ...survey, circuits: [{ id: "a", name: "Circuit A", limit: 1440 }] },
       { ...survey, checks: [{ id: "diagonal", from: "wall-1", to: "wall-3", length: 4.7 }] },
       { ...survey, sides: survey.sides.map((side) => ({ ...side, height: 2 })) },
       { ...survey, sides: survey.sides.map((side) => ({ ...side, thickness: 0.2 })) },
@@ -928,7 +943,7 @@ describe("the store", () => {
   const store: Store = storeOf([exampleDraft("ft-in"), room("m", TRIANGLE)], 1);
 
   it("starts with no connection", () => {
-    expect(store).toEqual({ version: 1, rooms: [exampleDraft("ft-in"), room("m", TRIANGLE)], connections: [], active: 1 });
+    expect(store).toEqual({ version: 1, rooms: [exampleDraft("ft-in"), room("m", TRIANGLE)], connections: [], circuits: [], active: 1 });
     expect(storeOf([BOX]).active).toBe(0);
   });
 
@@ -1720,5 +1735,103 @@ describe("shownObjects", () => {
     const shown = shownObjects({ ...result.room, outlets: [] }, result.objects);
     expect(shown[0]?.outlet).toBeUndefined();
     expect(shown[0]).toMatchObject({ id: "rack-1", kind: "rack", size: result.objects[0]?.size });
+  });
+});
+
+describe("the circuits of a store", () => {
+  const circuit = (key: string, name = ""): DraftCircuit => ({ key, name, breaker: "", voltage: "" });
+  const outlet = (key: string, offset: string): DraftFeature => feature(key, "outlet", { offset });
+  /** Room A has two outlets on circuit `c1`. Room B has one outlet on circuit `c1` and a door. */
+  const A = withOutletCircuit(withOutletCircuit(onWall(BOX, 0, [outlet("f1", "1"), outlet("f2", "2")]), "f1", "c1"), "f2", "c1");
+  const B = withOutletCircuit(onWall(BOX, 1, [outlet("f1", "1"), feature("f2", "door", { offset: "2", width: "0.9" })]), "f1", "c1");
+  const store: Store = { ...storeOf([A, B]), circuits: [circuit("c1", "Kitchen"), circuit("c2")] };
+  const full: Store = { ...storeOf([BOX]), circuits: Array.from({ length: MOST_CIRCUITS }, (_, index) => circuit(`c${String(index + 1)}`)) };
+
+  it("adds a circuit with a key that no circuit of the store has", () => {
+    const one = withNewCircuit(storeOf([BOX]));
+    expect(one.circuits).toEqual([circuit("c1")]);
+    const two = withNewCircuit(one);
+    expect(two.circuits.map((item) => item.key)).toEqual(["c1", "c2"]);
+    expect(withNewCircuit(withoutCircuit(two, "c1")).circuits.map((item) => item.key)).toEqual(["c2", "c3"]);
+    expect(withNewCircuit(full)).toBe(full);
+  });
+
+  it("changes the fields of one circuit", () => {
+    expect(withCircuit(store, "c2", { name: "Hall", breaker: "20" }).circuits).toEqual([circuit("c1", "Kitchen"), { key: "c2", name: "Hall", breaker: "20", voltage: "" }]);
+  });
+
+  it("gives a circuit only to an outlet, and the empty key removes it", () => {
+    expect(featureOf(A, "f1")).toMatchObject({ kind: "outlet", circuit: "c1" });
+    expect(featureOf(withOutletCircuit(A, "f1", ""), "f1")).not.toHaveProperty("circuit");
+    expect(featureOf(withOutletCircuit(B, "f2", "c1"), "f2")).not.toHaveProperty("circuit");
+  });
+
+  it("counts the outlets of a circuit and their rooms", () => {
+    expect(circuitUse(store, "c1")).toEqual({ outlets: 3, rooms: 2 });
+    expect(circuitUse(store, "c2")).toEqual({ outlets: 0, rooms: 0 });
+  });
+
+  it("removes a circuit from each outlet of each room", () => {
+    const without = withoutCircuit(store, "c1");
+    expect(without.circuits).toEqual([circuit("c2")]);
+    expect(circuitUse(without, "c1")).toEqual({ outlets: 0, rooms: 0 });
+    expect(featureOf(without.rooms[1] ?? BOX, "f1")).not.toHaveProperty("circuit");
+    // A room with no outlet of the circuit stays the same draft.
+    const second = withoutCircuit(store, "c2");
+    expect(second.rooms[0]).toBe(store.rooms[0]);
+    expect(withoutCircuit(store, "c9")).toBe(store);
+  });
+
+  it("keeps the circuits in its text, and removes each circuit that is not a circuit of the page", () => {
+    expect(parseStore(storeText(store))).toEqual(store);
+    const raw = JSON.parse(storeText(store)) as Record<string, unknown>;
+    const circuits: readonly unknown[] = [
+      { key: "c2", name: "A", breaker: "15", voltage: "" },
+      { key: "c2", name: "B", breaker: "", voltage: "" },
+      { key: "", name: "", breaker: "", voltage: "" },
+      { key: "c3", name: 1, breaker: "", voltage: "" },
+      { key: "c4", name: "", breaker: 15, voltage: "" },
+      null,
+    ];
+    const parsed = parseStore(JSON.stringify({ ...raw, circuits }));
+    expect(parsed?.circuits).toEqual([{ key: "c2", name: "A", breaker: "15", voltage: "" }]);
+    // The circuit c1 is not in the store now, so no outlet keeps it.
+    expect(parsed === undefined ? undefined : circuitUse(parsed, "c1")).toEqual({ outlets: 0, rooms: 0 });
+  });
+
+  it("reads a circuit of a feature: a text that is not a circuit refuses the store, and a door does not keep one", () => {
+    const [first, ...others] = BOX.sides;
+    const withFirst = (features: unknown): unknown => ({ version: 1, rooms: [{ ...BOX, sides: [{ ...first, features }, ...others] }], circuits: [circuit("c1")], active: 0 });
+    expect(parseStore(JSON.stringify(withFirst([{ ...outlet("f1", "1"), circuit: 7 }])))).toBeUndefined();
+    const door = feature("f1", "door", { offset: "1", width: "1" });
+    expect(parseStore(JSON.stringify(withFirst([{ ...door, circuit: "c1" }])))?.rooms[0]).toEqual(onWall(BOX, 0, [door]));
+  });
+
+  it("adds the circuits of new rooms with new keys, and the outlets of the new rooms keep them", () => {
+    const base = withNewCircuit(storeOf([BOX]));
+    const room = withOutletCircuit(onWall(BOX, 0, [outlet("f1", "1")]), "f1", "c1");
+    const next = withNewRooms(base, [room], [], false, [{ key: "c1", name: "Kitchen", breaker: "20", voltage: "" }]);
+    expect(next.circuits).toEqual([circuit("c1"), { key: "c2", name: "Kitchen", breaker: "20", voltage: "" }]);
+    expect(featureOf(next.rooms[1] ?? BOX, "f1")).toMatchObject({ circuit: "c2" });
+    // An outlet of a circuit that the new rooms do not have gets no circuit.
+    expect(featureOf(withNewRooms(base, [room], []).rooms[1] ?? BOX, "f1")).not.toHaveProperty("circuit");
+    expect(withNewRooms(full, [room], [], false, [circuit("c1")])).toBe(full);
+  });
+
+  it("gives the survey record the circuits, and `draftKeys` gives the outlets their circuits again", () => {
+    const records = { ids: new Map([["c1", "kitchen"]]), records: [{ id: "kitchen", name: "Kitchen", breaker: 20, voltage: 120, limit: 1920 }] };
+    const survey = surveyOf(A, records);
+    expect(survey.circuits).toEqual(records.records);
+    expect(survey.outlets?.map((item) => item.circuit)).toEqual(["kitchen", "kitchen"]);
+    expect(surveyOf(A)).not.toHaveProperty("circuits");
+    expect(surveyOf(A).outlets?.map((item) => item.circuit)).toEqual([undefined, undefined]);
+    expect(hasMore(survey)).toBe(false);
+    const { draft } = draftKeys(survey, new Map([["kitchen", "c1"]]));
+    expect(draft.sides[0]?.features.map((item) => item.circuit)).toEqual(["c1", "c1"]);
+    expect(draftKeys(survey).draft.sides[0]?.features.map((item) => item.circuit)).toEqual([undefined, undefined]);
+  });
+
+  it("gives an id to each name, with a number for a name with no words and for a second name", () => {
+    expect(idsOf(["Kitchen", "", "kitchen", " "], "circuit")).toEqual(["kitchen", "circuit-2", "kitchen-2", "circuit-4"]);
   });
 });
