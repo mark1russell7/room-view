@@ -3,7 +3,7 @@ import { SAMPLE_SCENE } from "@mark1russell7/room-view/sample";
 import { describe, expect, it } from "vitest";
 import { electrical } from "./add-on.ts";
 import { fromSceneV1, type SceneV1 } from "./convert.ts";
-import { parseElectrical } from "./layer.ts";
+import { parseElectrical } from "./schema.ts";
 import { circuitStates, outletLevels } from "./states.ts";
 
 describe("fromSceneV1", () => {

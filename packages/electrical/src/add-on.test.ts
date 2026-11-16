@@ -1,6 +1,7 @@
 import { checkLayers, readLayer, recordName, type Anchor, type Scene } from "@mark1russell7/room-view";
 import { describe, expect, it } from "vitest";
-import { electrical, electricalAddOn, outletAnchors, withOutletAnchors } from "./add-on.ts";
+import { electrical, electricalAddOn } from "./add-on.ts";
+import { outletAnchors, withOutletAnchors } from "./anchors.ts";
 import type { ElectricalLayer } from "./layer.ts";
 
 const onWall: Anchor = { on: "wall", wall: "a", face: "left", offset: 1, height: 0.3 };

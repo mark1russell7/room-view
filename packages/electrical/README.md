@@ -6,6 +6,16 @@ It is the electrical add-on of [`@mark1russell7/room-view`](../room-view/README.
 
 The package has no browser part. Each function is a plain function, and each formula is a Vex program.
 
+## The entries
+
+| Entry | What it has |
+| --- | --- |
+| `@mark1russell7/electrical` | The records of a layer, the circuit formulas, the states, the checks and the move of an old scene. |
+| `@mark1russell7/electrical/schema` | `electricalSchema`, the zod schema of a layer, and `parseElectrical`. |
+| `@mark1russell7/electrical/add-on` | `electrical`, the add-on value for the contract of the core. |
+
+The root entry imports only Vex at run time. Thus a page that shows only the load of a circuit gets no schema library.
+
 ## Install
 
 ```sh
@@ -44,7 +54,7 @@ circuitStates(layer);
 
 The units are fixed: a breaker in amperes, a voltage in volts, and a limit and a load in watts. The ids of one layer are unique, so `recordName("electrical/1", id)` of the core names one record.
 
-`parseElectrical` reads the JSON of a layer. It gives the layer, or the faults of its form with the place of each fault. `electricalSchema` is the zod schema.
+`parseElectrical` of the entry `/schema` reads the JSON of a layer. It gives the layer, or the faults of its form with the place of each fault. `electricalSchema` is the zod schema.
 
 ## The limit and the level of a circuit
 
@@ -68,14 +78,14 @@ A continuous load can use only a part of the rating of a breaker: 80% by default
 `electrical` is the add-on value for the contract of the core. `checkLayers` of the core examines the form of the layer, each anchor and the meaning of the records:
 
 ```ts
-import { electrical } from "@mark1russell7/electrical";
+import { electrical } from "@mark1russell7/electrical/add-on";
 import { checkLayers, readLayer } from "@mark1russell7/room-view";
 
 const findings = checkLayers(scene, [electrical]);
 const read = readLayer(scene, electrical);
 ```
 
-`electricalAddOn(options)` makes the add-on with different parts. `checkElectrical` gives the faults of the meaning of one layer:
+`electricalAddOn(options)` makes the add-on with different parts. `checkElectrical` of the root entry gives the faults of the meaning of one layer:
 
 | Code | Level | The fault |
 | --- | --- | --- |

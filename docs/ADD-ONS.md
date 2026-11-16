@@ -130,7 +130,8 @@ A mark is a record that a viewer draws. A mark has no topic. The marks are in `@
 
 The first add-on is a package in this repository: `@mark1russell7/electrical`, in `packages/electrical`.
 
-- The root entry is the model, with no browser part: the layer, its schema, its checks and the formulas.
+- The root entry is the model, with no browser part: the records of the layer, its checks and the formulas. It imports no zod.
+- The entry `/schema` has the zod schema of the layer. The entry `/add-on` has the add-on value for the contract of the core.
 - The entry `/marks` maps the records to the marks of `@mark1russell7/visuals`.
 - `@mark1russell7/cluster-design` imports the formulas of the root entry. It does not keep a copy.
 

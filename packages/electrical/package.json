@@ -28,6 +28,8 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./schema": "./src/schema.ts",
+    "./add-on": "./src/add-on.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -65,6 +67,16 @@
         "types": "./build/index.d.ts",
         "import": "./build/index.js",
         "default": "./build/index.js"
+      },
+      "./schema": {
+        "types": "./build/schema.d.ts",
+        "import": "./build/schema.js",
+        "default": "./build/schema.js"
+      },
+      "./add-on": {
+        "types": "./build/add-on.d.ts",
+        "import": "./build/add-on.js",
+        "default": "./build/add-on.js"
       },
       "./package.json": "./package.json"
     }

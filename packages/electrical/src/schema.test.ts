@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ELECTRICAL_SCHEMA, electricalSchema, parseElectrical, type ElectricalLayer } from "./layer.ts";
+import { ELECTRICAL_SCHEMA, type ElectricalLayer } from "./layer.ts";
+import { electricalSchema, parseElectrical } from "./schema.ts";
 
 /** A layer with each kind of record, and an outlet on each kind of surface. */
 const layer: ElectricalLayer = {
