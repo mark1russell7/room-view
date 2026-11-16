@@ -55,6 +55,7 @@ jobs:
       roadmap: docs/ROADMAP.md
       # The check opens each page in a browser at 360, 400 and 1280 pixels, in light and dark.
       site-check: true
-      site-check-pages: /,/releases/,/status/
-      # The probe selects parts and circuits in the home page, at each width.
-      site-check-probe: packages/site/src/site.probe.ts
+      site-check-pages: /,/measure/,/releases/,/status/
+      # The first probe selects parts and circuits in the home page, at each width.
+      # The second probe types the walls of a room in the page "Measure a room".
+      site-check-probe: packages/site/src/site.probe.ts,/measure/=packages/site/src/measure.probe.ts
