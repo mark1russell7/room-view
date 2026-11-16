@@ -295,3 +295,49 @@ describe("levelSchema", () => {
     }
   });
 });
+
+describe("surveySchema, the objects of a survey", () => {
+  const object = { id: "desk", kind: "desk", wall: "south", offset: 1, width: 1.6, depth: 0.75, height: 0.74 };
+  const withObjects = (...objects: unknown[]): boolean => surveySchema.safeParse({ ...SAMPLE_SURVEY, objects }).success;
+
+  it("accepts an object on a side, an object on a holder, and each field that is not necessary", () => {
+    expect(withObjects()).toBe(true);
+    expect(withObjects(object)).toBe(true);
+    expect(withObjects(object, { id: "lamp", kind: "lamp", on: "desk", offset: 0, width: 0.2, depth: 0.2, height: 0.4 })).toBe(true);
+    expect(withObjects({ ...object, name: "Desk", gap: 0.05, lift: 0.1, outlet: "south-1" })).toBe(true);
+    expect(withObjects({ ...object, on: "rack" })).toBe(true);
+    // The schema examines the form only. `expandSurvey` gives no place to an object with no side and no holder.
+    expect(withObjects({ id: "a", kind: "desk", offset: 0, width: 1, depth: 1, height: 1 })).toBe(true);
+    expect(withObjects({ ...object, offset: -1, width: 0 })).toBe(true);
+  });
+
+  it("refuses an object with a fault in its form", () => {
+    expect(withObjects({ ...object, color: "red" })).toBe(false);
+    expect(withObjects({ ...object, turn: 90 })).toBe(false);
+    expect(withObjects({ ...object, kind: "" })).toBe(false);
+    expect(withObjects({ ...object, id: "" })).toBe(false);
+    expect(withObjects({ ...object, wall: "" })).toBe(false);
+    expect(withObjects({ ...object, on: 3 })).toBe(false);
+    expect(withObjects({ ...object, width: undefined })).toBe(false);
+    expect(withObjects({ ...object, depth: "1" })).toBe(false);
+    expect(withObjects({ ...object, height: Number.NaN })).toBe(false);
+    expect(withObjects({ ...object, offset: Infinity })).toBe(false);
+    expect(withObjects({ ...object, gap: null })).toBe(false);
+    expect(withObjects(null)).toBe(false);
+    expect(surveySchema.safeParse({ ...SAMPLE_SURVEY, objects: object }).success).toBe(false);
+  });
+
+  it("examines the objects of each room of a level", () => {
+    const withRoomObjects = (...objects: unknown[]): boolean =>
+      levelSchema.safeParse({ ...SAMPLE_LEVEL, rooms: SAMPLE_LEVEL.rooms.map((room) => ({ ...room, survey: { ...room.survey, objects } })) }).success;
+    expect(withRoomObjects(object)).toBe(true);
+    expect(withRoomObjects({ ...object, color: "red" })).toBe(false);
+    expect(levelSchema.safeParse({ ...SAMPLE_LEVEL, objects: [object] }).success).toBe(false);
+  });
+
+  it("keeps the objects of the samples after a change to JSON text and back", () => {
+    expect(surveySchema.parse(JSON.parse(JSON.stringify(SAMPLE_SURVEY))).objects).toEqual(SAMPLE_SURVEY.objects);
+    expect(SAMPLE_SURVEY.objects).toHaveLength(9);
+    expect(levelSchema.parse(JSON.parse(JSON.stringify(SAMPLE_LEVEL))).rooms.map((room) => room.survey.objects?.length)).toEqual([9, 1, 1, 2]);
+  });
+});

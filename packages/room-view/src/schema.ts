@@ -116,6 +116,21 @@ const surveyOutlet = z.strictObject({
   circuit: id.optional(),
 });
 
+const surveyObject = z.strictObject({
+  id,
+  kind: z.string().min(1),
+  name: z.string().optional(),
+  wall: id.optional(),
+  on: id.optional(),
+  offset: z.number(),
+  width: z.number(),
+  depth: z.number(),
+  height: z.number(),
+  gap: z.number().optional(),
+  lift: z.number().optional(),
+  outlet: id.optional(),
+});
+
 /**
  * The schema of a survey record. It examines the form of the record, and it refuses a field that the format does not have.
  * `expandSurvey` makes the room record of a survey with a correct form, and `checkRoom` examines that room record.
@@ -133,6 +148,7 @@ export const surveySchema: z.ZodType<Survey> = z.strictObject({
   openings: z.array(opening).readonly().optional(),
   outlets: z.array(surveyOutlet).readonly().optional(),
   circuits: z.array(circuit).readonly().optional(),
+  objects: z.array(surveyObject).readonly().optional(),
 });
 
 const connectionEnd = z.strictObject({

@@ -1,5 +1,5 @@
 import { headingOf, squared, turned } from "./direction.ts";
-import { ROOM_SCHEMA, type Circuit, type Floor, type Opening, type Outlet, type PlanPoint, type Room, type Wall } from "./room.ts";
+import { ROOM_SCHEMA, type Circuit, type Floor, type Opening, type Outlet, type PlacedObject, type PlanPoint, type Room, type Wall } from "./room.ts";
 import { CLOSURE_LIMIT, convertSurvey, expandSurvey, type Survey, type SurveyOptions, type SurveyResult } from "./survey.ts";
 import { LARGEST_LENGTH, metersPer, type LengthUnit } from "./units.ts";
 
@@ -134,6 +134,11 @@ export interface LevelResult {
   readonly rooms: readonly LevelRoomResult[];
   /** The result of each connection, in the sequence of the connections. */
   readonly connections: readonly LevelConnectionResult[];
+  /**
+   * The placed objects of each room, in the sequence of the rooms. The `id` of an object, of its parent and of its outlet
+   * has the same form as the `id` of a wall. A scene record with the room record and these objects gives the model of the level.
+   */
+  readonly objects: readonly PlacedObject[];
 }
 
 /** The options of the expansion of a level. */
@@ -461,6 +466,7 @@ export function expandLevel(level: Level, options: LevelOptions = {}): LevelResu
   const openings: Opening[] = [];
   const floors: Floor[] = [];
   const outlets: Outlet[] = [];
+  const objects: PlacedObject[] = [];
   const circuits = new Map<string, Circuit>();
   for (const circuit of level.circuits ?? []) if (!circuits.has(circuit.id)) circuits.set(circuit.id, circuit);
   rooms.forEach(({ id, survey, result }, room) => {
@@ -481,6 +487,14 @@ export function expandLevel(level: Level, options: LevelOptions = {}): LevelResu
     for (const floor of record.floors ?? []) floors.push({ id, ...(survey.name === undefined ? {} : { name: survey.name }), ring: floor.ring });
     for (const outlet of record.outlets ?? []) outlets.push({ ...outlet, id: `${id}/${outlet.id}`, wall: `${id}/${outlet.wall}` });
     for (const circuit of record.circuits ?? []) if (!circuits.has(circuit.id)) circuits.set(circuit.id, circuit);
+    for (const object of result.objects) {
+      objects.push({
+        ...object,
+        id: `${id}/${object.id}`,
+        ...(object.parent === undefined ? {} : { parent: `${id}/${object.parent}` }),
+        ...(object.outlet === undefined ? {} : { outlet: `${id}/${object.outlet}` }),
+      });
+    }
   });
 
   const room: Room = {
@@ -495,5 +509,5 @@ export function expandLevel(level: Level, options: LevelOptions = {}): LevelResu
     ...(outlets.length === 0 ? {} : { outlets }),
     ...(circuits.size === 0 ? {} : { circuits: [...circuits.values()] }),
   };
-  return { room, rooms, connections: results };
+  return { room, rooms, connections: results, objects };
 }

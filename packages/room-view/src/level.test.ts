@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { checkRoom } from "./check.ts";
+import { checkRoom, checkScene } from "./check.ts";
 import {
   CONNECTION_FAULTS,
   CONNECTION_TURN_LIMIT,
@@ -14,8 +14,8 @@ import {
   type LevelRoom,
 } from "./level.ts";
 import type { Opening, PlanPoint, Room } from "./room.ts";
-import { SAMPLE_SURVEY } from "./sample.ts";
-import { expandSurvey, type Survey, type SurveySide, type SurveyTurn } from "./survey.ts";
+import { SAMPLE_LEVEL, SAMPLE_SURVEY } from "./sample.ts";
+import { expandSurvey, type Survey, type SurveyObject, type SurveySide, type SurveyTurn } from "./survey.ts";
 
 /** The sides `s0`, `s1` and so on, from a list of lengths and a list of turns. */
 function sides(lengths: readonly number[], turns: readonly SurveyTurn[]): SurveySide[] {
@@ -125,6 +125,7 @@ describe("expandLevel, one room", () => {
       room: { schema: "room/1", unit: "m", height: 1, wallThickness: 1, walls: [] },
       rooms: [],
       connections: [],
+      objects: [],
     });
     expect(expandLevel({ schema: "level/1", name: "Home", unit: "ft", rooms: [] }).room).toEqual({ schema: "room/1", name: "Home", unit: "ft", height: 1, wallThickness: 1, walls: [] });
   });
@@ -617,5 +618,65 @@ describe("expandLevel, the laws", () => {
         expect(result.room.walls).toHaveLength(12);
       }),
     );
+  });
+});
+
+describe("expandLevel, the objects of a level", () => {
+  const desk: SurveyObject = { id: "desk", kind: "desk", wall: "s0", offset: 0.5, width: 1, depth: 0.5, height: 0.8 };
+  const lamp: SurveyObject = { id: "lamp", kind: "lamp", on: "desk", offset: 0.4, width: 0.2, depth: 0.2, height: 0.4 };
+
+  it("gives no object for a level with no object", () => {
+    expect(expandLevel(TWO).objects).toEqual([]);
+  });
+
+  it("gives the objects of each room at the place of the room, with the `id` of the room before each `id`", () => {
+    const result = expandLevel(
+      level(
+        [
+          { id: "a", survey: { ...A, objects: [desk, lamp] } },
+          { id: "b", survey: { ...B, outlets: [{ id: "o", wall: "s0", offset: 1, height: 0.3 }], objects: [{ ...desk, name: "Desk", outlet: "o" }] } },
+        ],
+        [AB],
+      ),
+    );
+    expect(result.objects.slice(0, 2)).toEqual([
+      { id: "a/desk", kind: "desk", size: [1, 0.5, 0.8], at: [1, 0.25] },
+      { id: "a/lamp", kind: "lamp", size: [0.2, 0.2, 0.4], at: [0, -0.15], lift: 0.8, parent: "a/desk" },
+    ]);
+    // Room B starts at (4.15, -0.45). Its object has the same `id` in its survey as the object of room A.
+    const third = result.objects[2];
+    expect({ ...third, at: undefined }).toEqual({ id: "b/desk", kind: "desk", name: "Desk", size: [1, 0.5, 0.8], at: undefined, outlet: "b/o" });
+    expectPoint(third?.at, 5.15, -0.2, 12);
+    expect(result.objects).toHaveLength(3);
+    expect(checkScene({ schema: "scene/1", room: result.room, objects: result.objects })).toEqual([]);
+  });
+
+  it("gives the objects of the expansion of each survey, in the sequence of the rooms", () => {
+    const result = expandLevel(SAMPLE_LEVEL);
+    const own = result.rooms.flatMap((room) =>
+      room.result.objects.map((object) => ({
+        ...object,
+        id: `${room.id}/${object.id}`,
+        ...(object.parent === undefined ? {} : { parent: `${room.id}/${object.parent}` }),
+        ...(object.outlet === undefined ? {} : { outlet: `${room.id}/${object.outlet}` }),
+      })),
+    );
+    expect(result.objects).toEqual(own);
+    expect(result.objects).toHaveLength(13);
+    // The walk of the bathroom starts along its west wall, so the bathroom and its object turn.
+    const vanity = result.objects.find((object) => object.id === "bathroom/vanity");
+    expectPoint(vanity?.at, 5.775, -0.55, 12);
+    expect(vanity?.turn).toBe(90);
+  });
+
+  it("gives no place in the level to an object with no place in its survey", () => {
+    const result = expandLevel(level([{ id: "a", survey: { ...A, objects: [{ ...desk, wall: "s9" }, lamp, { ...desk, id: "good" }] } }]));
+    expect(result.objects.map((object) => object.id)).toEqual(["a/good"]);
+  });
+
+  it("does not change the level", () => {
+    const text = JSON.stringify(SAMPLE_LEVEL);
+    expandLevel(SAMPLE_LEVEL);
+    expect(JSON.stringify(SAMPLE_LEVEL)).toBe(text);
   });
 });

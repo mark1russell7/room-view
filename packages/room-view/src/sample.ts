@@ -86,6 +86,7 @@ export const SAMPLE_SCENE: Scene = {
 /**
  * The survey of the sample room: its six outer walls as a walk along their inner faces. The diagonal of the large part is a check.
  * It does not have the short wall of the nook, because that wall is not a side of the walk.
+ * Its objects are the objects of the sample scene, each with its measurements from a wall, from the desk or from the rack.
  */
 export const SAMPLE_SURVEY: Survey = {
   schema: "survey/1",
@@ -120,6 +121,17 @@ export const SAMPLE_SURVEY: Survey = {
     { id: "a", name: "Circuit A", limit: 1440 },
     { id: "b", name: "Circuit B", limit: 1440 },
   ],
+  objects: [
+    { id: "desk", kind: "desk", name: "Desk", wall: "north", offset: 2, width: 1.6, depth: 0.75, height: 0.74, gap: 0.075 },
+    { id: "display", kind: "display", name: "Display", on: "desk", offset: 0.5, width: 0.6, depth: 0.2, height: 0.4, gap: 0.075 },
+    { id: "tower", kind: "computer", name: "Tower", wall: "north", offset: 1.69, width: 0.22, depth: 0.45, height: 0.45, gap: 0.175, outlet: "north-1" },
+    { id: "sofa", kind: "sofa", name: "Sofa", wall: "south", offset: 3.4, width: 2, depth: 0.9, height: 0.8, gap: 0.15 },
+    { id: "rack", kind: "rack", name: "Rack", wall: "north", offset: 0.4, width: 0.6, depth: 0.8, height: 1.2, gap: 0.1 },
+    { id: "node-1", kind: "computer", name: "Node 1", on: "rack", offset: 0.06, width: 0.48, depth: 0.6, height: 0.18, gap: 0.1, lift: 0.08, outlet: "nook-1" },
+    { id: "node-2", kind: "computer", name: "Node 2", on: "rack", offset: 0.06, width: 0.48, depth: 0.6, height: 0.18, gap: 0.1, lift: 0.34, outlet: "nook-1" },
+    { id: "node-3", kind: "computer", name: "Node 3", on: "rack", offset: 0.06, width: 0.48, depth: 0.6, height: 0.18, gap: 0.1, lift: 0.6, outlet: "nook-2" },
+    { id: "node-4", kind: "computer", name: "Node 4", on: "rack", offset: 0.06, width: 0.48, depth: 0.6, height: 0.18, gap: 0.1, lift: 0.86, outlet: "nook-2" },
+  ],
 };
 
 /**
@@ -128,6 +140,8 @@ export const SAMPLE_SURVEY: Survey = {
  * The living room is the sample room. A hall is below it in the plan, with a bathroom on its right. A bedroom is below the hall and the bathroom.
  * Each survey starts at its own corner, and the three doors give the places of the rooms.
  * The walk of the bathroom starts along its west wall, so the bathroom turns. A wall between two rooms has a thickness of 0.1 m.
+ *
+ * Each room has objects: the hall has a shelf, the bathroom has a vanity, and the bedroom has a bed and a wardrobe.
  */
 export const SAMPLE_LEVEL: Level = {
   schema: "level/1",
@@ -156,6 +170,7 @@ export const SAMPLE_LEVEL: Level = {
           { id: "entry", wall: "west", kind: "door", offset: 0.15, width: 0.9, height: 2.05 },
         ],
         outlets: [{ id: "south-1", wall: "south", offset: 2.6, height: 0.3, circuit: "c" }],
+        objects: [{ id: "shelf", kind: "shelf", name: "Shoe shelf", wall: "south", offset: 1.6, width: 1.2, depth: 0.3, height: 0.9 }],
       },
     },
     {
@@ -177,6 +192,7 @@ export const SAMPLE_LEVEL: Level = {
           { id: "window", wall: "east", kind: "window", offset: 0.9, width: 0.7, sill: 1.3, height: 0.8 },
         ],
         outlets: [{ id: "east-1", wall: "east", offset: 2.1, height: 1.1, circuit: "c" }],
+        objects: [{ id: "vanity", kind: "cabinet", name: "Vanity", wall: "east", offset: 1.7, width: 0.7, depth: 0.45, height: 0.85 }],
       },
     },
     {
@@ -203,6 +219,10 @@ export const SAMPLE_LEVEL: Level = {
           { id: "south-1", wall: "south", offset: 1, height: 0.3, circuit: "c" },
           { id: "south-2", wall: "south", offset: 5, height: 0.3, circuit: "c" },
           { id: "west-1", wall: "west", offset: 1.8, height: 0.3, circuit: "c" },
+        ],
+        objects: [
+          { id: "bed", kind: "bed", name: "Bed", wall: "west", offset: 1, width: 1.6, depth: 2, height: 0.5 },
+          { id: "wardrobe", kind: "cabinet", name: "Wardrobe", wall: "east", offset: 0.3, width: 1.8, depth: 0.6, height: 2 },
         ],
       },
     },
