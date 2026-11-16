@@ -75,7 +75,12 @@ describe("planShapes", () => {
     expect(above.map((shape) => shape.source).sort()).toEqual(["east", "south", "west"]);
     expect(above.every((shape) => shape.kind === "wall")).toBe(true);
     expect(cut.length).toBe(shapes.length - above.length);
-    expect(planShapes(SAMPLE_SCENE, { cut: 0 })).toEqual([shapes[0]]);
+    // Each wall starts at the bottom of the floor. Thus a cut at the top of the floor keeps the floor and the low part of each wall.
+    const low = planShapes(SAMPLE_SCENE, { cut: 0 });
+    expect(low).toEqual(shapes.filter((shape) => shape.bottom < 0));
+    expect(low[0]).toEqual(shapes[0]);
+    expect(low.every((shape) => shape.kind === "floor" || shape.kind === "wall")).toBe(true);
+    expect(planShapes(SAMPLE_SCENE, { cut: -1 })).toEqual([]);
   });
 
   it("gives no outline for a scene with no solid", () => {
