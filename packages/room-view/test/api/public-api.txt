@@ -6,6 +6,7 @@
 
 ## . (build/index.d.ts): names
 
+CLOSURE_LIMIT: build/survey.chunk.d.ts#CLOSURE_LIMIT
 CheckOptions: build/index.d.ts#CheckOptions
 Circuit: build/room.chunk.d.ts#Circuit
 CircuitLoad: build/room.chunk.d.ts#CircuitLoad
@@ -48,12 +49,23 @@ Room: build/room.chunk.d.ts#Room
 SCENE_SCHEMA: build/room.chunk.d.ts#SCENE_SCHEMA
 SHAPE_OUTLINES: build/loads.chunk.d.ts#SHAPE_OUTLINES
 SOLID_KINDS: build/loads.chunk.d.ts#SOLID_KINDS
+SQUARE_TURNS: build/survey.chunk.d.ts#SQUARE_TURNS
+SURVEY_SCHEMA: build/survey.chunk.d.ts#SURVEY_SCHEMA
 Scene: build/room.chunk.d.ts#Scene
 ShapeOutline: build/loads.chunk.d.ts#ShapeOutline
 Solid: build/loads.chunk.d.ts#Solid
 SolidKind: build/loads.chunk.d.ts#SolidKind
 SolidOptions: build/loads.chunk.d.ts#SolidOptions
 SolidShape: build/loads.chunk.d.ts#SolidShape
+Survey: build/survey.chunk.d.ts#Survey
+SurveyCheck: build/survey.chunk.d.ts#SurveyCheck
+SurveyCheckResult: build/survey.chunk.d.ts#SurveyCheckResult
+SurveyClosure: build/survey.chunk.d.ts#SurveyClosure
+SurveyOptions: build/survey.chunk.d.ts#SurveyOptions
+SurveyOutlet: build/survey.chunk.d.ts#SurveyOutlet
+SurveyResult: build/survey.chunk.d.ts#SurveyResult
+SurveySide: build/survey.chunk.d.ts#SurveySide
+SurveyTurn: build/survey.chunk.d.ts#SurveyTurn
 TO_Y_UP: build/loads.chunk.d.ts#TO_Y_UP
 WALL_FACES: build/room.chunk.d.ts#WALL_FACES
 WALL_SIDES: build/room.chunk.d.ts#WALL_SIDES
@@ -66,6 +78,7 @@ boundsOfSolids: build/loads.chunk.d.ts#boundsOfSolids
 checkRoom: build/index.d.ts#checkRoom
 checkScene: build/index.d.ts#checkScene
 circuitStates: build/loads.chunk.d.ts#circuitStates
+expandSurvey: build/survey.chunk.d.ts#expandSurvey
 lengthsInRange: build/room.chunk.d.ts#lengthsInRange
 levelShape: build/loads.chunk.d.ts#levelShape
 metersPer: build/room.chunk.d.ts#metersPer
@@ -88,11 +101,13 @@ wallTransform: build/loads.chunk.d.ts#wallTransform
 
 roomSchema: build/schema.d.ts#roomSchema
 sceneSchema: build/schema.d.ts#sceneSchema
+surveySchema: build/schema.d.ts#surveySchema
 
 ## ./sample (build/sample.d.ts): names
 
 SAMPLE_ROOM: build/sample.d.ts#SAMPLE_ROOM
 SAMPLE_SCENE: build/sample.d.ts#SAMPLE_SCENE
+SAMPLE_SURVEY: build/sample.d.ts#SAMPLE_SURVEY
 
 ## ./three (build/three.d.ts): names
 
@@ -478,11 +493,98 @@ export declare const SAMPLE_ROOM: Room;
 ### build/sample.d.ts#SAMPLE_SCENE
 export declare const SAMPLE_SCENE: Scene;
 
+### build/sample.d.ts#SAMPLE_SURVEY
+export declare const SAMPLE_SURVEY: Survey;
+
 ### build/schema.d.ts#roomSchema
 export declare const roomSchema: z.ZodType<Room>;
 
 ### build/schema.d.ts#sceneSchema
 export declare const sceneSchema: z.ZodType<Scene>;
+
+### build/schema.d.ts#surveySchema
+export declare const surveySchema: z.ZodType<Survey>;
+
+### build/survey.chunk.d.ts#CLOSURE_LIMIT
+declare const CLOSURE_LIMIT = .01;
+
+### build/survey.chunk.d.ts#SQUARE_TURNS
+declare const SQUARE_TURNS: readonly ["left", "right"];
+
+### build/survey.chunk.d.ts#SURVEY_SCHEMA
+declare const SURVEY_SCHEMA = "survey/1";
+
+### build/survey.chunk.d.ts#Survey
+interface Survey {
+  readonly schema: typeof SURVEY_SCHEMA;
+  readonly name?: string | undefined;
+  readonly unit: LengthUnit;
+  readonly height: number;
+  readonly wallThickness: number;
+  readonly sides: readonly SurveySide[];
+  readonly start?: PlanPoint | undefined;
+  readonly heading?: number | undefined;
+  readonly checks?: readonly SurveyCheck[] | undefined;
+  readonly openings?: readonly Opening[] | undefined;
+  readonly outlets?: readonly SurveyOutlet[] | undefined;
+  readonly circuits?: readonly Circuit[] | undefined;
+}
+
+### build/survey.chunk.d.ts#SurveyCheck
+interface SurveyCheck {
+  readonly id: string;
+  readonly from: string;
+  readonly to: string;
+  readonly length: number;
+}
+
+### build/survey.chunk.d.ts#SurveyCheckResult
+interface SurveyCheckResult {
+  readonly id: string;
+  readonly measured: number;
+  readonly model: number | undefined;
+  readonly difference: number | undefined;
+}
+
+### build/survey.chunk.d.ts#SurveyClosure
+interface SurveyClosure {
+  readonly gap: number;
+  readonly ratio: number;
+  readonly turn: number;
+  readonly closed: boolean;
+}
+
+### build/survey.chunk.d.ts#SurveyOptions
+interface SurveyOptions {
+  readonly limit?: number | undefined;
+}
+
+### build/survey.chunk.d.ts#SurveyOutlet
+type SurveyOutlet = Omit<Outlet, "face">;
+
+### build/survey.chunk.d.ts#SurveyResult
+interface SurveyResult {
+  readonly room: Room;
+  readonly corners: readonly PlanPoint[];
+  readonly walk: readonly PlanPoint[];
+  readonly closure: SurveyClosure;
+  readonly checks: readonly SurveyCheckResult[];
+}
+
+### build/survey.chunk.d.ts#SurveySide
+interface SurveySide {
+  readonly id: string;
+  readonly length: number;
+  readonly turn: SurveyTurn;
+  readonly thickness?: number | undefined;
+  readonly height?: number | undefined;
+}
+
+### build/survey.chunk.d.ts#SurveyTurn
+type SurveyTurn = (typeof SQUARE_TURNS)[number] | number;
+
+### build/survey.chunk.d.ts#expandSurvey
+declare function expandSurvey(survey: Survey, options?: SurveyOptions): SurveyResult;
 
 ### build/three.d.ts#DARK_THEME
 export declare const DARK_THEME: ViewerTheme;

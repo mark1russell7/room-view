@@ -1,6 +1,6 @@
 # @mark1russell7/room-view
 
-The room format, the scene format and the 3D model of a room. A room is measurements, and the code makes the model from them.
+The room format, the scene format, the survey format and the 3D model of a room. A room is measurements, and the code makes the model from them.
 
 The entry `/three` shows the model in a page with three.js. [The demo page](https://mark1russell7.github.io/room-view/) shows a sample room.
 
@@ -54,6 +54,45 @@ roomSolids(room); // => the floor, and the parts of each wall around the door
 - An **outlet** is a point on a face of a wall. A **circuit** gives power to outlets, and it has a limit in watts.
 
 A scene is one room with its placed objects and the loads of its circuits. A placed object is a box: a desk, a rack, a computer. An object can have a parent, and then its position is relative to the parent.
+
+## A survey: the room from a tape measure
+
+A person with a tape measure does not know the coordinates of a corner. The person knows the length of each wall and the turn at each corner. A survey record keeps these numbers, in the sequence of a walk around the room.
+
+```ts
+import { checkRoom, expandSurvey, type Survey } from "@mark1russell7/room-view";
+
+const survey: Survey = {
+  schema: "survey/1",
+  unit: "ft",
+  height: 8,
+  wallThickness: 0.4,
+  sides: [
+    { id: "south", length: 12, turn: "left" },
+    { id: "east", length: 10, turn: "left" },
+    { id: "north", length: 12.1, turn: "left" },
+    { id: "west", length: 10, turn: "left" },
+  ],
+  checks: [{ id: "diagonal", from: "south", to: "north", length: 15.7 }],
+  openings: [{ id: "door", wall: "south", kind: "door", offset: 1, width: 3, height: 6.8 }],
+};
+
+const { room, closure, checks } = expandSurvey(survey);
+closure.closed; // => true: the walk ends 0.1 ft from its start, and the limit is 1 % of its length
+room.walls[0]; // => { id: "south", from: [0, 0], to: [12.05, 0], side: "right" }, with rounded numbers
+checks[0]?.difference; // => 0.04: the measured diagonal is 0.04 ft longer than the diagonal of the room record
+checkRoom(room); // => []
+```
+
+- A **side** is the inner face of one wall, from a corner to the next corner.
+- A **turn** is `left` or `right` at a square corner, or a measured angle in degrees. The turns `left` and `right` are exact.
+- A measured length has an error, so the walk does not end exactly at its start. `closure` tells the gap.
+- `expandSurvey` shares a small gap between the sides. A room with square corners keeps its square corners.
+- A walk with a mistake is not closed, for example a walk with a wrong turn. Its room has the walls of the walk and no floor, so a drawing shows the mistake.
+- A **check** is a measured distance between two corners, for example a diagonal. The result has its difference from the room record.
+- An opening and an outlet give their `offset` from the first corner of their side, as the tape measure shows it.
+
+The walk goes along the inner faces, so each wall is on the outer side of its line. A survey has one room. A wall in the middle of a room is not a side of the walk, for example the short wall of a nook. Add such a wall to the room record.
 
 ## The model
 
@@ -130,9 +169,9 @@ The option `cut` gives a floor plan: the plan keeps only the solids that start b
 
 | Entry | What it has |
 | --- | --- |
-| `@mark1russell7/room-view` | The record types, the model, the plan, the checks and the loads. It has no schema library. |
-| `@mark1russell7/room-view/schema` | `roomSchema` and `sceneSchema`: the zod schemas that examine the form of a JSON record. |
-| `@mark1russell7/room-view/sample` | `SAMPLE_ROOM` and `SAMPLE_SCENE`: a small apartment with a rack, for demos and tests. |
+| `@mark1russell7/room-view` | The record types, the model, the plan, the checks, the loads and the survey. It has no schema library. |
+| `@mark1russell7/room-view/schema` | `roomSchema`, `sceneSchema` and `surveySchema`: the zod schemas that examine the form of a JSON record. |
+| `@mark1russell7/room-view/sample` | `SAMPLE_ROOM`, `SAMPLE_SCENE` and `SAMPLE_SURVEY`: a small apartment with a rack, for demos and tests. |
 | `@mark1russell7/room-view/three` | `createRoomViewer`, the themes and `solidGeometry`: the viewer in a page. It needs the package `three`. |
 
 The schemas examine the form of a record: the fields and their types. The checks examine its meaning. Use the two for a record from a file:

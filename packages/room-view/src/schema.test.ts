@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { SAMPLE_ROOM, SAMPLE_SCENE } from "./sample.ts";
-import { roomSchema, sceneSchema } from "./schema.ts";
+import { SAMPLE_ROOM, SAMPLE_SCENE, SAMPLE_SURVEY } from "./sample.ts";
+import { roomSchema, sceneSchema, surveySchema } from "./schema.ts";
+import { expandSurvey } from "./survey.ts";
 
 type Data = Record<string, unknown>;
 
@@ -144,5 +145,77 @@ describe("sceneSchema", () => {
     expect(sceneAccepts({ objects: [{ ...object, turn: Number.NaN }] })).toBe(false);
     expect(sceneAccepts({ loads: [{ circuit: "a" }] })).toBe(false);
     expect(sceneAccepts({ loads: [{ circuit: "a", watts: 5, phase: 1 }] })).toBe(false);
+  });
+});
+
+describe("surveySchema", () => {
+  const survey = {
+    schema: "survey/1",
+    name: "Study",
+    unit: "ft",
+    height: 8,
+    wallThickness: 0.4,
+    sides: [
+      { id: "south", length: 12, turn: "left" },
+      { id: "east", length: 10, turn: "left", thickness: 0.5, height: 7.5 },
+      { id: "north", length: 12, turn: 90 },
+      { id: "west", length: 10, turn: "left" },
+    ],
+    start: [1, 2],
+    heading: 30,
+    checks: [{ id: "diagonal", from: "south", to: "north", length: 15.6 }],
+    openings: [{ id: "door", wall: "south", kind: "door", offset: 1, width: 3, height: 6.8 }],
+    outlets: [{ id: "o", wall: "east", offset: 2, height: 1, circuit: "a" }],
+    circuits: [{ id: "a", limit: 1800 }],
+  };
+  const surveyAccepts = (more: Data): boolean => surveySchema.safeParse({ ...survey, ...more }).success;
+  const side = { id: "a", length: 1, turn: "left" };
+
+  it("accepts a survey, also after a change to JSON text and back", () => {
+    expect(surveySchema.parse(survey)).toEqual(survey);
+    expect(surveySchema.parse(JSON.parse(JSON.stringify(survey)))).toEqual(survey);
+    expect(surveySchema.parse(SAMPLE_SURVEY)).toEqual(SAMPLE_SURVEY);
+  });
+
+  it("accepts a survey with only its necessary fields", () => {
+    const small = { schema: "survey/1", unit: "m", height: 2.4, wallThickness: 0.1, sides: [] };
+    expect(surveySchema.parse(small)).toEqual(small);
+  });
+
+  it("refuses a record with a fault in its form", () => {
+    expect(surveyAccepts({ sides: [side] })).toBe(true);
+    expect(surveyAccepts({ schema: "survey/2" })).toBe(false);
+    expect(surveyAccepts({ unit: "yd" })).toBe(false);
+    expect(surveyAccepts({ color: "red" })).toBe(false);
+    expect(surveyAccepts({ sides: undefined })).toBe(false);
+    expect(surveyAccepts({ sides: [{ ...side, turn: "up" }] })).toBe(false);
+    expect(surveyAccepts({ sides: [{ id: "a", length: 1 }] })).toBe(false);
+    expect(surveyAccepts({ sides: [{ ...side, length: Number.NaN }] })).toBe(false);
+    expect(surveyAccepts({ sides: [{ ...side, turn: Infinity }] })).toBe(false);
+    expect(surveyAccepts({ sides: [{ ...side, id: "" }] })).toBe(false);
+    expect(surveyAccepts({ sides: [{ ...side, note: "x" }] })).toBe(false);
+    expect(surveyAccepts({ start: [0, 0, 0] })).toBe(false);
+    expect(surveyAccepts({ heading: "north" })).toBe(false);
+    expect(surveyAccepts({ checks: [{ id: "d", from: "south", to: "north" }] })).toBe(false);
+    expect(surveyAccepts({ openings: [{ id: "door", wall: "south", kind: "arch", offset: 1, width: 3, height: 6.8 }] })).toBe(false);
+    expect(surveyAccepts({ circuits: [{ id: "a" }] })).toBe(false);
+  });
+
+  it("refuses an outlet with a face, because the expansion gives the face", () => {
+    expect(surveyAccepts({ outlets: [{ id: "o", wall: "east", face: "left", offset: 2, height: 1 }] })).toBe(false);
+  });
+
+  it("does not examine the meaning of a record", () => {
+    // The expansion counts a length below 0 as 0, and the checks tell an outlet on a wall that the room does not have.
+    expect(surveyAccepts({ sides: [{ ...side, length: -1 }] })).toBe(true);
+    expect(surveyAccepts({ sides: [{ ...side, turn: 720 }] })).toBe(true);
+    expect(surveyAccepts({ outlets: [{ id: "o", wall: "none", offset: 2, height: 1 }] })).toBe(true);
+  });
+
+  it("gives a survey whose room record has the form of the room format", () => {
+    for (const record of [survey, SAMPLE_SURVEY, { ...survey, sides: survey.sides.slice(0, 2) }]) {
+      const result = expandSurvey(surveySchema.parse(record));
+      expect(roomSchema.parse(result.room)).toEqual(result.room);
+    }
   });
 });
