@@ -5,6 +5,7 @@ declare const $: (selector: string) => HTMLElement | null;
 declare const $$: (selector: string) => HTMLElement[];
 declare const click: (element: Element | string) => void;
 declare const until: (fn: () => unknown, ms?: number) => Promise<unknown>;
+declare const wait: (ms: number) => Promise<void>;
 
 const text = (selector: string): string => $(selector)?.textContent ?? "";
 const pressed = (selector: string): string | null => $(selector)?.getAttribute("aria-pressed") ?? null;
@@ -81,9 +82,10 @@ if (canvas !== null) {
   // The part of the cells that have the same name in two scans, from 0 to 1.
   const same = (a: readonly string[], b: readonly string[]): number => a.filter((name, index) => name === b[index]).length / a.length;
 
-  // The first scan is the scan of a picture at rest: two scans in sequence are equal.
+  // The first scan is the scan of a picture at rest: two scans with some frames between them are equal.
   let first: readonly string[] = scan();
-  const found = await until(() => {
+  const found = await until(async () => {
+    await wait(80);
     const next = scan();
     const atRest = same(next, first) === 1;
     first = next;
