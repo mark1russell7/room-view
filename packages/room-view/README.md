@@ -95,6 +95,47 @@ checkRoom(room); // => []
 
 The walk goes along the inner faces, so each wall is on the outer side of its line. A survey has one room. A wall in the middle of a room is not a side of the walk, for example the short wall of a nook. Add such a wall to the room record.
 
+### The objects of a survey
+
+A person measures a desk or a rack from a wall. A survey can have these measurements as objects, and the result has a placed object for each of them.
+
+```ts
+import { checkScene, expandSurvey, type Scene, type Survey } from "@mark1russell7/room-view";
+
+const survey: Survey = {
+  schema: "survey/1",
+  unit: "m",
+  height: 2.5,
+  wallThickness: 0.15,
+  sides: [
+    { id: "south", length: 4, turn: "left" },
+    { id: "east", length: 3, turn: "left" },
+    { id: "north", length: 4, turn: "left" },
+    { id: "west", length: 3, turn: "left" },
+  ],
+  objects: [
+    { id: "desk", kind: "desk", wall: "north", offset: 1, width: 1.6, depth: 0.8, height: 0.75 },
+    { id: "display", kind: "display", on: "desk", offset: 0.5, width: 0.6, depth: 0.2, height: 0.4, gap: 0.1 },
+  ],
+};
+
+const { room, objects } = expandSurvey(survey);
+objects[0]; // => { id: "desk", kind: "desk", size: [1.6, 0.8, 0.75], at: [2.2, 2.6], turn: 180 }, with rounded numbers
+objects[1]; // => { id: "display", kind: "display", size: [0.6, 0.2, 0.4], at: [0, -0.2], lift: 0.75, parent: "desk" }, with rounded numbers
+const scene: Scene = { schema: "scene/1", room, objects };
+checkScene(scene); // => []
+```
+
+- An **object** is a box. `wall` names its side, and `offset` is the distance along the face from the first corner of the side to the object.
+- `width` goes along the wall, and `depth` goes out from the wall. `gap` is the distance from the face to the back of the object.
+- The back of an object is against its wall, so the object gets the turn of its wall.
+- An object with `on` is on a different object or in it. That object is its **holder**: a desk for a display, a rack for a computer.
+- With a holder, `offset` and `gap` start at the edge and the back of the holder. The holder becomes the parent of the placed object.
+- `lift` is the height of the bottom above the floor. With a holder, the default is the top of the holder.
+- `outlet` names the outlet that gives power to the object.
+- An object keeps its size on a side that shares the gap. Only its place changes.
+- An object with no place is not in the result. For example, its side is not in the survey, or a size is not above 0.
+
 ## A level: the rooms of an apartment
 
 A survey has one room, with its own first corner. A level record has the survey of each room, and the connections between the rooms. A connection is one hole through a wall, for example a door. A person measures the hole in each of its two rooms, so each survey has it as an opening.
@@ -156,6 +197,7 @@ checkRoom(room); // => []
 - A connection with a fault has the use `none` and a `fault`. For example, an end names an opening that its room does not have.
 - A room with no path of connections to the first room has the place `apart`. Its place is not known, so its group goes to the right of the groups before it.
 - The result has one room record with each room. The `id` of a wall, an opening or an outlet is the `id` of its room, then `/`, then its own `id`.
+- `objects` has the objects of each survey, at the place of their room. The `id` of an object has the same form.
 - Each closed room gives one floor, with the `id` and the name of the room.
 - A survey can have a different unit than the level. `convertSurvey` changes the unit of a survey.
 

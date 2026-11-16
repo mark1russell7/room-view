@@ -1,5 +1,5 @@
-import { directionOf, FULL, SQUARE, TURN_NOISE } from "./direction.ts";
-import { ROOM_SCHEMA, type Circuit, type Opening, type Outlet, type PlanPoint, type Room, type Wall } from "./room.ts";
+import { directionOf, FULL, headingOf, SQUARE, TURN_NOISE } from "./direction.ts";
+import { ROOM_SCHEMA, type Circuit, type Opening, type Outlet, type PlacedObject, type PlanPoint, type Room, type Wall } from "./room.ts";
 import { LARGEST_LENGTH, metersPer, unitsPer, type LengthUnit } from "./units.ts";
 
 /** The name of the format of a survey record. */
@@ -45,11 +45,55 @@ export interface SurveyCheck {
 export type SurveyOutlet = Omit<Outlet, "face">;
 
 /**
+ * An object of a survey: a box that a person measures from a side, for example a desk, a shelf or a rack.
+ *
+ * The back of the object is parallel to the inner face of the side. The person measures along the face to the near edge of the object,
+ * and out from the face to its back. The near edge is the edge that is nearest to the first corner of the side.
+ * Thus the record has no coordinate.
+ *
+ * An object with `on` is on a different object or in it, for example a display on a desk or a computer in a rack.
+ * Then the person measures from the near edge and from the back of that object, which is the holder.
+ * An object has `wall` or `on`. When it has the two, `on` applies.
+ */
+export interface SurveyObject {
+  readonly id: string;
+  /** The class of the object, for example `desk`, `rack` or `computer`. A viewer gives each class a color. */
+  readonly kind: string;
+  readonly name?: string | undefined;
+  /** The `id` of the side. */
+  readonly wall?: string | undefined;
+  /** The `id` of the holder. The first object with the `id` applies. */
+  readonly on?: string | undefined;
+  /**
+   * The distance along the inner face, from the first corner of the side to the near edge of the object.
+   * With `on`, this is the distance from the near edge of the holder to the near edge of the object.
+   */
+  readonly offset: number;
+  /** The size of the object along the wall. */
+  readonly width: number;
+  /** The size of the object out from the wall. */
+  readonly depth: number;
+  readonly height: number;
+  /**
+   * The distance from the inner face to the back of the object. With `on`, this is the distance from the back of the holder.
+   * The default is 0: the object touches the wall, or its back is level with the back of the holder.
+   */
+  readonly gap?: number | undefined;
+  /**
+   * The height of the bottom of the object above the floor. The default is 0.
+   * With `on`, this is the height above the bottom of the holder. Then the default is the height of the holder: the object is on its top.
+   */
+  readonly lift?: number | undefined;
+  /** The `id` of the outlet that gives power to the object. */
+  readonly outlet?: string | undefined;
+}
+
+/**
  * A survey: the measurements of one room by a person with a tape measure.
  *
  * The person goes around the room along the inner faces of the walls, in one direction.
  * Each side has the length of one face, and the turn at its end. The last turn gives the direction of the first side again.
- * An opening and an outlet name their side in `wall`. Their `offset` starts at the first corner of that side.
+ * An opening, an outlet and an object name their side in `wall`. Their `offset` starts at the first corner of that side.
  */
 export interface Survey {
   readonly schema: typeof SURVEY_SCHEMA;
@@ -70,6 +114,7 @@ export interface Survey {
   readonly openings?: readonly Opening[] | undefined;
   readonly outlets?: readonly SurveyOutlet[] | undefined;
   readonly circuits?: readonly Circuit[] | undefined;
+  readonly objects?: readonly SurveyObject[] | undefined;
 }
 
 /** The closure of a survey: the difference between the end of the walk and its start. */
@@ -107,6 +152,11 @@ export interface SurveyResult {
   readonly closure: SurveyClosure;
   /** The result of each check, in the sequence of the checks. */
   readonly checks: readonly SurveyCheckResult[];
+  /**
+   * The placed object of each object of the survey that has a place, in the sequence of the survey.
+   * A scene record with the room record and these objects gives the model of the room with its objects.
+   */
+  readonly objects: readonly PlacedObject[];
 }
 
 /** The default limit of the gap of a closed walk, as a part of the length of the walk. */
@@ -164,6 +214,19 @@ export function convertSurvey(survey: Survey, unit: LengthUnit): Survey {
           })),
         }),
     ...(survey.outlets === undefined ? {} : { outlets: survey.outlets.map((outlet) => ({ ...outlet, offset: to(outlet.offset), height: to(outlet.height) })) }),
+    ...(survey.objects === undefined
+      ? {}
+      : {
+          objects: survey.objects.map((object) => ({
+            ...object,
+            offset: to(object.offset),
+            width: to(object.width),
+            depth: to(object.depth),
+            height: to(object.height),
+            ...(object.gap === undefined ? {} : { gap: to(object.gap) }),
+            ...(object.lift === undefined ? {} : { lift: to(object.lift) }),
+          })),
+        }),
   };
 }
 
@@ -184,6 +247,14 @@ export function convertSurvey(survey: Survey, unit: LengthUnit): Survey {
  *
  * An opening and an outlet keep their place on a side that changes its length: each `offset` and each `width` changes in the same proportion.
  * Thus an opening that fits in its measured side fits in its wall, and two openings that do not overlap stay apart.
+ *
+ * An object keeps its size on a side that changes its length. It moves by a part of that change: its place in the free length of the side.
+ * Thus an object that touches a corner continues to touch it. The x axis of a placed object goes along its wall,
+ * and its y axis points into the room. An object with a holder has the holder as its parent, and its place is relative to the holder.
+ *
+ * Some objects have no place, and the result does not have them. A side that is not in the survey or has no length gives no place.
+ * A holder with no place gives no place. A size that is not a finite number above 0 gives no place.
+ * A distance that is not in the range of the model gives no place.
  *
  * A walk that is not closed gets no correction of the gap: its walls follow the walk, and the room has no floor.
  * Thus the record of a survey in progress shows the walls that the person measured.
@@ -299,5 +370,70 @@ export function expandSurvey(survey: Survey, options: SurveyOptions = {}): Surve
     ...(survey.outlets === undefined ? {} : { outlets: survey.outlets.map((outlet): Outlet => ({ ...outlet, offset: outlet.offset * (factorOf.get(outlet.wall) ?? 1), face })) }),
     ...(survey.circuits === undefined ? {} : { circuits: survey.circuits }),
   };
-  return { room, corners, walk, closure: { gap, ratio, turn: error, closed }, checks };
+
+  const sideOf = new Map<string, number>();
+  sides.forEach((side, index) => {
+    if (!sideOf.has(side.id)) sideOf.set(side.id, index);
+  });
+  const listed = new Map<string, SurveyObject>();
+  for (const object of survey.objects ?? []) if (!listed.has(object.id)) listed.set(object.id, object);
+  const places = new Map<SurveyObject, PlacedObject | undefined>();
+  const placeOf = (object: SurveyObject): PlacedObject | undefined => {
+    if (places.has(object)) return places.get(object);
+    // An object in a ring of objects that hold one another finds itself here. Thus it has no place.
+    places.set(object, undefined);
+    const made = placed(object);
+    places.set(object, made);
+    return made;
+  };
+  const placed = (object: SurveyObject): PlacedObject | undefined => {
+    const out = object.gap ?? 0;
+    if (![object.width, object.depth, object.height].every((size) => size > 0 && inRange(size))) return undefined;
+    if (![object.offset, out, object.lift ?? 0].every(inRange)) return undefined;
+    const record = {
+      id: object.id,
+      kind: object.kind,
+      ...(object.name === undefined ? {} : { name: object.name }),
+      size: [object.width, object.depth, object.height] as const,
+    };
+    const power = object.outlet === undefined ? {} : { outlet: object.outlet };
+    if (object.on !== undefined) {
+      const holder = listed.get(object.on);
+      if (holder === undefined || placeOf(holder) === undefined) return undefined;
+      // The x axis of the holder goes along its side for a walk to the left, and against its side for a walk to the right.
+      const x = object.offset + object.width / 2 - holder.width / 2;
+      return { ...record, at: [toLeft ? x : 0 - x, out + object.depth / 2 - holder.depth / 2], lift: object.lift ?? holder.height, parent: holder.id, ...power };
+    }
+    const index = object.wall === undefined ? undefined : sideOf.get(object.wall);
+    if (index === undefined) return undefined;
+    const { from, to } = walls[index]!;
+    const measure = lengths[index]!;
+    const line = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    if (!(line > 0) || !(measure > 0)) return undefined;
+    // The object keeps its size, so it moves by a part of the change of the length of its side.
+    // The part is the place of the object in the free length of the side. An object that is longer than its side has no free length,
+    // so the part is its place in the full length, as for an opening.
+    const free = measure - object.width;
+    const part = Math.min(1, Math.max(0, object.offset / (free > 0 ? free : measure)));
+    const near = shared ? object.offset + (line - measure) * part : object.offset;
+    const along: PlanPoint = [(to[0] - from[0]) / line, (to[1] - from[1]) / line];
+    // The room is on the left of each side of a walk to the left, and on the right of each side of a walk to the right.
+    const inward: PlanPoint = toLeft ? [0 - along[1], along[0]] : [along[1], 0 - along[0]];
+    const a = near + object.width / 2;
+    const b = out + object.depth / 2;
+    // The y axis of the object is on the left of its x axis, so the x axis of a walk to the right goes against the side.
+    const turn = headingOf(toLeft ? along : [0 - along[0], 0 - along[1]]);
+    return {
+      ...record,
+      at: [from[0] + along[0] * a + inward[0] * b, from[1] + along[1] * a + inward[1] * b],
+      ...(object.lift === undefined ? {} : { lift: object.lift }),
+      ...(turn === 0 ? {} : { turn }),
+      ...power,
+    };
+  };
+  const objects = (survey.objects ?? []).flatMap((object) => {
+    const made = placeOf(object);
+    return made === undefined ? [] : [made];
+  });
+  return { room, corners, walk, closure: { gap, ratio, turn: error, closed }, checks, objects };
 }

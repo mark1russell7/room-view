@@ -77,6 +77,7 @@ Survey: build/level.chunk.d.ts#Survey
 SurveyCheck: build/level.chunk.d.ts#SurveyCheck
 SurveyCheckResult: build/level.chunk.d.ts#SurveyCheckResult
 SurveyClosure: build/level.chunk.d.ts#SurveyClosure
+SurveyObject: build/level.chunk.d.ts#SurveyObject
 SurveyOptions: build/level.chunk.d.ts#SurveyOptions
 SurveyOutlet: build/level.chunk.d.ts#SurveyOutlet
 SurveyResult: build/level.chunk.d.ts#SurveyResult
@@ -272,6 +273,7 @@ interface LevelResult {
   readonly room: Room;
   readonly rooms: readonly LevelRoomResult[];
   readonly connections: readonly LevelConnectionResult[];
+  readonly objects: readonly PlacedObject[];
 }
 
 ### build/level.chunk.d.ts#LevelRoom
@@ -315,6 +317,7 @@ interface Survey {
   readonly openings?: readonly Opening[] | undefined;
   readonly outlets?: readonly SurveyOutlet[] | undefined;
   readonly circuits?: readonly Circuit[] | undefined;
+  readonly objects?: readonly SurveyObject[] | undefined;
 }
 
 ### build/level.chunk.d.ts#SurveyCheck
@@ -341,6 +344,22 @@ interface SurveyClosure {
   readonly closed: boolean;
 }
 
+### build/level.chunk.d.ts#SurveyObject
+interface SurveyObject {
+  readonly id: string;
+  readonly kind: string;
+  readonly name?: string | undefined;
+  readonly wall?: string | undefined;
+  readonly on?: string | undefined;
+  readonly offset: number;
+  readonly width: number;
+  readonly depth: number;
+  readonly height: number;
+  readonly gap?: number | undefined;
+  readonly lift?: number | undefined;
+  readonly outlet?: string | undefined;
+}
+
 ### build/level.chunk.d.ts#SurveyOptions
 interface SurveyOptions {
   readonly limit?: number | undefined;
@@ -356,6 +375,7 @@ interface SurveyResult {
   readonly walk: readonly PlanPoint[];
   readonly closure: SurveyClosure;
   readonly checks: readonly SurveyCheckResult[];
+  readonly objects: readonly PlacedObject[];
 }
 
 ### build/level.chunk.d.ts#SurveySide
