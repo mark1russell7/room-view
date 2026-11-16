@@ -156,7 +156,7 @@ let activeFeature: string | undefined;
 /** The key of the object whose field has the focus. */
 let activeObject: string | undefined;
 /**
- * The state of the box "More" of each object that a person opened or closed, by the key of the object.
+ * The state of the box "More" of each object of the room that a person opened or closed, by the key of the object.
  * The form makes its fields again after some changes, and a box keeps its state.
  */
 const moreBoxes = new Map<string, boolean>();
@@ -1137,6 +1137,8 @@ function show(next: Store, to: "room" | "all" = scope): void {
   scope = to;
   store = next;
   statuses = store.rooms.map(statusFor);
+  // The key of an object is a key in its room only, so a different room does not get the state of a box.
+  moreBoxes.clear();
   draft = store.rooms[store.active] ?? emptyDraft(draft.mode);
   typed = draft;
   keep();
