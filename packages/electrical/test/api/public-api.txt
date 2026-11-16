@@ -60,6 +60,14 @@ parseElectrical: build/schema.d.ts#parseElectrical
 electrical: build/add-on.d.ts#electrical
 electricalAddOn: build/add-on.d.ts#electricalAddOn
 
+## ./marks (build/marks.d.ts): names
+
+ELECTRICAL_MARK_KINDS: build/marks.d.ts#ELECTRICAL_MARK_KINDS
+ELECTRICAL_METER_UNIT: build/marks.d.ts#ELECTRICAL_METER_UNIT
+ElectricalMarkKind: build/marks.d.ts#ElectricalMarkKind
+electricalAddOnMarks: build/marks.d.ts#electricalAddOnMarks
+electricalMarks: build/marks.d.ts#electricalMarks
+
 ## Declarations
 
 ### build/add-on.d.ts#electrical
@@ -155,6 +163,21 @@ interface Outlet {
   readonly anchor: Anchor;
   readonly circuit?: string | undefined;
 }
+
+### build/marks.d.ts#ELECTRICAL_MARK_KINDS
+export declare const ELECTRICAL_MARK_KINDS: readonly ["outlet", "feed", "circuit"];
+
+### build/marks.d.ts#ELECTRICAL_METER_UNIT
+export declare const ELECTRICAL_METER_UNIT = "W";
+
+### build/marks.d.ts#ElectricalMarkKind
+export type ElectricalMarkKind = (typeof ELECTRICAL_MARK_KINDS)[number];
+
+### build/marks.d.ts#electricalAddOnMarks
+export declare function electricalAddOnMarks(options?: LoadOptions): AddOnMarks<ElectricalLayer>;
+
+### build/marks.d.ts#electricalMarks
+export declare function electricalMarks(layer: ElectricalLayer, space: SceneSpace, options?: LoadOptions): readonly Mark[];
 
 ### build/schema.d.ts#electricalSchema
 export declare const electricalSchema: z.ZodType<ElectricalLayer>;

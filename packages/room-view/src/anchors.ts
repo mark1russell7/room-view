@@ -92,6 +92,11 @@ function inRange(point: Point3): boolean {
   return Number.isFinite(point.x) && Number.isFinite(point.y) && Number.isFinite(point.z) && lengthsInRange(point.x, point.y, point.z);
 }
 
+/** This function gives a point with no negative zero. JSON has no negative zero, so a frame goes through JSON with no change. */
+function plainPoint(point: Point3): Point3 {
+  return { x: point.x + 0, y: point.y + 0, z: point.z + 0 };
+}
+
 /** This function gives the space of a scene. The transforms of the objects are calculated one time, at the first use. */
 export function sceneSpace(scene: Scene): SceneSpace {
   const scale = metersPer(scene.room.unit);
@@ -103,7 +108,7 @@ export function sceneSpace(scene: Scene): SceneSpace {
     return transforms.get(id);
   };
   const frame = (anchor: Anchor): AnchorFrame | undefined => {
-    let found: AnchorFrame | undefined;
+    let found: AnchorFrame;
     if (anchor.on === "wall") {
       const wall = walls.get(anchor.wall);
       if (wall === undefined) return undefined;
@@ -125,7 +130,8 @@ export function sceneSpace(scene: Scene): SceneSpace {
       if (!(size > 0) || !Number.isFinite(size)) return undefined;
       found = { at: transformPoint3(place, { x: x * scale, y: y * scale, z: z * scale }), out: rotatePoint3(place.rotation, scalePoint3(out, 1 / size)) };
     }
-    return inRange(found.at) && inRange(found.out) ? found : undefined;
+    const plain: AnchorFrame = { at: plainPoint(found.at), out: plainPoint(found.out) };
+    return inRange(plain.at) && inRange(plain.out) ? plain : undefined;
   };
   return { scene, scale, wall: (id) => walls.get(id), object: (id) => objects.get(id), transform, frame };
 }

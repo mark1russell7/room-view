@@ -13,8 +13,10 @@ The package has no browser part. Each function is a plain function, and each for
 | `@mark1russell7/electrical` | The records of a layer, the circuit formulas, the states, the checks and the move of an old scene. |
 | `@mark1russell7/electrical/schema` | `electricalSchema`, the zod schema of a layer, and `parseElectrical`. |
 | `@mark1russell7/electrical/add-on` | `electrical`, the add-on value for the contract of the core. |
+| `@mark1russell7/electrical/marks` | `electricalMarks` and `electricalAddOnMarks`: the records of a layer as marks for a viewer. |
 
 The root entry imports only Vex at run time. Thus a page that shows only the load of a circuit gets no schema library.
+The entry `/marks` uses only the types of `@mark1russell7/visuals`, so it adds no code of a viewer.
 
 ## Install
 
@@ -98,6 +100,37 @@ const read = readLayer(scene, electrical);
 | `circuit-no-limit` | warning | A circuit has no limit, and it does not have a breaker and a voltage. |
 | `circuit-limits` | warning | The field `limit` of a circuit and its rated limit are not equal. |
 | `circuit-over` | warning | The known load of a circuit is above its limit. |
+
+## The marks
+
+A mark is a record that a viewer draws. The entry `/marks` gives the records of a layer as marks of [`@mark1russell7/visuals/marks`](https://www.npmjs.com/package/@mark1russell7/visuals). A mark is plain data, with no shape and no color:
+
+```ts
+import { electrical } from "@mark1russell7/electrical/add-on";
+import { electricalAddOnMarks, electricalMarks } from "@mark1russell7/electrical/marks";
+import { sceneSpace } from "@mark1russell7/room-view";
+import { layerMarks } from "@mark1russell7/room-view/marks";
+
+// The marks of one layer:
+const marks = electricalMarks(layer, sceneSpace(scene));
+// The marks of each layer of a scene, with the add-ons of a host:
+const all = layerMarks(scene, [electrical], [electricalAddOnMarks()]);
+```
+
+| Record | Mark | Kind | What the mark shows |
+| --- | --- | --- | --- |
+| An outlet | A point | `outlet` | The place of the anchor and the direction out of its surface, with the level of its circuit. |
+| A feed | A link | `feed` | A line from the outlet to the center of the placed object, with the level of the circuit of the outlet. |
+| A circuit | A meter | `circuit` | The known load against the limit, in watts. |
+
+- The record name of a mark is `recordName("electrical/1", id)`. A finding of `checkLayers` has the same name, so a finding selects its mark.
+- Each point is in meters, with the z axis up.
+- A record with no place gives no mark: an outlet whose anchor has no position, and a feed with no outlet or no placed object.
+- A circuit with no limit gives no meter, because a meter needs a limit. Its outlets and its feeds have the level `unknown`.
+- The checks tell each of these faults, so a record with no mark has a finding.
+- Give the options of `electricalAddOn` to `electricalAddOnMarks` too. Thus the levels of the marks agree with the findings.
+
+`ELECTRICAL_MARK_KINDS` has the kinds of the marks, for the legend and the filter of a viewer.
 
 ## The formulas
 

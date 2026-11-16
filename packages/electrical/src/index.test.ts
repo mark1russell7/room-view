@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import * as addOn from "./add-on.ts";
 import * as entry from "./index.ts";
+import * as marks from "./marks.ts";
 import * as schema from "./schema.ts";
 
 /**
@@ -37,8 +38,8 @@ describe("the root entry", () => {
     for (const value of Object.values(entry)) expect(["function", "object", "string", "number"]).toContain(typeof value);
   });
 
-  it("has no schema and no add-on value", () => {
-    for (const name of ["electricalSchema", "parseElectrical", "electricalAddOn", "electrical"]) expect(entry).not.toHaveProperty(name);
+  it("has no schema, no add-on value and no mark", () => {
+    for (const name of ["electricalSchema", "parseElectrical", "electricalAddOn", "electrical", "electricalMarks", "electricalAddOnMarks"]) expect(entry).not.toHaveProperty(name);
   });
 
   it("imports only Vex at run time: no zod, and the core only for its types", () => {
@@ -65,5 +66,16 @@ describe("the entry /add-on", () => {
 
   it("reads a layer with the schema, so it imports zod", () => {
     expect(packages("./add-on.ts")).toContain("zod");
+  });
+});
+
+describe("the entry /marks", () => {
+  it("has the marks of a layer and the value for the core", () => {
+    expect(Object.keys(marks).sort()).toEqual(["ELECTRICAL_MARK_KINDS", "ELECTRICAL_METER_UNIT", "electricalAddOnMarks", "electricalMarks"]);
+    expect(marks.electricalAddOnMarks().schema).toBe(entry.ELECTRICAL_SCHEMA);
+  });
+
+  it("imports the core and Vex at run time: no zod, and the visuals package only for its types", () => {
+    expect(packages("./marks.ts")).toEqual(["@mark1russell7/room-view", "@mark1russell7/vex", "@mark1russell7/vex-domains"]);
   });
 });
