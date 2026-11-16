@@ -1,5 +1,6 @@
+import { directionOf, FULL, SQUARE, TURN_NOISE } from "./direction.ts";
 import { ROOM_SCHEMA, type Circuit, type Opening, type Outlet, type PlanPoint, type Room, type Wall } from "./room.ts";
-import { LARGEST_LENGTH, metersPer, type LengthUnit } from "./units.ts";
+import { LARGEST_LENGTH, metersPer, unitsPer, type LengthUnit } from "./units.ts";
 
 /** The name of the format of a survey record. */
 export const SURVEY_SCHEMA = "survey/1";
@@ -117,15 +118,6 @@ export interface SurveyOptions {
   readonly limit?: number | undefined;
 }
 
-/** The turn at a square corner, in degrees. */
-const SQUARE = 90;
-
-/** One full turn, in degrees. */
-const FULL = 360;
-
-/** A sum of turns with an error below this value makes a full turn, in degrees. The value is larger than the error of a sum of numbers. */
-const TURN_NOISE = 1e-9;
-
 /** This function tells if a turn is a measured angle: an angle from -360 degrees to 360 degrees. */
 function isMeasured(turn: SurveyTurn): turn is number {
   return typeof turn === "number" && Math.abs(turn) <= FULL;
@@ -138,15 +130,41 @@ function degreesOf(turn: SurveyTurn): number {
   return isMeasured(turn) ? turn : 0;
 }
 
-/** This function gives the unit vector of a direction in degrees. A direction along an axis gives an exact vector. */
-function directionOf(degrees: number): PlanPoint {
-  const turn = ((degrees % FULL) + FULL) % FULL;
-  if (turn === 0) return [1, 0];
-  if (turn === SQUARE) return [0, 1];
-  if (turn === 2 * SQUARE) return [-1, 0];
-  if (turn === 3 * SQUARE) return [0, -1];
-  const angle = (turn * Math.PI) / 180;
-  return [Math.cos(angle), Math.sin(angle)];
+/**
+ * This function gives a survey in a different unit. Each length of the record changes, and each angle stays.
+ * A survey that has the unit already is the result.
+ */
+export function convertSurvey(survey: Survey, unit: LengthUnit): Survey {
+  if (survey.unit === unit) return survey;
+  const factor = unitsPer(survey.unit, unit);
+  const to = (value: number): number => value * factor;
+  const start: PlanPoint | undefined = survey.start === undefined ? undefined : [to(survey.start[0]), to(survey.start[1])];
+  return {
+    ...survey,
+    unit,
+    height: to(survey.height),
+    wallThickness: to(survey.wallThickness),
+    sides: survey.sides.map((side) => ({
+      ...side,
+      length: to(side.length),
+      ...(side.thickness === undefined ? {} : { thickness: to(side.thickness) }),
+      ...(side.height === undefined ? {} : { height: to(side.height) }),
+    })),
+    ...(start === undefined ? {} : { start }),
+    ...(survey.checks === undefined ? {} : { checks: survey.checks.map((check) => ({ ...check, length: to(check.length) })) }),
+    ...(survey.openings === undefined
+      ? {}
+      : {
+          openings: survey.openings.map((opening) => ({
+            ...opening,
+            offset: to(opening.offset),
+            width: to(opening.width),
+            ...(opening.sill === undefined ? {} : { sill: to(opening.sill) }),
+            height: to(opening.height),
+          })),
+        }),
+    ...(survey.outlets === undefined ? {} : { outlets: survey.outlets.map((outlet) => ({ ...outlet, offset: to(outlet.offset), height: to(outlet.height) })) }),
+  };
 }
 
 /**

@@ -95,6 +95,72 @@ checkRoom(room); // => []
 
 The walk goes along the inner faces, so each wall is on the outer side of its line. A survey has one room. A wall in the middle of a room is not a side of the walk, for example the short wall of a nook. Add such a wall to the room record.
 
+## A level: the rooms of an apartment
+
+A survey has one room, with its own first corner. A level record has the survey of each room, and the connections between the rooms. A connection is one hole through a wall, for example a door. A person measures the hole in each of its two rooms, so each survey has it as an opening.
+
+```ts
+import { checkRoom, expandLevel, type Level, type Survey } from "@mark1russell7/room-view";
+
+const hall: Survey = {
+  schema: "survey/1",
+  name: "Hall",
+  unit: "m",
+  height: 2.5,
+  wallThickness: 0.15,
+  sides: [
+    { id: "south", length: 4, turn: "left" },
+    { id: "east", length: 1.2, turn: "left" },
+    { id: "north", length: 4, turn: "left" },
+    { id: "west", length: 1.2, turn: "left" },
+  ],
+  openings: [{ id: "to-study", wall: "east", kind: "door", offset: 0.2, width: 0.8, height: 2.05 }],
+};
+const study: Survey = {
+  schema: "survey/1",
+  name: "Study",
+  unit: "m",
+  height: 2.5,
+  wallThickness: 0.15,
+  sides: [
+    { id: "south", length: 3, turn: "left" },
+    { id: "east", length: 3, turn: "left" },
+    { id: "north", length: 3, turn: "left" },
+    { id: "west", length: 3, turn: "left" },
+  ],
+  openings: [{ id: "to-hall", wall: "west", kind: "door", offset: 1.1, width: 0.8, height: 2.05 }],
+};
+
+const level: Level = {
+  schema: "level/1",
+  unit: "m",
+  rooms: [
+    { id: "hall", survey: hall },
+    { id: "study", survey: study },
+  ],
+  connections: [{ id: "door", from: { room: "hall", opening: "to-study" }, to: { room: "study", opening: "to-hall" }, thickness: 0.1 }],
+};
+
+const { room, rooms, connections } = expandLevel(level);
+rooms[1]?.survey.start; // => [4.1, -0.9]: the door gives the place of the study
+connections[0]?.fits; // => true
+room.walls[4]?.id; // => "study/south"
+room.floors?.map((floor) => floor.name); // => ["Hall", "Study"]
+checkRoom(room); // => []
+```
+
+- The first room keeps the `start` and the `heading` of its survey. Each other room gets its place from a connection.
+- The two walls of a connection are back to back, and the centers of the two openings are opposite.
+- `thickness` is the thickness of the wall at the hole, as a person measures it in the frame of a door. The default is the thickness of the wall of `from`.
+- A connection between two rooms that have a place examines the measurements. Its `gap` and its `turn` tell a mistake, and `fits` tells if they are in the limits.
+- A connection with a fault has the use `none` and a `fault`. For example, an end names an opening that its room does not have.
+- A room with no path of connections to the first room has the place `apart`. Its place is not known, so its group goes to the right of the groups before it.
+- The result has one room record with each room. The `id` of a wall, an opening or an outlet is the `id` of its room, then `/`, then its own `id`.
+- Each closed room gives one floor, with the `id` and the name of the room.
+- A survey can have a different unit than the level. `convertSurvey` changes the unit of a survey.
+
+Two rooms have one wall between them, but each survey gives the full thickness to its own wall. Thus two walls that are back to back share the wall: each wall gets one half of the distance between the two faces. A wall that is in part an outer wall gets the same thickness along its full length. `checkRoom` examines the room record of a level, and it tells when two rooms overlap.
+
 ## The model
 
 `roomSolids` and `sceneSolids` give the model as a list of solids. Each solid is a prism or a placed box, in meters, with the z axis up.
@@ -170,9 +236,9 @@ The option `cut` gives a floor plan: the plan keeps only the solids that start b
 
 | Entry | What it has |
 | --- | --- |
-| `@mark1russell7/room-view` | The record types, the model, the plan, the checks, the loads and the survey. It has no schema library. |
-| `@mark1russell7/room-view/schema` | `roomSchema`, `sceneSchema` and `surveySchema`: the zod schemas that examine the form of a JSON record. |
-| `@mark1russell7/room-view/sample` | `SAMPLE_ROOM`, `SAMPLE_SCENE` and `SAMPLE_SURVEY`: a small apartment with a rack, for demos and tests. |
+| `@mark1russell7/room-view` | The record types, the model, the plan, the checks, the loads, the survey and the level. It has no schema library. |
+| `@mark1russell7/room-view/schema` | `roomSchema`, `sceneSchema`, `surveySchema` and `levelSchema`: the zod schemas that examine the form of a JSON record. |
+| `@mark1russell7/room-view/sample` | `SAMPLE_ROOM`, `SAMPLE_SCENE`, `SAMPLE_SURVEY` and `SAMPLE_LEVEL`: a room with a rack and an apartment of four rooms, for demos and tests. |
 | `@mark1russell7/room-view/three` | `createRoomViewer`, the themes and `solidGeometry`: the viewer in a page. It needs the package `three`. |
 
 The schemas examine the form of a record: the fields and their types. The checks examine its meaning. Use the two for a record from a file:

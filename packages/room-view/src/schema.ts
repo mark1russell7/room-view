@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LEVEL_SCHEMA, type Level } from "./level.ts";
 import { OPENING_KINDS, ROOM_SCHEMA, SCENE_SCHEMA, WALL_FACES, WALL_SIDES, type Room, type Scene } from "./room.ts";
 import { SQUARE_TURNS, SURVEY_SCHEMA, type Survey } from "./survey.ts";
 import { LENGTH_UNITS } from "./units.ts";
@@ -131,5 +132,26 @@ export const surveySchema: z.ZodType<Survey> = z.strictObject({
   checks: z.array(surveyCheck).readonly().optional(),
   openings: z.array(opening).readonly().optional(),
   outlets: z.array(surveyOutlet).readonly().optional(),
+  circuits: z.array(circuit).readonly().optional(),
+});
+
+const connectionEnd = z.strictObject({
+  room: id,
+  opening: id,
+});
+
+/**
+ * The schema of a level record. It examines the form of the record and of each survey, and it refuses a field that the format does not have.
+ * `expandLevel` makes the room record of a level with a correct form, and `checkRoom` examines that room record.
+ */
+export const levelSchema: z.ZodType<Level> = z.strictObject({
+  schema: z.literal(LEVEL_SCHEMA),
+  name: z.string().optional(),
+  unit: z.enum(LENGTH_UNITS),
+  rooms: z.array(z.strictObject({ id, survey: surveySchema })).readonly(),
+  connections: z
+    .array(z.strictObject({ id, from: connectionEnd, to: connectionEnd, thickness: z.number().optional() }))
+    .readonly()
+    .optional(),
   circuits: z.array(circuit).readonly().optional(),
 });

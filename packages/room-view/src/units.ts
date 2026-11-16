@@ -11,6 +11,11 @@ export function metersPer(unit: LengthUnit): number {
   return valueIn(quantity(1, unit), "m");
 }
 
+/** This function gives the length of one unit in a different unit. For example, one foot is 12 inches. */
+export function unitsPer(unit: LengthUnit, other: LengthUnit): number {
+  return valueIn(quantity(1, unit), other);
+}
+
 /**
  * The largest length in meters that the model can use: 1 000 km. A larger number in a room record is a mistake.
  * With this limit, each calculation of the model gives a finite number.

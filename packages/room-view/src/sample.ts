@@ -1,3 +1,4 @@
+import type { Level } from "./level.ts";
 import type { Room, Scene } from "./room.ts";
 import type { Survey } from "./survey.ts";
 
@@ -119,4 +120,97 @@ export const SAMPLE_SURVEY: Survey = {
     { id: "a", name: "Circuit A", limit: 1440 },
     { id: "b", name: "Circuit B", limit: 1440 },
   ],
+};
+
+/**
+ * A sample apartment in meters. It is not a real apartment.
+ *
+ * The living room is the sample room. A hall is below it in the plan, with a bathroom on its right. A bedroom is below the hall and the bathroom.
+ * Each survey starts at its own corner, and the three doors give the places of the rooms.
+ * The walk of the bathroom starts along its west wall, so the bathroom turns. A wall between two rooms has a thickness of 0.1 m.
+ */
+export const SAMPLE_LEVEL: Level = {
+  schema: "level/1",
+  name: "Sample apartment",
+  unit: "m",
+  rooms: [
+    { id: "living", survey: { ...SAMPLE_SURVEY, name: "Living room" } },
+    {
+      id: "hall",
+      survey: {
+        schema: "survey/1",
+        name: "Hall",
+        unit: "m",
+        height: 2.5,
+        wallThickness: 0.15,
+        sides: [
+          { id: "south", length: 4, turn: "left" },
+          { id: "east", length: 1.2, turn: "left" },
+          { id: "north", length: 4, turn: "left" },
+          { id: "west", length: 1.2, turn: "left" },
+        ],
+        openings: [
+          { id: "bedroom", wall: "south", kind: "door", offset: 0.4, width: 0.8, height: 2.05 },
+          { id: "bathroom", wall: "east", kind: "door", offset: 0.2, width: 0.75, height: 2.05 },
+          { id: "living", wall: "north", kind: "door", offset: 2.5, width: 0.9, height: 2.05 },
+          { id: "entry", wall: "west", kind: "door", offset: 0.15, width: 0.9, height: 2.05 },
+        ],
+        outlets: [{ id: "south-1", wall: "south", offset: 2.6, height: 0.3, circuit: "c" }],
+      },
+    },
+    {
+      id: "bathroom",
+      survey: {
+        schema: "survey/1",
+        name: "Bathroom",
+        unit: "m",
+        height: 2.5,
+        wallThickness: 0.15,
+        sides: [
+          { id: "west", length: 2.5, turn: "left" },
+          { id: "south", length: 1.9, turn: "left" },
+          { id: "east", length: 2.5, turn: "left" },
+          { id: "north", length: 1.9, turn: "left" },
+        ],
+        openings: [
+          { id: "door", wall: "west", kind: "door", offset: 0.25, width: 0.75, height: 2.05 },
+          { id: "window", wall: "east", kind: "window", offset: 0.9, width: 0.7, sill: 1.3, height: 0.8 },
+        ],
+        outlets: [{ id: "east-1", wall: "east", offset: 2.1, height: 1.1, circuit: "c" }],
+      },
+    },
+    {
+      id: "bedroom",
+      survey: {
+        schema: "survey/1",
+        name: "Bedroom",
+        unit: "m",
+        height: 2.5,
+        wallThickness: 0.15,
+        sides: [
+          { id: "south", length: 6, turn: "left" },
+          { id: "east", length: 2.3, turn: "left" },
+          { id: "inset-north", length: 2, turn: "right" },
+          { id: "inset-east", length: 1.3, turn: "left" },
+          { id: "north", length: 4, turn: "left" },
+          { id: "west", length: 3.6, turn: "left" },
+        ],
+        openings: [
+          { id: "door", wall: "north", kind: "door", offset: 2.8, width: 0.8, height: 2.05 },
+          { id: "window", wall: "south", kind: "window", offset: 2.2, width: 1.6, sill: 0.9, height: 1.2 },
+        ],
+        outlets: [
+          { id: "south-1", wall: "south", offset: 1, height: 0.3, circuit: "c" },
+          { id: "south-2", wall: "south", offset: 5, height: 0.3, circuit: "c" },
+          { id: "west-1", wall: "west", offset: 1.8, height: 0.3, circuit: "c" },
+        ],
+      },
+    },
+  ],
+  connections: [
+    { id: "living-hall", from: { room: "living", opening: "door" }, to: { room: "hall", opening: "living" }, thickness: 0.1 },
+    { id: "hall-bathroom", from: { room: "hall", opening: "bathroom" }, to: { room: "bathroom", opening: "door" }, thickness: 0.1 },
+    { id: "hall-bedroom", from: { room: "hall", opening: "bedroom" }, to: { room: "bedroom", opening: "door" }, thickness: 0.1 },
+  ],
+  circuits: [{ id: "c", name: "Circuit C", limit: 1440 }],
 };
