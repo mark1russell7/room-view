@@ -18,7 +18,8 @@ const OUTLET_MARK = 1.5;
 
 const SVG = "http://www.w3.org/2000/svg";
 
-function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Readonly<Record<string, string>>): SVGElementTagNameMap[K] {
+/** This function makes an element of a drawing with its attributes. */
+export function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Readonly<Record<string, string>>): SVGElementTagNameMap[K] {
   const element = document.createElementNS(SVG, tag);
   for (const [name, value] of Object.entries(attrs)) element.setAttribute(name, value);
   return element;

@@ -631,12 +631,629 @@ h2 {
   color: var(--quiet);
 }
 
+.call {
+  margin-top: 16px;
+}
+
+a.tool {
+  display: inline-block;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.tool:disabled,
+.tool:disabled:hover {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--quiet);
+  cursor: default;
+}
+
+.top nav a[aria-current="page"] {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.3em;
+}
+
+/* The page "Measure a room": the drawing of the walk, and the list of the walls. */
+
+.bench {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 24px;
+}
+
+/* On a small screen, the drawing stays at the top while the list of the walls moves below it. */
+.board-column {
+  display: contents;
+}
+
+.sheet.board {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+  order: 1;
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 0;
+  /* A band in the color of the page hides the list above and below the drawing. */
+  box-shadow:
+    0 -9px 0 var(--page),
+    0 9px 0 var(--page);
+}
+
+.entry {
+  order: 2;
+  min-width: 0;
+}
+
+.stage {
+  position: relative;
+  height: clamp(170px, 30svh, 280px);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+/* The 3D room gets more of a small screen: a person looks at it, and does not type. */
+.stage[data-view="room"] {
+  height: clamp(260px, 52svh, 460px);
+}
+
+.stage-box {
+  position: absolute;
+  inset: 0;
+}
+
+.stage-box canvas:focus-visible {
+  outline-offset: -3px;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  padding: 8px 10px;
+}
+
+.status {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  --level: var(--quiet);
+}
+
+.status[data-level="open"] {
+  --level: var(--level-near);
+}
+
+.status[data-level="closed"] {
+  --level: var(--level-ok);
+}
+
+.status-sign {
+  display: grid;
+  flex: none;
+  place-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--level);
+  color: var(--panel);
+  font-family: var(--display);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.status-words {
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+
+.status-words strong {
+  font-weight: 600;
+}
+
+.stage-views {
+  display: flex;
+  flex: none;
+}
+
+.stage-views .tool {
+  min-height: 36px;
+  background: var(--panel);
+  padding: 4px 11px;
+  font-size: 0.9375rem;
+}
+
+.stage-views .tool:first-child {
+  border-radius: 3px 0 0 3px;
+}
+
+.stage-views .tool:last-child {
+  margin-left: -1px;
+  border-radius: 0 3px 3px 0;
+}
+
+.stage-views .tool[aria-pressed="true"] {
+  position: relative;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--page);
+}
+
+.board-hint {
+  border-top: 1px solid var(--line);
+  padding: 7px 12px;
+}
+
+.facts {
+  display: grid;
+  order: 3;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.facts div {
+  border-top: 1px solid var(--ink);
+  padding-top: 6px;
+}
+
+.facts dt {
+  color: var(--quiet);
+  font-size: 0.875rem;
+}
+
+.facts dd {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.entry-note {
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 3px;
+  background: var(--panel);
+  padding: 8px 12px;
+}
+
+/* The fields of the room are a table, as in the title block of a drawing: the name at the left, and the value at the right. */
+.setup {
+  display: grid;
+  gap: 8px;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: minmax(8.4em, 2fr) minmax(0, 3fr);
+  align-items: center;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.field-name {
+  color: var(--quiet);
+  font-size: 0.9375rem;
+}
+
+.text-field,
+.number-field {
+  min-height: 44px;
+  border: 1px solid var(--quiet);
+  border-radius: 3px;
+  background: var(--panel);
+  padding: 8px;
+  font: inherit;
+  color: inherit;
+}
+
+.text-field {
+  width: 100%;
+}
+
+.text-field::placeholder {
+  color: var(--quiet);
+  opacity: 0.75;
+}
+
+.number-field {
+  width: 5.4em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Feet and inches are two short fields. */
+.length[data-fields="2"] .number-field {
+  width: 3.6em;
+}
+
+.text-field:focus-visible,
+.number-field:focus-visible {
+  border-color: var(--ink);
+  outline-offset: 0;
+}
+
+.length {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.number {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.unit {
+  color: var(--quiet);
+}
+
+.entry-aid {
+  margin-top: 10px;
+  color: var(--quiet);
+  font-size: 0.9375rem;
+}
+
+.entry-title {
+  margin-top: 28px;
+  font-size: 1.375rem;
+}
+
+.sides {
+  margin: 12px 0 0;
+  border-top: 1px solid var(--ink);
+  padding: 0;
+  list-style: none;
+}
+
+.side {
+  display: grid;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0 12px 12px;
+  /* The page moves to a wall below the drawing, which stays at the top. */
+  scroll-margin-top: calc(var(--board, 0px) + 28px);
+}
+
+.side:focus-within {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.side-wall {
+  display: flex;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.side-name {
+  flex: none;
+  min-width: 3.4em;
+  font-family: var(--display);
+  font-size: 1.1875rem;
+  font-weight: 600;
+}
+
+.remove {
+  flex: none;
+  width: 40px;
+  min-height: 44px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--quiet);
+  font-size: 1.375rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.remove:hover {
+  background: color-mix(in oklab, var(--ink) 9%, transparent);
+  color: var(--ink);
+}
+
+.remove:disabled {
+  visibility: hidden;
+}
+
+.corner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.corner-name {
+  color: var(--quiet);
+  font-size: 0.9375rem;
+}
+
+/* The three turns are one control with three parts. */
+.choices {
+  display: inline-grid;
+  grid-template-columns: repeat(3, auto);
+}
+
+.choice {
+  position: relative;
+}
+
+.choice input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.choice span {
+  display: grid;
+  place-content: center;
+  min-width: 62px;
+  min-height: 44px;
+  border: 1px solid var(--ink);
+  padding: 0 14px;
+  font-family: var(--display);
+  font-weight: 500;
+}
+
+.choice + .choice span {
+  border-left: 0;
+}
+
+.choice:first-child span {
+  border-radius: 3px 0 0 3px;
+}
+
+.choice:last-child span {
+  border-radius: 0 3px 3px 0;
+}
+
+.choice:hover span {
+  background: color-mix(in oklab, var(--ink) 9%, transparent);
+}
+
+.choice input:checked + span {
+  background: var(--ink);
+  color: var(--page);
+}
+
+.choice input:focus-visible + span {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+.add {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 14px;
+  background: var(--ink);
+  color: var(--page);
+}
+
+.add:hover {
+  background: color-mix(in oklab, var(--ink) 86%, var(--page));
+  color: var(--page);
+}
+
+.keep {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.keep .tool {
+  min-height: 40px;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid var(--ink);
+  border-left: 4px solid var(--accent);
+  border-radius: 3px;
+  background: var(--panel);
+  padding: 12px 14px;
+}
+
+.confirm p {
+  flex: 1 1 100%;
+}
+
+.steps {
+  max-width: 62ch;
+  margin: 14px 0 0;
+  padding-left: 1.3em;
+}
+
+.steps li + li {
+  margin-top: 8px;
+}
+
+.steps li::marker {
+  font-family: var(--display);
+  font-weight: 600;
+}
+
+/* The drawing of the walk. Its lines are ink, and the wall of the field with the focus has a mark as of a highlighter. */
+
+.walk {
+  display: block;
+}
+
+.walk-floor {
+  fill: color-mix(in oklab, var(--level-ok) 13%, transparent);
+}
+
+.walk-mark {
+  stroke: var(--accent);
+  stroke-width: 11;
+  stroke-linecap: round;
+  opacity: 0;
+}
+
+.walk-mark.walk-on {
+  opacity: 1;
+}
+
+.walk-wall {
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* A wide line with no color makes a wall easy to touch. */
+.walk-hit {
+  stroke: transparent;
+  stroke-width: 28;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.walk-gap {
+  stroke: var(--level-near);
+  stroke-width: 2;
+  stroke-dasharray: 5 5;
+}
+
+.walk-corner {
+  fill: var(--sheet);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.walk-start {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.walk-arrow {
+  fill: var(--ink);
+}
+
+/* A line in the color of the sheet around each letter keeps a label clear above a wall or the grid. */
+.walk-label,
+.walk-gap-label {
+  fill: var(--ink);
+  stroke: var(--sheet);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.walk-label {
+  cursor: pointer;
+}
+
+.walk-label.walk-on {
+  font-weight: 600;
+}
+
+@media (max-width: 899px) {
+  /* A message about a field is one sentence on a small screen. */
+  .status[data-level="typing"] .status-words span {
+    display: none;
+  }
+
+  /* A small screen shows only the button of the view that a person can go to. */
+  .stage-views .tool[aria-pressed="true"],
+  .stage-views .tool:disabled {
+    display: none;
+  }
+
+  .stage-views .tool:first-child,
+  .stage-views .tool:last-child {
+    margin-left: 0;
+    border-radius: 3px;
+  }
+
+  .board-hint[data-kind="plan"] {
+    display: none;
+  }
+}
+
+@media (min-width: 900px) {
+  .bench {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
+    align-items: start;
+    gap: 32px;
+  }
+
+  /* On a wide screen, the drawing and the numbers of the room stay at the side of the list. */
+  .board-column {
+    position: sticky;
+    top: 16px;
+    display: grid;
+    gap: 16px;
+  }
+
+  .sheet.board {
+    position: static;
+    box-shadow: none;
+  }
+
+  .stage,
+  .stage[data-view="room"] {
+    height: clamp(340px, 56svh, 600px);
+  }
+
+  .side {
+    scroll-margin-top: 16px;
+  }
+}
+
+@keyframes floor-in {
+  from {
+    fill-opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .chip,
   .meter,
-  .tool {
+  .tool,
+  .choice span {
     transition:
       border-color 120ms,
       background-color 120ms;
+  }
+
+  .walk-mark {
+    transition: opacity 120ms;
+  }
+
+  /* The floor of the room appears when the walk closes. */
+  .walk-floor-new {
+    animation: floor-in 420ms ease-out;
   }
 }

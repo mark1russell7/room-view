@@ -1,7 +1,8 @@
 import { levelShape, NEAR_LIMIT } from "@mark1russell7/room-view";
 import { SAMPLE_SCENE } from "@mark1russell7/room-view/sample";
 import type { ViewerPick, ViewerTheme } from "@mark1russell7/room-view/three";
-import { byId, copyText, currentTheme, h, setupTheme } from "@mark1russell7/site-pages/chrome";
+import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome";
+import { isDark, onThemeChange } from "./dark.ts";
 import { circuitRows, detailsOf, legendRows, partGroups, partKey, partName, roomDetails, type PartRecord } from "./details.ts";
 import { createPlanView, type RoomStage } from "./plan.ts";
 
@@ -26,13 +27,6 @@ let pinned: string | undefined;
 
 const partButtons = new Map<string, HTMLButtonElement>();
 const circuitButtons = new Map<string, HTMLButtonElement>();
-
-const darkScheme = matchMedia("(prefers-color-scheme: dark)");
-
-function isDark(): boolean {
-  const theme = currentTheme();
-  return theme === "dark" || (theme === "auto" && darkScheme.matches);
-}
 
 function showTheme(): void {
   if (themes !== undefined) stage?.setTheme(isDark() ? themes.dark : themes.light);
@@ -187,8 +181,7 @@ async function showRoom(): Promise<void> {
 }
 
 setupTheme(byId<HTMLButtonElement>("theme"), "theme");
-new MutationObserver(showTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-darkScheme.addEventListener("change", showTheme);
+onThemeChange(showTheme);
 
 const copy = byId<HTMLButtonElement>("copy");
 copy.addEventListener("click", () => {
