@@ -10,6 +10,14 @@ export const ROOM_SCHEMA = "room/1";
 /** The name of the format of a scene record. */
 export const SCENE_SCHEMA = "scene/1";
 
+/**
+ * This function tells if a text is the name of a layer: a word, a slash and a version, for example `electrical/1`.
+ * The word has lowercase letters, digits and hyphens. Thus a layer name has no colon, and `recordName` gives each record one name.
+ */
+export function isLayerName(text: string): boolean {
+  return /^[a-z][a-z0-9-]*\/[0-9]+$/.test(text);
+}
+
 /** These are the sides of the line of a wall that can have the wall. */
 export const WALL_SIDES: readonly ["center", "left", "right"] = ["center", "left", "right"];
 
@@ -148,4 +156,9 @@ export interface Scene {
   readonly room: Room;
   readonly objects?: readonly PlacedObject[] | undefined;
   readonly loads?: readonly CircuitLoad[] | undefined;
+  /**
+   * The records of each add-on, by the name of its layer, for example `electrical/1`. `isLayerName` tells the form of a name.
+   * The core keeps each layer and does not read it. `checkLayers` examines the layers with a list of add-ons.
+   */
+  readonly layers?: Readonly<Record<string, unknown>> | undefined;
 }

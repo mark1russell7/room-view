@@ -38,12 +38,13 @@ An anchor is a place in the space of the core. An add-on puts each of its record
 type Anchor =
   | { readonly on: "wall"; readonly wall: string; readonly face: WallFace; readonly offset: number; readonly height: number }
   | { readonly on: "floor"; readonly at: PlanPoint; readonly floor?: string }
-  | { readonly on: "ceiling"; readonly at: PlanPoint }
-  | { readonly on: "object"; readonly object: string; readonly at?: readonly [number, number, number] };
+  | { readonly on: "ceiling"; readonly at: PlanPoint; readonly floor?: string }
+  | { readonly on: "object"; readonly object: string; readonly at?: readonly [number, number, number]; readonly out?: readonly [number, number, number] };
 ```
 
-- `anchorFrame(anchor, core)` gives a point and the direction out of the surface, or a finding.
-- `checkAnchor(anchor, core)` gives the findings: the wall or the object is not in the room, the point is out of the wall, or the point is in an opening.
+- `sceneSpace(scene)` gives the space of a scene. Its function `frame(anchor)` gives the point and the direction out of the surface, or `undefined`.
+- A frame is in meters, with the z axis up, as the solids. An object anchor with no point is at the center of the top, with the direction up.
+- `checkAnchor(anchor, space)` gives the faults of an anchor. An error tells that the anchor has no position: its wall or object is not in the room, or its point is out of range. A warning tells a point in an opening.
 - The wall anchor is the outlet of today without its circuit. The checks `outlet-wall`, `outlet-range` and `outlet-in-opening` become the anchor checks `anchor-wall`, `anchor-range` and `anchor-in-opening`.
 
 ### Layers
@@ -70,14 +71,16 @@ An add-on is a value of this type. The core and the hosts know only this type.
 
 ```ts
 interface AddOn<Layer> {
-  /** The schema name of the layer, for example `electrical/1`. */
+  /** The name of the layer, for example `electrical/1`. */
   readonly schema: string;
-  /** This function reads the JSON of a layer. It gives the layer, or the findings. */
-  readonly parse: (value: unknown) => ParseResult<Layer>;
+  /** This function reads the JSON of a layer. It gives the layer, or the faults of its form. */
+  parse(value: unknown): LayerParse<Layer>;
   /** This function gives the anchors of the records, by the `id` of each record. */
-  readonly anchors: (layer: Layer) => ReadonlyMap<string, Anchor>;
-  /** This function gives the findings of the meaning of the layer. The anchor checks are in the core. */
-  readonly check: (layer: Layer, space: SceneSpace) => readonly Finding[];
+  anchors(layer: Layer): ReadonlyMap<string, Anchor>;
+  /** This function gives the layer with new anchors. The core uses it when it moves the records of a room. */
+  withAnchors(layer: Layer, anchors: ReadonlyMap<string, Anchor>): Layer;
+  /** This function gives the faults of the meaning of the layer. The anchor checks are in the core. */
+  check(layer: Layer, space: SceneSpace): readonly AddOnFault[];
 }
 
 /** The marks of one add-on. This value is in the entry `/marks` of the add-on, so the root entry has no visual part. */
@@ -87,11 +90,15 @@ interface AddOnMarks<Layer> {
 }
 ```
 
-- `SceneSpace` is the read view of the core: the walls, the floors, the objects and `anchorFrame`.
+- `SceneSpace` is the read view of the core: the walls, the objects, their transforms and the frame of each anchor.
 - A host with no viewer, for example a command-line tool, imports only the root entry of each add-on.
-- A finding of an add-on has the code `<add-on>/<code>`, for example `electrical/circuit-limit`.
-- A host composes a list of add-ons: `checkScene(scene, [electrical, light])` runs the core checks, the anchor checks and the checks of each add-on.
+- A host composes a list of add-ons. `checkScene(scene)` examines the core, and `checkLayers(scene, [electrical, light])` examines the layers.
+- `checkLayers` gives the faults of the form of each layer, of each anchor and of the meaning of its records.
+- A finding of a layer has the name of the layer in `layer`. Thus an add-on gives its own codes.
+- The name of a layer is a word, a slash and a version, for example `electrical/1`. A layer with a different name gets an error.
 - An unknown layer gives a warning, and the scene keeps it.
+
+`recordName(kind, id)` gives one name for each record, for example `object:desk` or `electrical/1:o1`. The kind of a record of a layer is the name of the layer. A finding, a mark and the selection use this name, so a click on a finding selects its mark.
 
 ### Two add-ons on one object
 
@@ -103,13 +110,19 @@ A mark is a record that a viewer draws. A mark has no topic. The marks are in `@
 
 | Mark | Data | Example |
 | --- | --- | --- |
-| A point | An anchor frame, a shape, a level and a label | An outlet, a tap, a lamp |
-| A run | A list of points along surfaces, a width and a level | A cable, a pipe, a duct |
-| A link | Two record ids and a level | A power line from an outlet to a computer |
-| A field | A grid of values on a floor, and a scale | Light in lux, sound in decibels, heat |
-| A meter | A value, a limit and a label | The load of a circuit against its limit |
+| A point | A frame and a size | An outlet, a tap, a lamp |
+| A run | A list of frames and a width | A cable, a pipe, a duct |
+| A link | Two ends, each with a record name and a point | A power line from an outlet to a computer |
+| A field | A grid of values on a plane, and a scale | Light in lux, sound in decibels, heat |
+| A meter | A value, a limit and the text of the unit | The load of a circuit against its limit |
 
-- The level of a mark is `unknown`, `ok`, `near` or `over`. Each level has a shape and a color, so a mark does not use color alone. The shapes of the levels move from `loads.ts` to the marks.
+- Each mark has a record name (`recordName`), a kind, a level and a label. The kind is a word of the add-on, for example `outlet`, for the legend and the filter.
+- The level of a mark is `unknown`, `ok`, `near` or `over`. The add-on calculates the level, so `visuals` has no rule from a value to a level.
+- A mark has no shape and no color. The scale gives each level its shape, and the theme gives its color. Thus a mark does not use color alone.
+- Each point of a mark is in the space of the frames: meters, with the z axis up. Each point of a run has its own direction, so a run can cross surfaces.
+- A field has its values row by row, with `null` for a cell with no value. JSON has no NaN.
+- A meter has no place. The page draws it in a panel, and the 3D view ignores it.
+- The entry `@mark1russell7/visuals/marks` has the types, the levels, their shapes and `checkMarks`, with no three.js. The shapes move from `loads.ts` to that entry.
 - A plan view and a 3D view draw the same marks.
 
 ## The electrical add-on
@@ -179,7 +192,7 @@ The first steps add, and the last step removes. Thus each step keeps the page an
 6. The core removes `outlets`, `circuits`, `loads` and `PlacedObject.outlet`, and it gives `room/2` and `scene/2`. This step is the break of the version.
 7. The procedures packages.
 
-## The open questions
+## The answers of the review
 
-- A run along two walls and a ceiling needs a path of anchors. The first version has runs on one surface.
-- Two marks at one point hide each other. The marks have one order, by add-on and then by `id`, and the viewer decides how it shows two marks at one point.
+- A run along two walls and a ceiling is a list of frames, so it needs no new format.
+- Two marks at one point: the 3D view draws the levels in sequence, so the worst level is always in view.

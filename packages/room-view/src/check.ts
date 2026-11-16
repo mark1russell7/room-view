@@ -1,9 +1,10 @@
-import { convexOverlap, pointInRing, regionArea, transformPoint3, type Ring, type Transform3 } from "@mark1russell7/layout-contract";
+import { convexOverlap, length3, pointInRing, regionArea, transformPoint3, type Ring, type Transform3 } from "@mark1russell7/layout-contract";
+import type { Anchor, SceneSpace } from "./anchors.ts";
 import { wallFrames, wallHasOutline } from "./frames.ts";
 import { wallFootprints, type JoinOptions } from "./joins.ts";
 import type { PlacedObject, Room, Scene } from "./room.ts";
 import { objectTransforms } from "./solids.ts";
-import { LARGEST_LENGTH, metersPer } from "./units.ts";
+import { LARGEST_LENGTH, lengthsInRange, metersPer } from "./units.ts";
 
 /** These are the levels of a finding. An error is a fault that the model cannot show. A warning is a fault that the model can show. */
 export const FINDING_LEVELS: readonly ["error", "warning"] = ["error", "warning"];
@@ -25,6 +26,20 @@ export const RECORD_KINDS: readonly ["room", "wall", "opening", "floor", "outlet
 
 /** A kind of record. */
 export type RecordKind = (typeof RECORD_KINDS)[number];
+
+/**
+ * This function gives the name of a record: its kind, a colon and its `id`, for example `object:desk`.
+ * The kind of a record of a layer is the name of the layer, for example `electrical/1`. A finding, a mark and the selection use this name.
+ */
+export function recordName(kind: string, id: string): string {
+  return `${kind}:${id}`;
+}
+
+/** This function gives the kind and the `id` of a record name, or `undefined` for a text with no kind. A kind has no colon, so the first colon ends it. */
+export function parseRecordName(name: string): { readonly kind: string; readonly id: string } | undefined {
+  const colon = name.indexOf(":");
+  return colon < 1 ? undefined : { kind: name.slice(0, colon), id: name.slice(colon + 1) };
+}
 
 /** These are the codes of the findings. */
 export const FINDING_CODES: readonly [
@@ -392,4 +407,86 @@ export function checkScene(scene: Scene, options: CheckOptions = {}): readonly F
     if (!(load.watts >= 0 && Number.isFinite(load.watts))) error("load-watts", "load", load.circuit, `A load of the circuit "${load.circuit}" is ${show(load.watts)} W. It must be a finite number, 0 or more.`);
   }
   return findings;
+}
+
+/** These are the codes of the faults of an anchor. */
+export const ANCHOR_CODES: readonly [
+  "anchor-not-finite",
+  "anchor-wall",
+  "anchor-object",
+  "anchor-floor",
+  "anchor-range",
+  "anchor-direction",
+  "anchor-in-opening",
+  "anchor-outside",
+] = ["anchor-not-finite", "anchor-wall", "anchor-object", "anchor-floor", "anchor-range", "anchor-direction", "anchor-in-opening", "anchor-outside"];
+
+/** A code of a fault of an anchor. */
+export type AnchorCode = (typeof ANCHOR_CODES)[number];
+
+/** A fault of an anchor. `checkLayers` gives it the layer and the key of the anchor. */
+export interface AnchorFault {
+  readonly level: FindingLevel;
+  readonly code: AnchorCode;
+  /** The fault in plain words, with the values. */
+  readonly message: string;
+  /** The `id` of the second record of the fault: the opening that the anchor is in. A different fault has none. */
+  readonly other?: string | undefined;
+}
+
+/**
+ * This function gives the faults of an anchor in the space of a scene. `name` starts each message.
+ * An error tells that the anchor has no position. A warning tells a fault that the model can show.
+ */
+export function checkAnchor(anchor: Anchor, space: SceneSpace, name: string = "The anchor"): readonly AnchorFault[] {
+  const error = (code: AnchorCode, message: string): readonly AnchorFault[] => [{ level: "error", code, message: `${name} ${message}` }];
+  const { scene, scale } = space;
+  if (holdsBadNumber(anchor)) return error("anchor-not-finite", "has a number that is not finite.");
+  if (anchor.on === "wall") {
+    const wall = space.wall(anchor.wall);
+    if (wall === undefined) return error("anchor-wall", `is on the wall "${anchor.wall}", which the room does not have.`);
+    const along = anchor.offset * scale;
+    const height = anchor.height * scale;
+    if (!(along >= 0 && along <= wall.length + SMALL && height >= 0 && height <= wall.height + SMALL)) {
+      return error(
+        "anchor-range",
+        `is at ${show(anchor.offset)} along the wall "${anchor.wall}" and at the height ${show(anchor.height)}. The wall has the length ${show(wall.length / scale)} and the height ${show(wall.height / scale)}.`,
+      );
+    }
+    const hole = (scene.room.openings ?? []).find((opening) => {
+      const sill = (opening.sill ?? 0) * scale;
+      return opening.wall === anchor.wall && along > opening.offset * scale && along < (opening.offset + opening.width) * scale && height > sill && height < sill + opening.height * scale;
+    });
+    return hole === undefined ? [] : [{ level: "warning", code: "anchor-in-opening", message: `${name} is in the opening "${hole.id}" of the wall "${anchor.wall}".`, other: hole.id }];
+  }
+  if (anchor.on === "object") {
+    const object = space.object(anchor.object);
+    if (object === undefined) return error("anchor-object", `is on the object "${anchor.object}", which the scene does not have.`);
+    // An object with no place has a fault of its own, which `checkScene` tells. Here, the anchor tells that it has no position.
+    if (space.transform(anchor.object) === undefined) return error("anchor-object", `is on the object "${anchor.object}", which has no place in the room.`);
+    const small = SMALL / scale;
+    if (anchor.at !== undefined) {
+      const [x, y, z] = anchor.at;
+      const [width, depth, height] = object.size;
+      if (!(Math.abs(x) <= width / 2 + small && Math.abs(y) <= depth / 2 + small && z >= -small && z <= height + small)) {
+        return error("anchor-range", `is at (${anchor.at.map(show).join(", ")}) in the frame of the object "${anchor.object}". The object has the size ${object.size.map(show).join(" by ")}.`);
+      }
+    }
+    if (anchor.out !== undefined) {
+      const [x, y, z] = anchor.out;
+      if (!(length3({ x, y, z }) > 0)) return error("anchor-direction", "has a direction with the length 0. A direction must have a length above 0.");
+    }
+    return [];
+  }
+  const [x, y] = anchor.at;
+  if (!lengthsInRange(x * scale, y * scale)) return error("anchor-range", "is at a point above 1 000 km, the largest length of the model.");
+  const word = anchor.on === "floor" ? "on" : "above";
+  const floors = scene.room.floors ?? [];
+  if (anchor.floor !== undefined) {
+    const floor = floors.find((item) => item.id === anchor.floor);
+    if (floor === undefined) return error("anchor-floor", `is ${word} the floor "${anchor.floor}", which the room does not have.`);
+    return pointInRing(x, y, floor.ring) ? [] : [{ level: "warning", code: "anchor-outside", message: `${name} is not ${word} the floor "${anchor.floor}".` }];
+  }
+  if (floors.length === 0 || floors.some((floor) => pointInRing(x, y, floor.ring))) return [];
+  return [{ level: "warning", code: "anchor-outside", message: `${name} is not ${word} a floor of the room.` }];
 }

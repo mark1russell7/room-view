@@ -147,6 +147,15 @@ describe("sceneSchema", () => {
     expect(sceneAccepts({ loads: [{ circuit: "a" }] })).toBe(false);
     expect(sceneAccepts({ loads: [{ circuit: "a", watts: 5, phase: 1 }] })).toBe(false);
   });
+
+  it("keeps each layer, and refuses a layer name that is not a word, a slash and a version", () => {
+    const scene = { schema: "scene/1", room: SAMPLE_ROOM, layers: { "mark/1": { marks: [{ id: "m", size: 1 }] }, "pipe/1": 7 } };
+    expect(sceneSchema.parse(JSON.parse(JSON.stringify(scene)))).toEqual(scene);
+    expect(sceneSchema.safeParse({ ...scene, layers: { "": {} } }).success).toBe(false);
+    expect(sceneSchema.safeParse({ ...scene, layers: { Mark: {} } }).success).toBe(false);
+    expect(sceneSchema.safeParse({ ...scene, layers: { "mark:1/1": {} } }).success).toBe(false);
+    expect(sceneSchema.safeParse({ ...scene, layers: "mark/1" }).success).toBe(false);
+  });
 });
 
 describe("surveySchema", () => {

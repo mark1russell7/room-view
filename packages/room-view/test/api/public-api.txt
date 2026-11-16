@@ -6,10 +6,20 @@
 
 ## . (build/index.d.ts): names
 
+ANCHOR_CODES: build/index.d.ts#ANCHOR_CODES
+ANCHOR_SURFACES: build/index.d.ts#ANCHOR_SURFACES
+AddOn: build/index.d.ts#AddOn
+AddOnFault: build/index.d.ts#AddOnFault
+Anchor: build/index.d.ts#Anchor
+AnchorCode: build/index.d.ts#AnchorCode
+AnchorFault: build/index.d.ts#AnchorFault
+AnchorFrame: build/index.d.ts#AnchorFrame
+AnchorSurface: build/index.d.ts#AnchorSurface
 CLOSURE_LIMIT: build/level.chunk.d.ts#CLOSURE_LIMIT
 CONNECTION_FAULTS: build/level.chunk.d.ts#CONNECTION_FAULTS
 CONNECTION_TURN_LIMIT: build/level.chunk.d.ts#CONNECTION_TURN_LIMIT
 CONNECTION_USES: build/level.chunk.d.ts#CONNECTION_USES
+CeilingAnchor: build/index.d.ts#CeilingAnchor
 CheckOptions: build/index.d.ts#CheckOptions
 Circuit: build/room.chunk.d.ts#Circuit
 CircuitLoad: build/room.chunk.d.ts#CircuitLoad
@@ -24,14 +34,18 @@ Finding: build/index.d.ts#Finding
 FindingCode: build/index.d.ts#FindingCode
 FindingLevel: build/index.d.ts#FindingLevel
 Floor: build/room.chunk.d.ts#Floor
+FloorAnchor: build/index.d.ts#FloorAnchor
 GLASS_THICKNESS: build/loads.chunk.d.ts#GLASS_THICKNESS
 JOIN_TOLERANCE: build/loads.chunk.d.ts#JOIN_TOLERANCE
 JoinOptions: build/loads.chunk.d.ts#JoinOptions
 LARGEST_LENGTH: build/room.chunk.d.ts#LARGEST_LENGTH
+LAYER_CODES: build/index.d.ts#LAYER_CODES
 LENGTH_UNITS: build/room.chunk.d.ts#LENGTH_UNITS
 LEVEL_SCHEMA: build/level.chunk.d.ts#LEVEL_SCHEMA
 LEVEL_SHAPES: build/loads.chunk.d.ts#LEVEL_SHAPES
 LOAD_LEVELS: build/loads.chunk.d.ts#LOAD_LEVELS
+LayerFinding: build/index.d.ts#LayerFinding
+LayerParse: build/index.d.ts#LayerParse
 LengthUnit: build/room.chunk.d.ts#LengthUnit
 Level: build/level.chunk.d.ts#Level
 LevelConnection: build/level.chunk.d.ts#LevelConnection
@@ -47,6 +61,7 @@ MITER_LIMIT: build/loads.chunk.d.ts#MITER_LIMIT
 NEAR_LIMIT: build/loads.chunk.d.ts#NEAR_LIMIT
 OPENING_KINDS: build/room.chunk.d.ts#OPENING_KINDS
 OUTLET_PLATE: build/loads.chunk.d.ts#OUTLET_PLATE
+ObjectAnchor: build/index.d.ts#ObjectAnchor
 Opening: build/room.chunk.d.ts#Opening
 OpeningKind: build/room.chunk.d.ts#OpeningKind
 Outlet: build/room.chunk.d.ts#Outlet
@@ -68,6 +83,7 @@ SOLID_KINDS: build/loads.chunk.d.ts#SOLID_KINDS
 SQUARE_TURNS: build/level.chunk.d.ts#SQUARE_TURNS
 SURVEY_SCHEMA: build/level.chunk.d.ts#SURVEY_SCHEMA
 Scene: build/room.chunk.d.ts#Scene
+SceneSpace: build/index.d.ts#SceneSpace
 ShapeOutline: build/loads.chunk.d.ts#ShapeOutline
 Solid: build/loads.chunk.d.ts#Solid
 SolidKind: build/loads.chunk.d.ts#SolidKind
@@ -87,26 +103,34 @@ TO_Y_UP: build/loads.chunk.d.ts#TO_Y_UP
 WALL_FACES: build/room.chunk.d.ts#WALL_FACES
 WALL_SIDES: build/room.chunk.d.ts#WALL_SIDES
 Wall: build/room.chunk.d.ts#Wall
+WallAnchor: build/index.d.ts#WallAnchor
 WallFace: build/room.chunk.d.ts#WallFace
 WallFootprint: build/loads.chunk.d.ts#WallFootprint
 WallFrame: build/loads.chunk.d.ts#WallFrame
 WallSide: build/room.chunk.d.ts#WallSide
 boundsOfSolids: build/loads.chunk.d.ts#boundsOfSolids
+checkAnchor: build/index.d.ts#checkAnchor
+checkLayers: build/index.d.ts#checkLayers
 checkRoom: build/index.d.ts#checkRoom
 checkScene: build/index.d.ts#checkScene
 circuitStates: build/loads.chunk.d.ts#circuitStates
 convertSurvey: build/level.chunk.d.ts#convertSurvey
 expandLevel: build/level.chunk.d.ts#expandLevel
 expandSurvey: build/level.chunk.d.ts#expandSurvey
+isLayerName: build/room.chunk.d.ts#isLayerName
 lengthsInRange: build/room.chunk.d.ts#lengthsInRange
 levelShape: build/loads.chunk.d.ts#levelShape
 metersPer: build/room.chunk.d.ts#metersPer
 objectTransforms: build/loads.chunk.d.ts#objectTransforms
 outletLevels: build/loads.chunk.d.ts#outletLevels
+parseRecordName: build/index.d.ts#parseRecordName
 planShape: build/index.d.ts#planShape
 planShapes: build/index.d.ts#planShapes
+readLayer: build/index.d.ts#readLayer
+recordName: build/index.d.ts#recordName
 roomSolids: build/loads.chunk.d.ts#roomSolids
 sceneSolids: build/loads.chunk.d.ts#sceneSolids
+sceneSpace: build/index.d.ts#sceneSpace
 shapeRing: build/loads.chunk.d.ts#shapeRing
 solidCorners: build/loads.chunk.d.ts#solidCorners
 solidVolume: build/loads.chunk.d.ts#solidVolume
@@ -147,6 +171,60 @@ solidGeometry: build/three.d.ts#solidGeometry
 
 ## Declarations
 
+### build/index.d.ts#ANCHOR_CODES
+export declare const ANCHOR_CODES: readonly ["anchor-not-finite", "anchor-wall", "anchor-object", "anchor-floor", "anchor-range", "anchor-direction", "anchor-in-opening", "anchor-outside"];
+
+### build/index.d.ts#ANCHOR_SURFACES
+export declare const ANCHOR_SURFACES: readonly ["wall", "floor", "ceiling", "object"];
+
+### build/index.d.ts#AddOn
+export interface AddOn<Layer> {
+  readonly schema: string;
+  parse(value: unknown): LayerParse<Layer>;
+  anchors(layer: Layer): ReadonlyMap<string, Anchor>;
+  withAnchors(layer: Layer, anchors: ReadonlyMap<string, Anchor>): Layer;
+  check(layer: Layer, space: SceneSpace): readonly AddOnFault[];
+}
+
+### build/index.d.ts#AddOnFault
+export interface AddOnFault {
+  readonly level: FindingLevel;
+  readonly code: string;
+  readonly at: string;
+  readonly message: string;
+  readonly other?: string | undefined;
+}
+
+### build/index.d.ts#Anchor
+export type Anchor = WallAnchor | FloorAnchor | CeilingAnchor | ObjectAnchor;
+
+### build/index.d.ts#AnchorCode
+export type AnchorCode = (typeof ANCHOR_CODES)[number];
+
+### build/index.d.ts#AnchorFault
+export interface AnchorFault {
+  readonly level: FindingLevel;
+  readonly code: AnchorCode;
+  readonly message: string;
+  readonly other?: string | undefined;
+}
+
+### build/index.d.ts#AnchorFrame
+export interface AnchorFrame {
+  readonly at: Point3;
+  readonly out: Point3;
+}
+
+### build/index.d.ts#AnchorSurface
+export type AnchorSurface = (typeof ANCHOR_SURFACES)[number];
+
+### build/index.d.ts#CeilingAnchor
+export interface CeilingAnchor {
+  readonly on: "ceiling";
+  readonly at: PlanPoint;
+  readonly floor?: string | undefined;
+}
+
 ### build/index.d.ts#CheckOptions
 export interface CheckOptions {
   readonly joins?: JoinOptions | undefined;
@@ -174,6 +252,43 @@ export type FindingCode = (typeof FINDING_CODES)[number];
 ### build/index.d.ts#FindingLevel
 export type FindingLevel = (typeof FINDING_LEVELS)[number];
 
+### build/index.d.ts#FloorAnchor
+export interface FloorAnchor {
+  readonly on: "floor";
+  readonly at: PlanPoint;
+  readonly floor?: string | undefined;
+}
+
+### build/index.d.ts#LAYER_CODES
+export declare const LAYER_CODES: readonly ["layer-name", "layer-unknown", "layer-form"];
+
+### build/index.d.ts#LayerFinding
+export interface LayerFinding {
+  readonly level: FindingLevel;
+  readonly code: string;
+  readonly layer: string;
+  readonly at: string;
+  readonly message: string;
+  readonly other?: string | undefined;
+}
+
+### build/index.d.ts#LayerParse
+export type LayerParse<Layer> = {
+  readonly ok: true;
+  readonly layer: Layer;
+} | {
+  readonly ok: false;
+  readonly errors: readonly string[];
+};
+
+### build/index.d.ts#ObjectAnchor
+export interface ObjectAnchor {
+  readonly on: "object";
+  readonly object: string;
+  readonly at?: readonly [number, number, number] | undefined;
+  readonly out?: readonly [number, number, number] | undefined;
+}
+
 ### build/index.d.ts#PlanOptions
 export interface PlanOptions extends SolidOptions {
   readonly cut?: number | undefined;
@@ -195,17 +310,57 @@ export declare const RECORD_KINDS: readonly ["room", "wall", "opening", "floor",
 ### build/index.d.ts#RecordKind
 export type RecordKind = (typeof RECORD_KINDS)[number];
 
+### build/index.d.ts#SceneSpace
+export interface SceneSpace {
+  readonly scene: Scene;
+  readonly scale: number;
+  readonly wall: (id: string) => WallFrame | undefined;
+  readonly object: (id: string) => PlacedObject | undefined;
+  readonly transform: (id: string) => Transform3 | undefined;
+  readonly frame: (anchor: Anchor) => AnchorFrame | undefined;
+}
+
+### build/index.d.ts#WallAnchor
+export interface WallAnchor {
+  readonly on: "wall";
+  readonly wall: string;
+  readonly face: WallFace;
+  readonly offset: number;
+  readonly height: number;
+}
+
+### build/index.d.ts#checkAnchor
+export declare function checkAnchor(anchor: Anchor, space: SceneSpace, name?: string): readonly AnchorFault[];
+
+### build/index.d.ts#checkLayers
+export declare function checkLayers(scene: Scene, addOns: readonly AddOn<unknown>[]): readonly LayerFinding[];
+
 ### build/index.d.ts#checkRoom
 export declare function checkRoom(room: Room, options?: CheckOptions): readonly Finding[];
 
 ### build/index.d.ts#checkScene
 export declare function checkScene(scene: Scene, options?: CheckOptions): readonly Finding[];
 
+### build/index.d.ts#parseRecordName
+export declare function parseRecordName(name: string): {
+  readonly kind: string;
+  readonly id: string;
+} | undefined;
+
 ### build/index.d.ts#planShape
 export declare function planShape(solid: Solid): PlanShape;
 
 ### build/index.d.ts#planShapes
 export declare function planShapes(scene: Scene, options?: PlanOptions): readonly PlanShape[];
+
+### build/index.d.ts#readLayer
+export declare function readLayer<Layer>(scene: Scene, addOn: AddOn<Layer>): LayerParse<Layer> | undefined;
+
+### build/index.d.ts#recordName
+export declare function recordName(kind: string, id: string): string;
+
+### build/index.d.ts#sceneSpace
+export declare function sceneSpace(scene: Scene): SceneSpace;
 
 ### build/level.chunk.d.ts#CLOSURE_LIMIT
 declare const CLOSURE_LIMIT = .01;
@@ -673,6 +828,7 @@ interface Scene {
   readonly room: Room;
   readonly objects?: readonly PlacedObject[] | undefined;
   readonly loads?: readonly CircuitLoad[] | undefined;
+  readonly layers?: Readonly<Record<string, unknown>> | undefined;
 }
 
 ### build/room.chunk.d.ts#WALL_FACES
@@ -696,6 +852,9 @@ type WallFace = (typeof WALL_FACES)[number];
 
 ### build/room.chunk.d.ts#WallSide
 type WallSide = (typeof WALL_SIDES)[number];
+
+### build/room.chunk.d.ts#isLayerName
+declare function isLayerName(text: string): boolean;
 
 ### build/room.chunk.d.ts#lengthsInRange
 declare function lengthsInRange(...meters: readonly number[]): boolean;
