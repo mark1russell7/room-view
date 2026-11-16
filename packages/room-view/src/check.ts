@@ -94,6 +94,11 @@ export interface Finding {
   readonly at: string;
   /** The fault in plain words, with the values. */
   readonly message: string;
+  /**
+   * The `id` of the second record of the fault. It is the other opening or the other object of an overlap, or the opening that an outlet is in.
+   * It is also the wall that an object overlaps, or the parent or the outlet that an object names. A fault of one record has none.
+   */
+  readonly other?: string | undefined;
 }
 
 /** The options of the checks. Give the options that the model gets. */
@@ -144,11 +149,11 @@ function repeated(ids: readonly string[]): readonly string[] {
  */
 export function checkRoom(room: Room, options: CheckOptions = {}): readonly Finding[] {
   const findings: Finding[] = [];
-  const error = (code: FindingCode, record: RecordKind, at: string, message: string): void => {
-    findings.push({ level: "error", code, record, at, message });
+  const error = (code: FindingCode, record: RecordKind, at: string, message: string, other?: string): void => {
+    findings.push({ level: "error", code, record, at, message, ...(other === undefined ? {} : { other }) });
   };
-  const warning = (code: FindingCode, record: RecordKind, at: string, message: string): void => {
-    findings.push({ level: "warning", code, record, at, message });
+  const warning = (code: FindingCode, record: RecordKind, at: string, message: string, other?: string): void => {
+    findings.push({ level: "warning", code, record, at, message, ...(other === undefined ? {} : { other }) });
   };
   const scale = metersPer(room.unit);
   /** The largest length of the model, in the unit of the room. */
@@ -241,7 +246,7 @@ export function checkRoom(room: Room, options: CheckOptions = {}): readonly Find
     for (let i = 1; i < list.length; i++) {
       const before = list[i - 1]!;
       const hole = list[i]!;
-      if (hole.from < before.to - SMALL) error("opening-overlap", "opening", hole.id, `The openings "${before.id}" and "${hole.id}" of the wall "${wall}" overlap.`);
+      if (hole.from < before.to - SMALL) error("opening-overlap", "opening", hole.id, `The openings "${before.id}" and "${hole.id}" of the wall "${wall}" overlap.`, before.id);
     }
   }
 
@@ -265,7 +270,7 @@ export function checkRoom(room: Room, options: CheckOptions = {}): readonly Find
       continue;
     }
     const hole = (holes.get(outlet.wall) ?? []).find((item) => along > item.from && along < item.to && height > item.sill && height < item.top);
-    if (hole !== undefined) warning("outlet-in-opening", "outlet", outlet.id, `The outlet "${outlet.id}" is in the opening "${hole.id}" of the wall "${outlet.wall}".`);
+    if (hole !== undefined) warning("outlet-in-opening", "outlet", outlet.id, `The outlet "${outlet.id}" is in the opening "${hole.id}" of the wall "${outlet.wall}".`, hole.id);
   }
 
   for (const floor of floors) {
@@ -310,11 +315,11 @@ function extentOf(object: PlacedObject, transform: Transform3, scale: number): E
  */
 export function checkScene(scene: Scene, options: CheckOptions = {}): readonly Finding[] {
   const findings: Finding[] = [...checkRoom(scene.room, options)];
-  const error = (code: FindingCode, record: RecordKind, at: string, message: string): void => {
-    findings.push({ level: "error", code, record, at, message });
+  const error = (code: FindingCode, record: RecordKind, at: string, message: string, other?: string): void => {
+    findings.push({ level: "error", code, record, at, message, ...(other === undefined ? {} : { other }) });
   };
-  const warning = (code: FindingCode, record: RecordKind, at: string, message: string): void => {
-    findings.push({ level: "warning", code, record, at, message });
+  const warning = (code: FindingCode, record: RecordKind, at: string, message: string, other?: string): void => {
+    findings.push({ level: "warning", code, record, at, message, ...(other === undefined ? {} : { other }) });
   };
   const room = scene.room;
   const scale = metersPer(room.unit);
@@ -346,9 +351,9 @@ export function checkScene(scene: Scene, options: CheckOptions = {}): readonly F
     // The turn of an object is an angle, so it has no such limit.
     if (holdsLargeNumber([object.size, object.at, object.lift], LARGEST_LENGTH / scale)) error("number-too-large", "object", object.id, `A length of the object "${object.id}" is above 1 000 km, the largest length of the model.`);
     if (!hasSize(object)) error("size-not-positive", "object", object.id, `The size of the object "${object.id}" is ${object.size.map(show).join(" by ")}. Each number must be above 0.`);
-    if (object.parent !== undefined && !byId.has(object.parent)) error("object-parent", "object", object.id, `The object "${object.id}" is on the object "${object.parent}", which the scene does not have.`);
+    if (object.parent !== undefined && !byId.has(object.parent)) error("object-parent", "object", object.id, `The object "${object.id}" is on the object "${object.parent}", which the scene does not have.`, object.parent);
     else if (holders(object) === undefined) error("object-cycle", "object", object.id, `The parents of the object "${object.id}" make a loop.`);
-    if (object.outlet !== undefined && !outletIds.has(object.outlet)) error("object-outlet", "object", object.id, `The object "${object.id}" uses the outlet "${object.outlet}", which the room does not have.`);
+    if (object.outlet !== undefined && !outletIds.has(object.outlet)) error("object-outlet", "object", object.id, `The object "${object.id}" uses the outlet "${object.outlet}", which the room does not have.`, object.outlet);
   }
 
   const transforms = objectTransforms(scene);
@@ -369,7 +374,7 @@ export function checkScene(scene: Scene, options: CheckOptions = {}): readonly F
     }
     footprints.forEach((footprint, index) => {
       if (footprint.ring.length < 3 || !(extent.z < frames[index]!.height - SMALL) || !(convexOverlap(footprint.ring, extent.ring) > SMALL)) return;
-      warning("object-in-wall", "object", object.id, `The object "${object.id}" overlaps the wall "${footprint.wall}".`);
+      warning("object-in-wall", "object", object.id, `The object "${object.id}" overlaps the wall "${footprint.wall}".`, footprint.wall);
     });
   }
   for (let i = 0; i < extents.length; i++) {
@@ -378,7 +383,7 @@ export function checkScene(scene: Scene, options: CheckOptions = {}): readonly F
       const b = extents[j]!;
       if (holders(a.object)?.has(b.object.id) === true || holders(b.object)?.has(a.object.id) === true) continue;
       if (!(Math.min(a.top, b.top) - Math.max(a.z, b.z) > SMALL) || !(convexOverlap(a.ring, b.ring) > SMALL)) continue;
-      warning("object-overlap", "object", a.object.id, `The objects "${a.object.id}" and "${b.object.id}" overlap.`);
+      warning("object-overlap", "object", a.object.id, `The objects "${a.object.id}" and "${b.object.id}" overlap.`, b.object.id);
     }
   }
 

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   emptyDraft,
   exampleDraft,
+  listedObjects,
   statusOf,
   storeOf,
   surveyOf,
@@ -12,25 +13,31 @@ import {
   type Draft,
   type DraftEnd,
   type DraftFeature,
+  type DraftObject,
   type DraftSide,
   type FeatureKind,
   type Status,
   type Store,
   type TypedLength,
 } from "./draft.ts";
-import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, roomIds, shownLevel, type Joint } from "./level.ts";
+import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, roomIds, shownLevel, shownLevelObjects, type Joint } from "./level.ts";
 
 const typed = (text: string): TypedLength => ({ value: text, inches: "" });
 
 /**
  * This function gives a room of 4 m by 3 m with a name. The walk goes to the left: wall 1 is the south wall, and wall 2 is the east wall.
- * `features` has the features of a wall at its position, from 0. `lengths` replaces the lengths of the walls.
+ * `features` and `objects` have the features and the objects of a wall at its position, from 0. `lengths` replaces the lengths of the walls.
  */
-function box(name: string, features: Readonly<Record<number, readonly DraftFeature[]>> = {}, lengths: readonly string[] = ["4", "3", "4", "3"]): Draft {
+function box(
+  name: string,
+  features: Readonly<Record<number, readonly DraftFeature[]>> = {},
+  lengths: readonly string[] = ["4", "3", "4", "3"],
+  objects: Readonly<Record<number, readonly DraftObject[]>> = {},
+): Draft {
   return {
     ...emptyDraft("m"),
     name,
-    sides: lengths.map((length, index): DraftSide => ({ key: `s${String(index + 1)}`, length: typed(length), corner: "left", angle: "", features: features[index] ?? [] })),
+    sides: lengths.map((length, index): DraftSide => ({ key: `s${String(index + 1)}`, length: typed(length), corner: "left", angle: "", features: features[index] ?? [], objects: objects[index] ?? [] })),
   };
 }
 
@@ -40,6 +47,24 @@ function hole(key: string, offset: string, width = "0.9", kind: FeatureKind = "d
 }
 
 const end = (room: number, feature: string): DraftEnd => ({ room, feature });
+
+/** This function gives a cabinet of 1 m by 0.5 m by 1 m against a wall, with a distance from the start of its wall. `outlet` is the key of its outlet. */
+function cabinet(key: string, offset: string, outlet = ""): DraftObject {
+  return {
+    key,
+    kind: "cabinet",
+    name: "",
+    from: "start",
+    offset: typed(offset),
+    width: typed("1"),
+    depth: typed("0.5"),
+    height: typed("1"),
+    gap: typed(""),
+    lift: typed(""),
+    outlet,
+    holds: [],
+  };
+}
 
 /** Room A has two doors on its east wall: door 1 from 0.2 m to 1.1 m above the south corner, and door 2 from 2 m to 2.9 m. */
 const A = box("A", { 1: [hole("f1", "0.2"), hole("f2", "2")] });
@@ -128,6 +153,19 @@ describe("draftsOf", () => {
     expect(apartRooms(result)).toEqual([]);
     expect(statusAll(store)).toMatchObject({ level: "closed", title: "The rooms fit together." });
     expect(shownLevel(result).floors?.map((floor) => floor.id)).toEqual(["living-room", "hall", "bathroom", "bedroom"]);
+  });
+
+  it("keeps the objects of each room", () => {
+    const drafts = draftsOf(SAMPLE_LEVEL);
+    expect(drafts.rooms.map((room) => listedObjects(room).length)).toEqual([9, 1, 1, 2]);
+    const store = withNewRooms(storeOf([exampleDraft("m")]), drafts.rooms, drafts.connections, true);
+    const result = expand(store);
+    expect(result.objects).toHaveLength(13);
+    expect(result.objects.filter((object) => object.id.startsWith("bedroom/")).map((object) => object.kind).sort()).toEqual(["bed", "cabinet"]);
+    const objects = shownLevelObjects(result, shownLevel(result));
+    expect(objects).toEqual(result.objects);
+    // The tower and the four nodes of the rack have an outlet.
+    expect(objects.filter((object) => object.outlet !== undefined)).toHaveLength(5);
   });
 
   it("reads the level record of a store again", () => {
@@ -308,6 +346,16 @@ describe("levelStatus", () => {
     expect(status.level).toBe("closed");
     expect(status.text).toBe(`B: ${statusFor(store.rooms[1] ?? A).text}`);
   });
+
+  it("tells the fault of an object of a room", () => {
+    // A cabinet of 1 m at 3.5 m on a wall of 4 m goes past the end of the wall.
+    const store = withB(PAIR, box("B", { 3: [hole("f1", "0.1"), hole("f2", "1.9")] }, undefined, { 0: [cabinet("o1", "3.5")] }));
+    const own = statusFor(store.rooms[1] ?? A);
+    expect(own.object).toBe("o1");
+    const status = statusAll(store);
+    expect(status.level).toBe("closed");
+    expect(status.text).toBe(`B: ${own.text}`);
+  });
 });
 
 describe("shownLevel", () => {
@@ -335,5 +383,31 @@ describe("shownLevel", () => {
     expect(shown.outlets).toEqual([]);
     expect(shown.walls).toHaveLength(8);
     expect(shown.openings).toHaveLength(4);
+  });
+});
+
+describe("shownLevelObjects", () => {
+  it("gives the objects of a level with no fault", () => {
+    const result = expand(withB(TWICE, box("B", { 3: [hole("f1", "0.1"), hole("f2", "1.9")] }, undefined, { 0: [cabinet("o1", "1")] })));
+    expect(result.objects.map((object) => object.id)).toEqual(["b/cabinet-1"]);
+    expect(shownLevelObjects(result, shownLevel(result))).toEqual(result.objects);
+  });
+
+  it("has no object of a room that does not close", () => {
+    const one = box("A", { 1: [hole("f1", "0.2"), hole("f2", "2")] }, undefined, { 0: [cabinet("o1", "1")] });
+    const two = box("B", { 3: [hole("f1", "0.1"), hole("f2", "1.9")] }, ["4", "3", "4", "2"], { 0: [cabinet("o1", "1")] });
+    const result = expand(withConnection(storeOf([one, two]), end(0, "f1"), end(1, "f2")));
+    expect(result.objects.map((object) => object.id)).toEqual(["a/cabinet-1", "b/cabinet-1"]);
+    expect(shownLevelObjects(result, shownLevel(result)).map((object) => object.id)).toEqual(["a/cabinet-1"]);
+  });
+
+  it("removes an outlet with an error from an object", () => {
+    // An outlet at 5 m is not on a wall of 4 m.
+    const room = box("B", { 3: [hole("f1", "0.1"), hole("f2", "1.9")], 0: [hole("f3", "5", "", "outlet")] }, undefined, { 0: [cabinet("o1", "1", "f3")] });
+    const result = expand(withB(PAIR, room));
+    expect(result.objects.map((object) => object.outlet)).toEqual(["b/outlet-1"]);
+    const objects = shownLevelObjects(result, shownLevel(result));
+    expect(objects.map((object) => object.id)).toEqual(["b/cabinet-1"]);
+    expect(objects[0]?.outlet).toBeUndefined();
   });
 });

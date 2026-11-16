@@ -1,6 +1,6 @@
 import { expandSurvey, SURVEY_SCHEMA, type PlanPoint, type SurveyResult, type SurveyTurn } from "@mark1russell7/room-view";
 import { describe, expect, it } from "vitest";
-import type { FeatureEnd, FeatureKind, FeatureSpan } from "./draft.ts";
+import type { FeatureEnd, FeatureKind, FeatureSpan, ObjectMark } from "./draft.ts";
 import { drawWalk, pathOf, PICTURE_MARGIN, type Pixel, type WalkDrawing, type WalkFeature } from "./walk.ts";
 
 // A picture whose room for the drawing is 600 by 300 pixels. A room of 6 by 3 thus gets 100 pixels for each unit.
@@ -327,5 +327,57 @@ describe("pathOf", () => {
 
   it("closes the line of an outline", () => {
     expect(pathOf(points, true)).toBe("M1.0 2.0 L3.3 4.0 L10.0 0.0 Z");
+  });
+});
+
+describe("drawWalk, the objects of a room", () => {
+  // A desk of 2 m by 1 m is 1 m from the start of the first wall, and a lamp is on the desk.
+  const FURNISHED = expandSurvey({
+    schema: SURVEY_SCHEMA,
+    unit: "m",
+    height: 2.5,
+    wallThickness: 0.1,
+    sides: [6, 3, 6, 3].map((length, index) => ({ id: `w${String(index + 1)}`, length, turn: "left" as const })),
+    objects: [
+      { id: "desk", kind: "desk", wall: "w1", offset: 1, width: 2, depth: 1, height: 0.75 },
+      { id: "lamp", kind: "lamp", on: "desk", offset: 0.5, width: 0.5, depth: 0.5, height: 0.5 },
+    ],
+  });
+  const DESK: ObjectMark = { side: 0, key: "o1", id: "desk", kind: "desk", level: 1, fault: undefined };
+  const LAMP: ObjectMark = { side: 0, key: "o2", id: "lamp", kind: "lamp", level: 2, fault: "warning" };
+
+  function outline(ring: readonly Pixel[] | undefined): readonly [left: number, top: number, right: number, bottom: number] {
+    const xs = (ring ?? []).map((point) => point[0]);
+    const ys = (ring ?? []).map((point) => point[1]);
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  }
+
+  it("draws each object with a mark, as a camera above the room sees it", () => {
+    const objects = drawWalk(FURNISHED, SIZE, textsOf(FURNISHED), [], [LAMP, DESK]).objects;
+    // The lamp has the higher top, so it comes after the desk.
+    expect(objects.map((item) => [item.key, item.kind, item.side, item.level, item.fault])).toEqual([
+      ["o1", "desk", 0, 1, undefined],
+      ["o2", "lamp", 0, 2, "warning"],
+    ]);
+    const [left, top, right, bottom] = outline(objects[0]?.ring);
+    expect(left).toBeCloseTo(LEFT + 100, 6);
+    expect(right).toBeCloseTo(LEFT + 300, 6);
+    expect(top).toBeCloseTo(BOTTOM - 100, 6);
+    expect(bottom).toBeCloseTo(BOTTOM, 6);
+    const lamp = outline(objects[1]?.ring);
+    expect(lamp[2] - lamp[0]).toBeCloseTo(50, 6);
+    expect(lamp[3] - lamp[1]).toBeCloseTo(50, 6);
+    expect(lamp[0]).toBeGreaterThanOrEqual(left - 1e-6);
+    expect(lamp[2]).toBeLessThanOrEqual(right + 1e-6);
+  });
+
+  it("draws only the objects with a mark", () => {
+    expect(draw(FURNISHED).objects).toEqual([]);
+    expect(drawWalk(FURNISHED, SIZE, textsOf(FURNISHED), [], [DESK]).objects.map((item) => item.key)).toEqual(["o1"]);
+  });
+
+  it("draws no objects in an open walk", () => {
+    const open = openWalk(FURNISHED, FURNISHED.corners);
+    expect(drawWalk(open, SIZE, textsOf(open), [], [DESK, LAMP]).objects).toEqual([]);
   });
 });

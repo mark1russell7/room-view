@@ -223,7 +223,7 @@ Two rooms have one wall between them, but each survey gives the full thickness t
 | `error` | The model cannot show the record correctly. | An opening that is longer than its wall, an outlet on a wall that the room does not have. |
 | `warning` | The record is possible, but it is probably a mistake. | Two objects that overlap, an object in a wall, an outlet in a door. |
 
-Each finding has a code, the kind and the `id` of the record, and a message with the values. `FINDING_CODES` has each code.
+Each finding has a code, the kind and the `id` of the record, and a message with the values. `FINDING_CODES` has each code. A fault between two records also has the `id` of the second record in `other`. An example is the other object of an overlap.
 
 The model does not stop on a record with faults. It does not make the solids that it cannot make, and the checks tell why.
 

@@ -1,5 +1,6 @@
 // The probe of the page "Measure a room" for the command `site-pages check`. The check runs this code in the page, at each width.
 // It tests the interactive core: a person types the walls of a room with six corners, and the page draws the room and tells if the walk closes.
+// A person adds a door, an outlet, a desk and a display on the desk, and the page tells the fault of each one at its fields.
 // Then a person joins two rooms by a door, and the page shows the rooms together and tells if they fit at the door.
 declare const check: (name: string, ok: unknown, detail?: unknown) => boolean;
 declare const $: (selector: string) => HTMLElement | null;
@@ -181,6 +182,111 @@ $('#plan-box .walk-hit[data-side="2"]')?.dispatchEvent(new MouseEvent("click", {
 check("a click on a wall of the drawing goes to the field of its length", document.activeElement !== null && document.activeElement === lengthField(2), document.activeElement?.getAttribute("aria-label"));
 // A window with no focus gets no focus events, so the page cannot mark the wall there.
 if (document.hasFocus()) check("the drawing marks the wall of the field with the focus", await until(() => $('#plan-box .walk-mark[data-side="2"].walk-on'), 1000));
+
+// Furniture on the first wall: a desk with a display on it. A size with no number has the usual size of the kind.
+const objects = (): HTMLElement[] => $$("#sides li.object");
+const desk = '#sides li.object[data-kind="desk"]';
+const display = `${desk} li.object[data-kind="display"]`;
+/** This function gives the first field of a length of an object. A length in the box "More" is not a length of this function. */
+const objectField = (item: string, of: string): HTMLInputElement | null => document.querySelector<HTMLInputElement>(`${item} > .field .length[data-of="${of}"] input`);
+const shapes = (): HTMLElement[] => $$("#plan-box .walk-object");
+const addTo = (place: string): string => `${place} > .object-add [data-action="objects"]`;
+press(addTo(wallOne));
+check(
+  "the button for furniture shows the kinds of objects",
+  $(`${wallOne} > .object-add .object-kinds`)?.hidden === false && $(addTo(wallOne))?.getAttribute("aria-expanded") === "true" && $$(`${wallOne} > .object-add [data-action="add-object"]`).length === 12,
+  $$(`${wallOne} > .object-add [data-action="add-object"]`).length,
+);
+press(`${wallOne} > .object-add [data-action="add-object"][data-kind="desk"]`);
+check(
+  "a new desk asks for its distance from the corner",
+  objects().length === 1 && text(`${desk} > .feature-head .feature-name`) === "Desk 1" && level() === "closed" && text("#status-text") === "Type the distance from the corner of desk 1 on wall 1.",
+  status(),
+);
+check("a new desk has the focus in its first field", document.activeElement !== null && document.activeElement === objectField(desk, "offset"), document.activeElement?.getAttribute("aria-label"));
+check("the size of a desk shows its usual value", objectField(desk, "width")?.placeholder === "1.5" && objectField(desk, "depth")?.placeholder === "0.75", [objectField(desk, "width")?.placeholder, objectField(desk, "depth")?.placeholder]);
+check("a desk with no distance is not in the drawing", shapes().length === 0 && fact("Furniture and equipment") === "1", [shapes().length, text("#facts")]);
+enter(objectField(desk, "offset"), "0.5");
+check("a desk with its distance is in the drawing, and the room has no fault", shapes().length === 1 && shapes()[0]?.dataset["fault"] === undefined && text("#status-text") === exact, status());
+
+press(addTo(desk));
+press(`${desk} > .object-add [data-action="add-object"][data-kind="display"]`);
+check(
+  "a display on the desk asks for its distance from the edge of the desk",
+  $(display)?.dataset["level"] === "2" && text(`${display} > .field .field-name`).startsWith("From the edge near wall 6") && text("#status-text") === "Type the distance from the edge of display 1 on desk 1.",
+  [text(`${display} > .field .field-name`), status()],
+);
+enter(objectField(display, "offset"), "0.4");
+check(
+  "the display is in the drawing, on the desk",
+  shapes().length === 2 && $('#plan-box .walk-object[data-level="2"]') !== null && fact("Furniture and equipment") === "2" && text("#status-text") === exact,
+  [shapes().length, text("#facts"), status()],
+);
+interface KeptObject {
+  readonly kind?: string;
+  readonly holds?: readonly KeptObject[];
+}
+const keptObjects = (): string => {
+  try {
+    const kept = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null") as { readonly rooms?: readonly { readonly sides?: readonly { readonly objects?: readonly KeptObject[] }[] }[] } | null;
+    const write = (list: readonly KeptObject[]): string => list.map((item) => `${item.kind ?? ""}${(item.holds ?? []).length === 0 ? "" : `(${write(item.holds ?? [])})`}`).join("+");
+    return (kept?.rooms?.[0]?.sides ?? []).map((side) => write(side.objects ?? [])).join(",");
+  } catch {
+    return "";
+  }
+};
+check("the page keeps the desk with its wall, and the display on the desk", keptObjects() === "desk(display),,,,,", keptObjects());
+
+// The box "More" of an object has its name and its outlet.
+const more = document.querySelector<HTMLDetailsElement>(`${desk} > details.more`);
+check("the box More of a new object is closed", more?.open === false, more?.open);
+if (more !== null) more.open = true;
+enter(document.querySelector<HTMLInputElement>(`${desk} > details.more input[data-part="name"]`), "Work desk");
+check("the name of an object shows next to its kind", text(`${desk} > .feature-head .object-given`) === "Work desk", text(`${desk} > .feature-head`));
+const power = document.querySelector<HTMLSelectElement>(`${desk} > details.more select[data-part="outlet"]`);
+check("an object can use an outlet of the room", power?.options.length === 2 && power.options[1]?.textContent === "Outlet 1, wall 2", power === null ? "no field" : Array.from(power.options, (option) => option.textContent));
+if (power !== null && power.options.length === 2) {
+  power.selectedIndex = 1;
+  power.dispatchEvent(new Event("change", { bubbles: true }));
+}
+check("the outlet of the desk gives the room no fault", power?.selectedIndex === 1 && text("#status-text") === exact, status());
+
+// A click on an object of the drawing goes to its first field.
+const deskKey = $(desk)?.dataset["key"] ?? "";
+$(`#plan-box .walk-touch[data-object="${CSS.escape(deskKey)}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+check("a click on a desk of the drawing goes to its first field", document.activeElement !== null && document.activeElement === objectField(desk, "offset"), document.activeElement?.getAttribute("aria-label"));
+if (document.hasFocus()) check("the drawing marks the object of the field with the focus", await until(() => $(`#plan-box .walk-object[data-key="${CSS.escape(deskKey)}"].walk-on`), 1000));
+
+// The distance of an object can start at each corner of its wall. The typed number stays.
+press(`${desk} > .field [data-action="swap-object"]`);
+check(
+  "the other corner keeps the typed number of the desk",
+  objectField(desk, "offset")?.value === "0.5" && text(`${desk} > .field .field-name`).startsWith("From the corner with wall 2") && text("#status-text") === exact,
+  [objectField(desk, "offset")?.value, text(`${desk} > .field .field-name`), status()],
+);
+press(`${desk} > .field [data-action="swap-object"]`);
+
+// A chair in the space of the desk. The room stays closed, and the page tells the fault at the two objects.
+const chair = '#sides li.object[data-kind="chair"]';
+press(addTo(wallOne));
+press(`${wallOne} > .object-add [data-action="add-object"][data-kind="chair"]`);
+enter(objectField(chair, "offset"), "1");
+check(
+  "two objects in one space tell the fault at each object",
+  $(chair)?.dataset["fault"] === "warning" && $(`${chair} > .object-note`)?.hidden === false && text(`${chair} > .object-note`) === "It is in the space of desk 1." && $(desk)?.dataset["fault"] === "warning",
+  [text(`${chair} > .object-note`), $(desk)?.dataset["fault"]],
+);
+check(
+  "the status and the drawing tell the fault, and the room stays closed",
+  level() === "closed" && text("#status-text") === "Desk 1 on wall 1 is in the space of chair 1." && $$('#plan-box .walk-object[data-fault="warning"]').length >= 2 && !disabled("#save-room"),
+  status(),
+);
+press(`${chair} > .feature-head [data-action="remove-object"]`);
+check(
+  "the removal of an object removes its fault, and the focus goes to the button of its wall",
+  objects().length === 2 && $(desk)?.dataset["fault"] === undefined && text("#status-text") === exact && document.activeElement !== null && document.activeElement === $(addTo(wallOne)),
+  [objects().length, status(), document.activeElement?.className],
+);
 
 // A value that is not a number.
 enter(lengthField(1), "abc");

@@ -18,7 +18,7 @@ A room and a scene are data, and the code makes the 3D model from them. So a pro
 
 | Package | What it has |
 | --- | --- |
-| [`@mark1russell7/room-view`](packages/room-view/README.md) | The room format, the scene format, the 3D model, the checks and the loads of the circuits. It is not on npm yet. |
+| [`@mark1russell7/room-view`](packages/room-view/README.md) | The room format, the scene format, the 3D model, the checks and the loads of the circuits. It is on npm. |
 
 `@mark1russell7/layout-contract` gives the geometry records: the 3D points, the boxes and the transforms. This repository keeps only the room, the scene and the viewer.
 

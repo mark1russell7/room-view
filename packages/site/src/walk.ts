@@ -1,5 +1,5 @@
-import type { PlanPoint, SurveyResult } from "@mark1russell7/room-view";
-import type { FeatureKind, FeatureSpan } from "./draft.ts";
+import { metersPer, planShapes, SCENE_SCHEMA, type PlanPoint, type SurveyResult } from "@mark1russell7/room-view";
+import type { FeatureKind, FeatureSpan, ObjectMark } from "./draft.ts";
 
 // The drawing of a walk for the page "Measure a room", as data. Each position is in pixels of the picture.
 // The y axis of a plan points up, and that of a picture points down.
@@ -49,11 +49,31 @@ export interface WalkFeature {
   readonly fault: "error" | "warning" | undefined;
 }
 
+/** An object of the drawing: a piece of furniture or a piece of equipment, as a camera above the room sees it. */
+export interface WalkObject {
+  /** The position of the wall of the object in the walk, from 0. An object on a holder has the wall of the holder. */
+  readonly side: number;
+  /** The key of the object in the page. */
+  readonly key: string;
+  readonly kind: string;
+  /** The outline of the object. */
+  readonly ring: readonly Pixel[];
+  /** The level of the object: 1 for an object against a wall, 2 for an object on such an object. */
+  readonly level: number;
+  /** The level of the fault of the place of the object. */
+  readonly fault: "error" | "warning" | undefined;
+}
+
 /** The drawing of a walk. */
 export interface WalkDrawing {
   readonly walls: readonly WalkWall[];
   /** The features of the walls. A feature on a wall with no length is not in the drawing. */
   readonly features: readonly WalkFeature[];
+  /**
+   * The objects of a closed room, from the object with the lowest top to the object with the highest top.
+   * Thus a drawing in this sequence shows a display on a desk. An open walk has no objects.
+   */
+  readonly objects: readonly WalkObject[];
   /** The outline of the floor of a closed room. An open walk has no floor. */
   readonly floor: readonly Pixel[] | undefined;
   readonly labels: readonly WalkLabel[];
@@ -113,17 +133,29 @@ export function fitOf(points: readonly PlanPoint[], size: PictureSize, margin: P
 
 /**
  * This function gives the drawing of the result of a survey in a picture. `texts` has the label of each wall, and a wall with `undefined` has none.
- * `spans` has the place of each feature along its wall.
+ * `spans` has the place of each feature along its wall, and `marks` has each object of the survey record: the result of `objectMarks`.
  */
-export function drawWalk(result: SurveyResult, size: PictureSize, texts: readonly (string | undefined)[], spans: readonly FeatureSpan[] = []): WalkDrawing {
-  return drawWalkAt(result, fitOf(result.closure.closed ? result.corners : result.walk, size, PICTURE_MARGIN), texts, spans);
+export function drawWalk(
+  result: SurveyResult,
+  size: PictureSize,
+  texts: readonly (string | undefined)[],
+  spans: readonly FeatureSpan[] = [],
+  marks: readonly ObjectMark[] = [],
+): WalkDrawing {
+  return drawWalkAt(result, fitOf(result.closure.closed ? result.corners : result.walk, size, PICTURE_MARGIN), texts, spans, marks);
 }
 
 /**
  * This function gives the drawing of the result of a survey, as `drawWalk` does. `pixel` gives the position of each point of the plan in the picture.
  * Thus the drawings of two or more rooms can have one scale.
  */
-export function drawWalkAt(result: SurveyResult, pixel: (point: PlanPoint) => Pixel, texts: readonly (string | undefined)[], spans: readonly FeatureSpan[] = []): WalkDrawing {
+export function drawWalkAt(
+  result: SurveyResult,
+  pixel: (point: PlanPoint) => Pixel,
+  texts: readonly (string | undefined)[],
+  spans: readonly FeatureSpan[] = [],
+  marks: readonly ObjectMark[] = [],
+): WalkDrawing {
   const closed = result.closure.closed;
   const count = result.room.walls.length;
   const points: readonly PlanPoint[] = closed ? result.corners : result.walk;
@@ -171,7 +203,23 @@ export function drawWalkAt(result: SurveyResult, pixel: (point: PlanPoint) => Pi
   const open = !closed && Math.hypot(end[0] - start[0], end[1] - start[1]) >= SMALLEST_GAP;
   const gap = open ? { from: end, to: start, at: [(end[0] + start[0]) / 2, (end[1] + start[1]) / 2] as const } : undefined;
 
-  return { walls, features, floor: closed ? result.corners.map(pixel) : undefined, labels, start, heading, gap };
+  return { walls, features, objects: closed ? objectsOf(result, pixel, marks) : [], floor: closed ? result.corners.map(pixel) : undefined, labels, start, heading, gap };
+}
+
+/**
+ * This function gives the objects of the drawing of a closed room. Each object of `marks` with a box in the model of the room is in it.
+ * The outline of a box comes from `planShapes`, in meters, so the function changes it to the unit of the room before `pixel`.
+ */
+function objectsOf(result: SurveyResult, pixel: (point: PlanPoint) => Pixel, marks: readonly ObjectMark[]): readonly WalkObject[] {
+  if (marks.length === 0 || result.objects.length === 0) return [];
+  const byId = new Map(marks.map((mark): [string, ObjectMark] => [mark.id, mark]));
+  const scale = metersPer(result.room.unit);
+  return planShapes({ schema: SCENE_SCHEMA, room: result.room, objects: result.objects }).flatMap((shape): WalkObject[] => {
+    const mark = shape.kind === "object" ? byId.get(shape.source) : undefined;
+    if (mark === undefined) return [];
+    const ring = shape.ring.map(([x, y]) => pixel([x / scale, y / scale]));
+    return [{ side: mark.side, key: mark.key, kind: mark.kind, ring, level: mark.level, fault: mark.fault }];
+  });
 }
 
 function unit(wall: WalkWall): Pixel {
