@@ -310,6 +310,30 @@ describe("expandSurvey, the records of a survey", () => {
     expect(checkRoom(result.room)).toEqual([]);
   });
 
+  it("keeps each opening and each outlet at its place on a side that shares the gap", () => {
+    const openings = [
+      // The first opening ends at the end of its side, and the second opening has the full length of its side.
+      { id: "end", wall: "s0", kind: "gap", offset: 3.12, width: 0.9, height: 2 },
+      { id: "full", wall: "s2", kind: "gap", offset: 0, width: 4, height: 2 },
+      { id: "same", wall: "s1", kind: "door", offset: 1, width: 0.9, height: 2 },
+    ] as const;
+    // The outlet is at the end of its side, above the opening.
+    const result = expandSurvey(survey(sides([4.02, 3, 4, 3], LEFT4), { openings, outlets: [{ id: "o", wall: "s0", offset: 4.02, height: 2.2 }] }));
+    const width = 4.02 * (1 - 0.02 / 8.02);
+    const [end, full, same] = result.room.openings ?? [];
+    expect((end?.offset ?? 0) + (end?.width ?? 0)).toBeCloseTo(width, 12);
+    expect(end?.width).toBeCloseTo((0.9 * width) / 4.02, 12);
+    expect(full?.offset).toBe(0);
+    expect(full?.width).toBeCloseTo(width, 12);
+    // A side along the y axis has no gap to share, so its opening does not change.
+    expect(same).toBe(openings[2]);
+    expect(result.room.outlets?.[0]?.offset).toBeCloseTo(width, 12);
+    expect(checkRoom(result.room)).toEqual([]);
+    // A walk with no gap keeps the measured numbers, and an open walk also keeps them.
+    expect(expandSurvey(survey(sides([4, 3, 4, 3], LEFT4), { openings })).room.openings).toBe(openings);
+    expect(expandSurvey(survey(sides([4.5, 3, 4, 3], LEFT4), { openings })).room.openings).toBe(openings);
+  });
+
   it("has no optional list that the survey does not have", () => {
     const room = expandSurvey(survey(sides([4, 3, 4, 3], LEFT4))).room;
     for (const field of ["name", "openings", "outlets", "circuits"]) expect(field in room, field).toBe(false);

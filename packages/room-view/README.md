@@ -91,6 +91,7 @@ checkRoom(room); // => []
 - A walk with a mistake is not closed, for example a walk with a wrong turn. Its room has the walls of the walk and no floor, so a drawing shows the mistake.
 - A **check** is a measured distance between two corners, for example a diagonal. The result has its difference from the room record.
 - An opening and an outlet give their `offset` from the first corner of their side, as the tape measure shows it.
+- A side that shares the gap changes its length. Its openings and its outlets keep their place: each `offset` and each `width` changes in the same proportion.
 
 The walk goes along the inner faces, so each wall is on the outer side of its line. A survey has one room. A wall in the middle of a room is not a side of the walk, for example the short wall of a nook. Add such a wall to the room record.
 
