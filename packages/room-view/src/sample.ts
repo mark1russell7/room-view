@@ -56,8 +56,8 @@ export const SAMPLE_ROOM: Room = {
     { id: "nook-2", wall: "inset-east", face: "left", offset: 1.2, height: 0.3, circuit: "b" },
   ],
   circuits: [
-    { id: "a", name: "Circuit A", limit: 1440 },
-    { id: "b", name: "Circuit B", limit: 1440 },
+    { id: "a", name: "Circuit A", breaker: 15, voltage: 120, limit: 1440 },
+    { id: "b", name: "Circuit B", breaker: 15, voltage: 120, limit: 1440 },
   ],
 };
 
@@ -118,8 +118,8 @@ export const SAMPLE_SURVEY: Survey = {
     { id: "nook-2", wall: "inset-east", offset: 1.2, height: 0.3, circuit: "b" },
   ],
   circuits: [
-    { id: "a", name: "Circuit A", limit: 1440 },
-    { id: "b", name: "Circuit B", limit: 1440 },
+    { id: "a", name: "Circuit A", breaker: 15, voltage: 120, limit: 1440 },
+    { id: "b", name: "Circuit B", breaker: 15, voltage: 120, limit: 1440 },
   ],
   objects: [
     { id: "desk", kind: "desk", name: "Desk", wall: "north", offset: 2, width: 1.6, depth: 0.75, height: 0.74, gap: 0.075 },
@@ -232,5 +232,5 @@ export const SAMPLE_LEVEL: Level = {
     { id: "hall-bathroom", from: { room: "hall", opening: "bathroom" }, to: { room: "bathroom", opening: "door" }, thickness: 0.1 },
     { id: "hall-bedroom", from: { room: "hall", opening: "bedroom" }, to: { room: "bedroom", opening: "door" }, thickness: 0.1 },
   ],
-  circuits: [{ id: "c", name: "Circuit C", limit: 1440 }],
+  circuits: [{ id: "c", name: "Circuit C", breaker: 15, voltage: 120, limit: 1440 }],
 };

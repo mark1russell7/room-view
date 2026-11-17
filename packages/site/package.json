@@ -16,6 +16,7 @@
     "@fontsource/barlow": "^5.3.0",
     "@fontsource/barlow-semi-condensed": "^5.3.0",
     "@mark1russell7/cue": "^2.0.0",
+    "@mark1russell7/electrical": "workspace:*",
     "@mark1russell7/layout-contract": "^0.10.2",
     "@mark1russell7/room-view": "workspace:*",
     "@mark1russell7/site-pages": "^0.7.0",

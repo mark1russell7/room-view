@@ -212,6 +212,46 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  packages/electrical:
+    dependencies:
+      '@mark1russell7/room-view':
+        specifier: workspace:*
+        version: link:../room-view
+      '@mark1russell7/vex':
+        specifier: ^0.19.1
+        version: 0.19.1(zod@4.6.7)
+      '@mark1russell7/vex-domains':
+        specifier: ^0.19.1
+        version: 0.19.1(zod@4.6.7)
+      '@mark1russell7/visuals':
+        specifier: ^0.2.2
+        version: 0.2.2(three@0.187.0)(zod@4.6.7)
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@mark1russell7/cue':
+        specifier: ^2.0.0
+        version: 2.1.4
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.6
+      '@vitest/coverage-v8':
+        specifier: ^5.0.3
+        version: 5.1.0(vitest@5.1.0)
+      fast-check:
+        specifier: ^4.10.2
+        version: 4.10.2
+      tsdown:
+        specifier: ^0.23.1
+        version: 0.23.7(publint@0.3.25)(tsx@4.23.15)(typescript@7.0.2)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.3
+        version: 5.1.0(@types/node@26.6.6)(@vitest/coverage-v8@5.1.0)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/room-view:
     dependencies:
       '@mark1russell7/layout-contract':
@@ -220,6 +260,9 @@ importers:
       '@mark1russell7/quantity':
         specifier: ^0.4.1
         version: 0.4.1(zod@4.6.7)
+      '@mark1russell7/visuals':
+        specifier: ^0.2.2
+        version: 0.2.2(three@0.187.0)(zod@4.6.7)
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -263,6 +306,9 @@ importers:
       '@mark1russell7/cue':
         specifier: ^2.0.0
         version: 2.1.4
+      '@mark1russell7/electrical':
+        specifier: workspace:*
+        version: link:../electrical
       '@mark1russell7/layout-contract':
         specifier: ^0.10.2
         version: 0.10.2(zod@4.6.7)
@@ -532,6 +578,9 @@ packages:
       dependency-cruiser:
         optional: true
 
+  '@mark1russell7/coeval@0.34.0':
+    resolution: {integrity: sha512-RBffEYCcXuHYuEWUzQw6ebrT86aCsfp3SGvUiKlZ/cfZE7RVNbWLITtUtnPDorD+radOYxDZNSo3kS1LsqBfkg==}
+
   '@mark1russell7/collections@0.10.2':
     resolution: {integrity: sha512-uOqrK6ZYqgbG8DLchTU2FO8DcNeeeLbNAqR8E3YTe/HKK3rk4ZpR0M0GlYG/7ApiWfrFkVhW1rCF6opaeiL16g==}
     engines: {node: '>=22.12'}
@@ -546,6 +595,10 @@ packages:
     engines: {node: '>=22'}
     hasBin: true
 
+  '@mark1russell7/geo@0.5.2':
+    resolution: {integrity: sha512-hr8rFQLIQ0MbzdZUDhQ10A6dKUtVsSXHhpXng8xzkR9NFnwy9dXSgfx1E5dgXF4GjGIFmd4TD/4ZYOwl5YUoiQ==}
+    engines: {node: '>=22.12'}
+
   '@mark1russell7/layout-contract@0.10.2':
     resolution: {integrity: sha512-53xgUkaVtkGXEdRZesdxKl1bSel8NCIs/OyKyk56t7VhjgSIIinELGKei8prBL1/cHnjswXMkkDgu/eo6wqmYg==}
     engines: {node: '>=22.12'}
@@ -556,6 +609,10 @@ packages:
 
   '@mark1russell7/predicates@0.1.4':
     resolution: {integrity: sha512-1lh7XAAejuygPdes/Ze4XV+p+CqxzLGRW9aUwavnSk5hhnc5YkhZN2rjz1ps7oEC9eImd2yfmbt6QKZktT4XPQ==}
+    engines: {node: '>=22'}
+
+  '@mark1russell7/predicates@0.1.5':
+    resolution: {integrity: sha512-WXgTOliDm5650i3adkTjAj85Uzp22LD7KQFqwhETlQWG4CK3pDnd4I4ef9YrOAfzik1uTdChVk8RZaqdeP+YxA==}
     engines: {node: '>=22'}
 
   '@mark1russell7/quantity@0.4.1':
@@ -605,6 +662,21 @@ packages:
   '@mark1russell7/typeset@0.5.3':
     resolution: {integrity: sha512-uKmmt2icpkn2k9Wn/y1fRZvBml80dgwRLRhI72e6SkGVSF3UWCiuPZdYTJA2WEstRolq0viSLRJjXb/o8NF8JQ==}
     engines: {node: '>=22.12'}
+
+  '@mark1russell7/vex-domains@0.19.1':
+    resolution: {integrity: sha512-mfOTq9GUER3gh4i7ayzuIsVGMT9OtwYwQo4Pzzcu6IR2NY4WaZiA5sdwhOL0LmRVDyPvlL/vjC4a0+c4XwD2NQ==}
+
+  '@mark1russell7/vex@0.19.1':
+    resolution: {integrity: sha512-Hl8IVbyNmhJ7xV2nyTyOgiqANGWSWhmZSdnuucSRnmBj/KSnp0kvSz7MNzcWcI+tV34wfXmTNp6Y3ewDATbXjg==}
+
+  '@mark1russell7/visuals@0.2.2':
+    resolution: {integrity: sha512-I8qEugK3ygwmExGfNjn0yrBCthcbpHrPnVy/M2l+0qA1DgPI0/B/raCZVhF4wuqR3AKxTEn3GMWGtnZBuI3cDw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      three: '>=0.187.0'
+    peerDependenciesMeta:
+      three:
+        optional: true
 
   '@napi-rs/wasm-runtime@1.2.6':
     resolution: {integrity: sha512-mRyDmEw9/fCDXCGfL1sbgIw/GUK0PVxRW4YwgPN61F3LQ+fSyoBFarJVzgGyhF6kRzEQZ0FejDqm4WLXSeqQmw==}
@@ -1903,6 +1975,13 @@ snapshots:
       '@swc/core': 1.16.22
       dependency-cruiser: 18.7.2
 
+  '@mark1russell7/coeval@0.34.0(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/collections': 0.10.2(zod@4.6.7)
+      '@mark1russell7/rigor-generators': 0.1.16
+    transitivePeerDependencies:
+      - zod
+
   '@mark1russell7/collections@0.10.2(zod@4.6.7)':
     dependencies:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
@@ -1917,6 +1996,11 @@ snapshots:
 
   '@mark1russell7/cue@2.1.4': {}
 
+  '@mark1russell7/geo@0.5.2':
+    dependencies:
+      '@mark1russell7/optional': 1.2.0
+      '@mark1russell7/predicates': 0.1.5
+
   '@mark1russell7/layout-contract@0.10.2(zod@4.6.7)':
     dependencies:
       '@mark1russell7/predicates': 0.1.4
@@ -1930,6 +2014,8 @@ snapshots:
   '@mark1russell7/optional@1.2.0': {}
 
   '@mark1russell7/predicates@0.1.4': {}
+
+  '@mark1russell7/predicates@0.1.5': {}
 
   '@mark1russell7/quantity@0.4.1(zod@4.6.7)':
     dependencies:
@@ -1970,6 +2056,28 @@ snapshots:
     dependencies:
       '@mark1russell7/collections': 0.10.2(zod@4.6.7)
       '@mark1russell7/rigor-generators': 0.1.16
+    transitivePeerDependencies:
+      - zod
+
+  '@mark1russell7/vex-domains@0.19.1(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/quantity': 0.4.1(zod@4.6.7)
+      '@mark1russell7/vex': 0.19.1(zod@4.6.7)
+    transitivePeerDependencies:
+      - zod
+
+  '@mark1russell7/vex@0.19.1(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/coeval': 0.34.0(zod@4.6.7)
+    transitivePeerDependencies:
+      - zod
+
+  '@mark1russell7/visuals@0.2.2(three@0.187.0)(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/geo': 0.5.2
+      '@mark1russell7/layout-contract': 0.10.2(zod@4.6.7)
+    optionalDependencies:
+      three: 0.187.0
     transitivePeerDependencies:
       - zod
 

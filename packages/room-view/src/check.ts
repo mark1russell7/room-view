@@ -295,6 +295,8 @@ export function checkRoom(room: Room, options: CheckOptions = {}): readonly Find
   }
   for (const circuit of circuits) {
     if (!(circuit.limit > 0)) error("circuit-limit", "circuit", circuit.id, `The limit of the circuit "${circuit.id}" is ${show(circuit.limit)} W. It must be above 0.`);
+    if (circuit.breaker !== undefined && !(circuit.breaker > 0)) error("circuit-limit", "circuit", circuit.id, `The breaker of the circuit "${circuit.id}" is ${show(circuit.breaker)} A. It must be above 0.`);
+    if (circuit.voltage !== undefined && !(circuit.voltage > 0)) error("circuit-limit", "circuit", circuit.id, `The voltage of the circuit "${circuit.id}" is ${show(circuit.voltage)} V. It must be above 0.`);
   }
   return findings;
 }

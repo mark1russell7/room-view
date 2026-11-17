@@ -1,4 +1,5 @@
-import { levelShape, NEAR_LIMIT } from "@mark1russell7/room-view";
+import { DEFAULT_NEAR_LOAD, fromSceneV1 } from "@mark1russell7/electrical";
+import { levelShape } from "@mark1russell7/room-view";
 import { SAMPLE_SCENE } from "@mark1russell7/room-view/sample";
 import type { ViewerPick, ViewerTheme } from "@mark1russell7/room-view/three";
 import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome";
@@ -7,7 +8,9 @@ import { circuitRows, detailsOf, legendRows, partGroups, partKey, partName, room
 import { createPlanView, type RoomStage } from "./plan.ts";
 
 const scene = SAMPLE_SCENE;
-const circuits = circuitRows(scene);
+// The sample keeps its outlets and circuits in its `scene/1`, so the page moves them to a layer of the electrical add-on.
+const electrical = fromSceneV1(scene);
+const circuits = circuitRows(electrical);
 
 const viewerBox = byId("viewer");
 const detailsBox = byId("details");
@@ -98,7 +101,7 @@ function showCircuits(): void {
   for (const row of circuits) {
     const track = h("span", { class: "meter-track", "aria-hidden": "true" }, h("span", { class: "meter-fill" }), h("span", { class: "meter-tick" }));
     track.style.setProperty("--fill", String(row.fill));
-    track.style.setProperty("--near", String(NEAR_LIMIT));
+    track.style.setProperty("--near", String(DEFAULT_NEAR_LOAD));
     const button = h(
       "button",
       { class: "meter", type: "button", "data-level": row.level, "data-circuit": row.id, "aria-pressed": "false" },
@@ -119,7 +122,7 @@ function showCircuits(): void {
 /** This function shows the legend of the outlets: the sign of each level, and the number of the outlets with the level. */
 function showLegend(): void {
   const list = byId("legend");
-  for (const row of legendRows(scene)) {
+  for (const row of legendRows(electrical)) {
     const mark = h("span", { class: "level-mark", "data-shape": row.shape, "aria-hidden": "true" });
     list.append(h("li", { class: "legend-item", "data-level": row.level, "data-count": String(row.count) }, mark, `${row.label}: ${String(row.count)}`));
   }

@@ -1,3 +1,4 @@
+import { ELECTRICAL_SCHEMA, fromSceneV1 } from "@mark1russell7/electrical";
 import { sceneSolids, type Scene } from "@mark1russell7/room-view";
 import { SAMPLE_SCENE } from "@mark1russell7/room-view/sample";
 import { describe, expect, it } from "vitest";
@@ -109,23 +110,33 @@ describe("roomDetails", () => {
 
 describe("circuitRows", () => {
   it("gives the load, the limit and the level of each circuit", () => {
-    const [a, b] = circuitRows(SAMPLE_SCENE);
+    const [a, b] = circuitRows(fromSceneV1(SAMPLE_SCENE));
     expect(a).toMatchObject({ id: "a", name: "Circuit A", level: "ok", figure: "420 of 1440 W, 29.17% of the limit", status: "Within its limit" });
     expect(a!.fill).toBeCloseTo(420 / 1440, 9);
     expect(b).toMatchObject({ id: "b", name: "Circuit B", level: "near", figure: "1260 of 1440 W, 87.5% of the limit", status: "Near its limit", fill: 0.875 });
   });
 
   it("gives the outlets of a circuit and the objects that take power from them", () => {
-    const [a, b] = circuitRows(SAMPLE_SCENE);
+    const [a, b] = circuitRows(fromSceneV1(SAMPLE_SCENE));
     expect(a!.records.map(partKey)).toEqual(["outlet:south-1", "outlet:south-2", "outlet:east-1", "outlet:west-1", "outlet:north-1", "object:tower"]);
     expect(b!.records.map(partKey)).toEqual(["outlet:nook-1", "outlet:nook-2", "object:node-1", "object:node-2", "object:node-3", "object:node-4"]);
   });
 
   it("fills the meter of a circuit over its limit, and gives no load for a circuit with no load record", () => {
     const scene: Scene = { ...SAMPLE_SCENE, loads: [{ circuit: "a", watts: 2000 }] };
-    const [a, b] = circuitRows(scene);
+    const [a, b] = circuitRows(fromSceneV1(scene));
     expect(a).toMatchObject({ level: "over", fill: 1, status: "Over its limit", figure: "2000 of 1440 W, 138.89% of the limit" });
     expect(b).toMatchObject({ level: "unknown", fill: 0, status: "No load value", figure: "The limit is 1440 W" });
+  });
+
+  it("gives the limit of a circuit from its breaker and its voltage, and the name of the circuit from the layer", () => {
+    const [row] = circuitRows({ schema: ELECTRICAL_SCHEMA, circuits: [{ id: "c", name: "Rack", breaker: 20, voltage: 120, otherLoad: 960 }] });
+    expect(row).toMatchObject({ id: "c", name: "Rack", level: "ok", fill: 0.5, figure: "960 of 1920 W, 50% of the limit", status: "Within its limit" });
+  });
+
+  it("gives only the load of a circuit with no limit", () => {
+    const [row] = circuitRows({ schema: ELECTRICAL_SCHEMA, circuits: [{ id: "c", otherLoad: 300 }] });
+    expect(row).toMatchObject({ id: "c", name: "c", level: "unknown", fill: 0, figure: "300 W", status: "No limit", records: [] });
   });
 });
 
@@ -145,7 +156,7 @@ describe("partGroups", () => {
 
 describe("legendRows", () => {
   it("gives the sign and the number of the outlets of each level, with the unknown level last", () => {
-    expect(legendRows(SAMPLE_SCENE)).toEqual([
+    expect(legendRows(fromSceneV1(SAMPLE_SCENE))).toEqual([
       { level: "ok", shape: "disc", label: "Within its limit", count: 5 },
       { level: "near", shape: "triangle", label: "Near its limit", count: 2 },
       { level: "over", shape: "square", label: "Over its limit", count: 0 },
@@ -159,6 +170,6 @@ describe("legendRows", () => {
       { id: "quiet", wall: "south", face: "left" as const, offset: 2, height: 0.3, circuit: "c" },
     ];
     const scene: Scene = { ...SAMPLE_SCENE, room: { ...SAMPLE_SCENE.room, outlets, circuits: [{ id: "c", limit: 1440 }] }, objects: [], loads: [] };
-    expect(legendRows(scene).map((row) => row.count)).toEqual([0, 0, 0, 2]);
+    expect(legendRows(fromSceneV1(scene)).map((row) => row.count)).toEqual([0, 0, 0, 2]);
   });
 });

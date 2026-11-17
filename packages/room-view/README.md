@@ -51,7 +51,7 @@ roomSolids(room); // => the floor, and the parts of each wall around the door
 - A **wall** is a straight line in the plan, with a thickness and a height. The field `side` tells which side of the line has the wall.
 - An **opening** is a door, a window or a gap in a wall.
 - A **floor** is one area of the plan.
-- An **outlet** is a point on a face of a wall. A **circuit** gives power to outlets, and it has a limit in watts.
+- An **outlet** is a point on a face of a wall. A **circuit** gives power to outlets, and it has a limit in watts. A circuit can also keep the rating of its breaker in amperes and its voltage. The limit does not change with them.
 
 A scene is one room with its placed objects and the loads of its circuits. A placed object is a box: a desk, a rack, a computer. An object can have a parent, and then its position is relative to the parent.
 
@@ -251,6 +251,19 @@ const findings = checkLayers(scene, addOns);
 - The findings are in the order of the layer keys, then of the record keys. Thus equal inputs give equal findings.
 - The add-ons do not know each other. Two add-ons can put records on one object.
 
+An add-on can give marks: records that a viewer draws, in the format of `@mark1russell7/visuals/marks`. `layerMarks` of the entry `/marks` gives the marks of the layers of a scene:
+
+```ts
+import { layerMarks } from "@mark1russell7/room-view/marks";
+
+const marks = layerMarks(scene, addOns, addOnMarks);
+```
+
+- Each value of `addOnMarks` is the `AddOnMarks` value of an add-on, from the entry `/marks` of its package. The add-on of the same name reads the layer.
+- The marks are in the order of the layer names, then of the record names. Thus equal inputs give equal marks.
+- A layer with a fault of its form gives no marks, and `checkLayers` tells the fault.
+- A mark is plain data in meters, with the z axis up. It has no shape and no color.
+
 `ANCHOR_CODES` and `LAYER_CODES` have the codes of the core. The design of the add-ons is in `docs/ADD-ONS.md` of the repository.
 
 ## The loads of the circuits
@@ -303,8 +316,9 @@ The option `cut` gives a floor plan: the plan keeps only the solids that start b
 | Entry | What it has |
 | --- | --- |
 | `@mark1russell7/room-view` | The record types, the model, the plan, the checks, the loads, the survey and the level. It has no schema library. |
-| `@mark1russell7/room-view/schema` | `roomSchema`, `sceneSchema`, `surveySchema` and `levelSchema`: the zod schemas that examine the form of a JSON record. |
+| `@mark1russell7/room-view/schema` | `roomSchema`, `sceneSchema`, `surveySchema`, `levelSchema` and `anchorSchema`: the zod schemas that examine the form of a JSON record. |
 | `@mark1russell7/room-view/sample` | `SAMPLE_ROOM`, `SAMPLE_SCENE`, `SAMPLE_SURVEY` and `SAMPLE_LEVEL`: a room with a rack and an apartment of four rooms, for demos and tests. |
+| `@mark1russell7/room-view/marks` | `layerMarks` and the type `AddOnMarks`: the marks of the layers of a scene, as plain data for a viewer. |
 | `@mark1russell7/room-view/three` | `createRoomViewer`, the themes and `solidGeometry`: the viewer in a page. It needs the package `three`. |
 
 The schemas examine the form of a record: the fields and their types. The checks examine its meaning. Use the two for a record from a file:

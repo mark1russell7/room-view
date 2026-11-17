@@ -55,40 +55,49 @@
       <dl id="facts" class="facts" aria-label="The room in numbers"></dl>
     </div>
 
-    <form id="form" class="entry" novalidate autocomplete="off">
-      <p id="example-note" class="entry-note" hidden>This is an example room. Type the numbers of your room over it. <button id="see-example" class="see-example" type="button">See an example apartment</button></p>
+    <div class="entry-column">
+      <form id="form" class="entry" novalidate autocomplete="off">
+        <p id="example-note" class="entry-note" hidden>This is an example room. Type the numbers of your room over it. <button id="see-example" class="see-example" type="button">See an example apartment</button></p>
 
-      <div class="setup">
-        <label class="field field-wide">
-          <span class="field-name">Name of the room</span>
-          <input id="name" class="text-field" type="text" maxlength="60" placeholder="Bedroom" enterkeyhint="next">
-        </label>
-        <label class="field">
-          <span class="field-name">Units</span>
-          <select id="mode" class="text-field"></select>
-        </label>
-        <div class="field">
-          <span class="field-name">Height of the room</span>
-          <span id="height" class="length" data-of="height"></span>
+        <div class="setup">
+          <label class="field field-wide">
+            <span class="field-name">Name of the room</span>
+            <input id="name" class="text-field" type="text" maxlength="60" placeholder="Bedroom" enterkeyhint="next">
+          </label>
+          <label class="field">
+            <span class="field-name">Units</span>
+            <select id="mode" class="text-field"></select>
+          </label>
+          <div class="field">
+            <span class="field-name">Height of the room</span>
+            <span id="height" class="length" data-of="height"></span>
+          </div>
+          <div class="field">
+            <span class="field-name">Thickness of a wall</span>
+            <span id="thickness" class="length" data-of="thickness"></span>
+          </div>
         </div>
-        <div class="field">
-          <span class="field-name">Thickness of a wall</span>
-          <span id="thickness" class="length" data-of="thickness"></span>
-        </div>
-      </div>
-      <p id="fractions" class="entry-aid" hidden>For a part of an inch, type a decimal: ¼ is .25, ½ is .5 and ¾ is .75.</p>
+        <p id="fractions" class="entry-aid" hidden>For a part of an inch, type a decimal: ¼ is .25, ½ is .5 and ¾ is .75.</p>
 
-      <h2 class="entry-title">The walls, in the sequence of your walk</h2>
-      <ol id="sides" class="sides"></ol>
-      <button id="add" class="tool add" type="button">Add a wall</button>
-    </form>
+        <h2 class="entry-title">The walls, in the sequence of your walk</h2>
+        <ol id="sides" class="sides"></ol>
+        <button id="add" class="tool add" type="button">Add a wall</button>
+      </form>
 
-    <section id="level" class="entry level" aria-labelledby="level-title" hidden>
-      <h2 id="level-title" class="entry-title">Doors between rooms</h2>
-      <ul id="joints" class="joints"></ul>
-      <p id="no-joints" class="entry-note">No door joins two rooms yet.</p>
-      <p class="entry-aid">A door between two rooms is in each of the two rooms. Open one of the rooms. At its door, select where the door goes.</p>
-    </section>
+      <section id="level" class="entry level" aria-labelledby="level-title" hidden>
+        <h2 id="level-title" class="entry-title">Doors between rooms</h2>
+        <ul id="joints" class="joints"></ul>
+        <p id="no-joints" class="entry-note">No door joins two rooms yet.</p>
+        <p class="entry-aid">A door between two rooms is in each of the two rooms. Open one of the rooms. At its door, select where the door goes.</p>
+      </section>
+
+      <section id="circuits" class="entry circuits" aria-labelledby="circuits-title">
+        <h2 id="circuits-title" class="entry-title">Circuits</h2>
+        <p class="entry-aid">Each breaker of the electrical panel gives power to the outlets of one circuit. Add each breaker here. Then, at each outlet, select its circuit.</p>
+        <ol id="circuit-list" class="features circuit-list" aria-label="The circuits of the home"></ol>
+        <button id="add-circuit" class="tool add" type="button">Add a breaker</button>
+      </section>
+    </div>
   </div>
 
   <div class="below">
@@ -127,6 +136,8 @@
         <li>For the next room, select Add a room. The page keeps each room, and the list above the drawing shows them.</li>
         <li>Measure a door between two rooms in each of the two rooms. At one of the two doors, select the other door in the field Goes to.</li>
         <li>Select All rooms to see the rooms together. The page tells if the rooms fit at each door.</li>
+        <li>For the circuits, switch off one breaker of the electrical panel. Find each outlet with no power.</li>
+        <li>Under Circuits, select Add a breaker. Type the amperes on the handle of the breaker. Then, at each outlet with no power, select the circuit.</li>
       </ol>
       <p class="note">The measurements are a <code>survey/1</code> record, and <a href="https://github.com/mark1russell7/room-view/tree/main/packages/room-view#a-survey-the-room-from-a-tape-measure">the package</a> makes the room from it. The rooms together are a <code>level/1</code> record.</p>
     </section>
