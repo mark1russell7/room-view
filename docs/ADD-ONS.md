@@ -86,9 +86,14 @@ interface AddOn<Layer> {
 
 /** The marks of one add-on. This value is in the entry `/marks` of the add-on, so the root entry has no visual part. */
 interface AddOnMarks<Layer> {
+  /** The name of the layer. It is the `schema` of the add-on that reads the layer. */
   readonly schema: string;
-  readonly marks: (layer: Layer, space: SceneSpace) => readonly Mark[];
+  /** This function gives the marks of a layer, in the space of the frames. */
+  marks(layer: Layer, space: SceneSpace): readonly Mark[];
 }
+
+/** This function gives the marks of the layers of a scene. It is in the entry `/marks` of the core. */
+function layerMarks(scene: Scene, addOns: readonly AddOn<unknown>[], marks: readonly AddOnMarks<unknown>[]): readonly Mark[];
 ```
 
 - `SceneSpace` is the read view of the core: the walls, the objects, their transforms and the frame of each anchor.
@@ -98,6 +103,10 @@ interface AddOnMarks<Layer> {
 - A finding of a layer has the name of the layer in `layer`. Thus an add-on gives its own codes.
 - The name of a layer is a word, a slash and a version, for example `electrical/1`. A layer with a different name gets an error.
 - An unknown layer gives a warning, and the scene keeps it.
+- `layerMarks` is in the entry `@mark1russell7/room-view/marks`. The add-on of the same name reads each layer, and its `AddOnMarks` value gives the marks.
+- The marks are in the order of the layer names, then of the record names. Thus equal inputs give equal marks.
+- A layer with a fault of its form gives no marks, and `checkLayers` tells the fault.
+- The function `marks` is a method, as the functions of `AddOn` are. Thus one list holds the marks values of different layers.
 
 `recordName(kind, id)` gives one name for each record, for example `object:desk` or `electrical/1:o1`. The kind of a record of a layer is the name of the layer. A finding, a mark and the selection use this name, so a click on a finding selects its mark.
 
@@ -123,6 +132,7 @@ A mark is a record that a viewer draws. A mark has no topic. The marks are in `@
 - Each point of a mark is in the space of the frames: meters, with the z axis up. Each point of a run has its own direction, so a run can cross surfaces.
 - A field has its values row by row, with `null` for a cell with no value. JSON has no NaN.
 - A meter has no place. The page draws it in a panel, and the 3D view ignores it.
+- A meter needs a limit. A record with no limit gives no meter, and the check of its add-on tells the fault.
 - The entry `@mark1russell7/visuals/marks` has the types, the levels, their shapes and `checkMarks`, with no three.js. The shapes move from `loads.ts` to that entry.
 - A plan view and a 3D view draw the same marks.
 
@@ -175,7 +185,8 @@ The programs evaluate over a tree, which `electricalSpace` makes from a layer. A
 The add-on also has these parts:
 
 - The checks find a duplicate `id`, an unknown circuit, outlet or object, and a number that is not valid. They also find a circuit with no limit or over its limit.
-- The marks: a point for each outlet, a link for each feed, and a meter for each circuit.
+- The marks: a point for each outlet, a link for each feed, and a meter for each circuit with a limit.
+  A link goes from its outlet to the center of its placed object. A record with no place gives no mark.
 - The form: the outlets of each wall and the list of circuits. The site gets them from the add-on, not from the core.
 - `fromSceneV1` moves the electrical records of a `scene/1` to a layer: the outlets, the circuits, the loads and the outlet of each object. The loads of a circuit become its `otherLoad`.
 

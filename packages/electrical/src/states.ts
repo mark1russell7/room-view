@@ -15,6 +15,7 @@ import {
   type NodeKind,
 } from "./formulas.ts";
 import type { ElectricalLayer } from "./layer.ts";
+import { firsts } from "./records.ts";
 
 // The state of each circuit of a layer. The layer becomes a tree, and the programs of `formulas.ts` evaluate at each circuit.
 
@@ -112,16 +113,6 @@ function numberOf(result: Result<unknown>): number | undefined {
 function textsOf(result: Result<unknown>): ReadonlySet<string> {
   const value = result.ok ? result.value : [];
   return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
-}
-
-/** This function gives the first record of each `id` of a list, in the sequence of the list. */
-function firsts<Item extends { readonly id: string }>(list: readonly Item[]): readonly Item[] {
-  const seen = new Set<string>();
-  return list.filter((item) => {
-    if (seen.has(item.id)) return false;
-    seen.add(item.id);
-    return true;
-  });
 }
 
 /**

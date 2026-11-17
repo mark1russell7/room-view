@@ -78,6 +78,24 @@ describe("sceneSpace", () => {
     expect(lost.frame({ on: "object", object: "lamp" })).toBeUndefined();
   });
 
+  it("gives a frame with no negative zero, so the frame goes through JSON with no change", () => {
+    const space = sceneSpace(scene());
+    const anchors: Anchor[] = [
+      { on: "wall", wall: "a", face: "left", offset: 3, height: 0 },
+      { on: "wall", wall: "a", face: "right", offset: 3, height: 0.3 },
+      { on: "floor", at: [-0, 0] },
+      { on: "ceiling", at: [0, -0] },
+      { on: "object", object: "desk" },
+      { on: "object", object: "desk", at: [-0, 0, 0], out: [0, -1, 0] },
+    ];
+    for (const anchor of anchors) {
+      const frame = space.frame(anchor);
+      if (frame === undefined) throw new Error("The anchor has no position.");
+      for (const value of [frame.at.x, frame.at.y, frame.at.z, frame.out.x, frame.out.y, frame.out.z]) expect(Object.is(value, -0)).toBe(false);
+      expect(JSON.parse(JSON.stringify(frame))).toEqual(frame);
+    }
+  });
+
   it("gives no frame for a number that is not finite or not in the range of the model", () => {
     const space = sceneSpace(scene());
     expect(space.frame({ on: "floor", at: [Number.NaN, 0] })).toBeUndefined();

@@ -1,5 +1,6 @@
 import { sceneSpace, type Anchor, type SceneSpace } from "./anchors.ts";
 import { checkAnchor, type FindingLevel } from "./check.ts";
+import { compareText } from "./order.ts";
 import { isLayerName, type Scene } from "./room.ts";
 
 // The layers of a scene: the records of the add-ons. The core keeps each layer, and it does not read one.
@@ -58,11 +59,6 @@ export interface LayerFinding {
   readonly message: string;
   /** The `id` of the second record of the fault. A fault of one record has none. */
   readonly other?: string | undefined;
-}
-
-/** This function compares two texts by their code points, so the order does not change with the language of a computer. */
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** This function gives the add-on of each schema name. The first add-on of a name is used. */

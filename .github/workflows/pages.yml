@@ -49,7 +49,7 @@ jobs:
       out: packages/site/dist
       env: '{"SITE_BASE": "/${{ github.event.repository.name }}"}'
       deploy: ${{ github.event_name != 'pull_request' }}
-      packages: "@mark1russell7/room-view"
+      packages: "@mark1russell7/room-view,@mark1russell7/electrical"
       site-name: room-view
       # The open items for the Status page. check:conventions parses the file on each pull request (roadmap-parses).
       roadmap: docs/ROADMAP.md
