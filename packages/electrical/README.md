@@ -121,13 +121,14 @@ const all = layerMarks(scene, [electrical], [electricalAddOnMarks()]);
 | --- | --- | --- | --- |
 | An outlet | A point | `outlet` | The place of the anchor and the direction out of its surface, with the level of its circuit. |
 | A feed | A link | `feed` | A line from the outlet to the center of the placed object, with the level of the circuit of the outlet. |
-| A circuit | A meter | `circuit` | The known load against the limit, in watts. |
+| A circuit | A meter | `circuit` | The known load in watts, and the limit when the circuit has one. |
 
 - The record name of a mark is `recordName("electrical/1", id)`. A finding of `checkLayers` has the same name, so a finding selects its mark.
 - Each point is in meters, with the z axis up.
 - A record with no place gives no mark: an outlet whose anchor has no position, and a feed with no outlet or no placed object.
-- A circuit with no limit gives no meter, because a meter needs a limit. Its outlets and its feeds have the level `unknown`.
-- The checks tell each of these faults, so a record with no mark has a finding.
+- A circuit with no limit above 0 gives a meter with no `limit`, so a page shows only its known load.
+- The meter, the outlets and the feeds of a circuit with no limit have the level `unknown`.
+- The checks tell each of these faults, so a record with no mark has a finding, and so has a circuit with no limit.
 - Give the options of `electricalAddOn` to `electricalAddOnMarks` too. Thus the levels of the marks agree with the findings.
 
 `ELECTRICAL_MARK_KINDS` has the kinds of the marks, for the legend and the filter of a viewer.
