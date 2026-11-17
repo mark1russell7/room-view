@@ -225,7 +225,7 @@ importers:
         version: 0.19.1(zod@4.6.7)
       '@mark1russell7/visuals':
         specifier: ^0.3.1
-        version: 0.3.1(three@0.187.0)(zod@4.6.7)
+        version: 0.3.3(three@0.187.0)(zod@4.6.7)
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -261,8 +261,8 @@ importers:
         specifier: ^0.4.1
         version: 0.4.1(zod@4.6.7)
       '@mark1russell7/visuals':
-        specifier: ^0.3.1
-        version: 0.3.1(three@0.187.0)(zod@4.6.7)
+        specifier: ^0.3.3
+        version: 0.3.3(three@0.187.0)(zod@4.6.7)
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -607,10 +607,6 @@ packages:
     resolution: {integrity: sha512-vS5jF21WC/VApRv4p8afRZahcMl9cuNp03LxbVngY9nYkzq+S7Oit6ksySt2baML+tp46UF60sxnHxn1jlwtTg==}
     engines: {node: '>=22.12'}
 
-  '@mark1russell7/predicates@0.1.4':
-    resolution: {integrity: sha512-1lh7XAAejuygPdes/Ze4XV+p+CqxzLGRW9aUwavnSk5hhnc5YkhZN2rjz1ps7oEC9eImd2yfmbt6QKZktT4XPQ==}
-    engines: {node: '>=22'}
-
   '@mark1russell7/predicates@0.1.5':
     resolution: {integrity: sha512-WXgTOliDm5650i3adkTjAj85Uzp22LD7KQFqwhETlQWG4CK3pDnd4I4ef9YrOAfzik1uTdChVk8RZaqdeP+YxA==}
     engines: {node: '>=22'}
@@ -669,8 +665,8 @@ packages:
   '@mark1russell7/vex@0.19.1':
     resolution: {integrity: sha512-Hl8IVbyNmhJ7xV2nyTyOgiqANGWSWhmZSdnuucSRnmBj/KSnp0kvSz7MNzcWcI+tV34wfXmTNp6Y3ewDATbXjg==}
 
-  '@mark1russell7/visuals@0.3.1':
-    resolution: {integrity: sha512-syFFEuw2cb1PlAuippo/Up991iDMDLCvfYIT8nU2IR//6Vt+unnn78Gqkw6g0wAsh+TGezhhkM9rDEx3Cpb+9w==}
+  '@mark1russell7/visuals@0.3.3':
+    resolution: {integrity: sha512-D5wWVh1zkSJ6JiXoE9BWX9/vCHOBY/VB9Ofh/RzOgSaz7IInrdQFQnD/gUjVrvCpc/NYaeVMJcYHdKIg9Qm+Ug==}
     engines: {node: '>=22'}
     peerDependencies:
       three: '>=0.187.0'
@@ -2003,7 +1999,7 @@ snapshots:
 
   '@mark1russell7/layout-contract@0.10.2(zod@4.6.7)':
     dependencies:
-      '@mark1russell7/predicates': 0.1.4
+      '@mark1russell7/predicates': 0.1.5
       '@mark1russell7/rigor-generators': 0.1.16
       '@mark1russell7/rigor-statistics': 0.1.29
       '@mark1russell7/strategy-space': 0.0.5
@@ -2012,8 +2008,6 @@ snapshots:
       - zod
 
   '@mark1russell7/optional@1.2.0': {}
-
-  '@mark1russell7/predicates@0.1.4': {}
 
   '@mark1russell7/predicates@0.1.5': {}
 
@@ -2072,7 +2066,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@mark1russell7/visuals@0.3.1(three@0.187.0)(zod@4.6.7)':
+  '@mark1russell7/visuals@0.3.3(three@0.187.0)(zod@4.6.7)':
     dependencies:
       '@mark1russell7/geo': 0.5.2
       '@mark1russell7/layout-contract': 0.10.2(zod@4.6.7)
