@@ -22,15 +22,21 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+/** This function tells if a number is a limit of a meter: a finite number above 0. */
+function isMeterLimit(limit: number | undefined): limit is number {
+  return limit !== undefined && Number.isFinite(limit) && limit > 0;
+}
+
 /**
  * This function gives the marks of an electrical layer in the space of a scene: meters, with the z axis up.
  *
  * - An outlet gives a point at its anchor. Its level is the level of its circuit.
  * - A feed gives a link from its outlet to the center of its placed object. Its level is the level of the circuit of the outlet.
- * - A circuit with a limit above 0 gives a meter: the known load against the limit, in watts.
+ * - A circuit gives a meter: the known load, in watts. The meter has the limit of the circuit when that limit is a finite number above 0.
  *
  * A record with no place gives no mark: an outlet whose anchor has no position, and a feed with no outlet or no placed object.
- * A circuit with no limit above 0 gives no meter, because a meter needs a limit. `checkElectrical` and `checkLayers` tell each of these faults.
+ * A circuit with no such limit gives a meter with no `limit`, so a page shows only its known load. The level of that meter is `unknown`.
+ * `checkElectrical` and `checkLayers` tell each of these faults.
  * An outlet with no circuit of the layer has the level `unknown`.
  *
  * The record name of a mark is `recordName("electrical/1", id)`, so a finding of the layer selects its mark.
@@ -83,7 +89,7 @@ export function electricalMarks(layer: ElectricalLayer, space: SceneSpace, optio
   }
 
   for (const state of states) {
-    if (state.limit === undefined || !Number.isFinite(state.limit) || state.limit <= 0 || !Number.isFinite(state.watts)) continue;
+    // The known load of a state is a finite number, so each circuit has a value for its meter.
     const meter: MeterMark = {
       type: "meter",
       record: name(state.circuit),
@@ -91,7 +97,8 @@ export function electricalMarks(layer: ElectricalLayer, space: SceneSpace, optio
       level: state.level,
       label: oneLine(`Circuit ${names.get(state.circuit) ?? state.circuit}`),
       value: state.watts,
-      limit: state.limit,
+      // A meter with no limit has no field `limit`. Thus the mark is the same before and after JSON.
+      ...(isMeterLimit(state.limit) ? { limit: state.limit } : {}),
       unit: ELECTRICAL_METER_UNIT,
     };
     marks.push(meter);

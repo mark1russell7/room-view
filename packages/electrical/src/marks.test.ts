@@ -93,10 +93,34 @@ describe("electricalMarks", () => {
     expect(markOf(electricalMarks(rated, space, { continuousLoad: 1 }), "electrical/1:c")).toMatchObject({ limit: 1800 });
   });
 
-  it("gives no meter for a circuit with no limit above 0, and the level unknown to its outlets", () => {
-    for (const circuit of [{ id: "c" }, { id: "c", limit: 0 }, { id: "c", limit: -5 }] satisfies Circuit[]) {
+  it("gives a meter with no limit for a circuit with no limit above 0, and the level unknown to its marks", () => {
+    for (const circuit of [{ id: "c" }, { id: "c", limit: 0 }, { id: "c", limit: -5 }, { id: "c", breaker: 15 }, { id: "c", breaker: 15, voltage: 0 }] satisfies Circuit[]) {
       const layer: ElectricalLayer = { ...good, circuits: [circuit] };
-      expect(lines(electricalMarks(layer, space))).toEqual(["point electrical/1:o unknown", "link electrical/1:f unknown"]);
+      const marks = electricalMarks(layer, space);
+      expect(lines(marks)).toEqual(["point electrical/1:o unknown", "link electrical/1:f unknown", "meter electrical/1:c unknown"]);
+      // The mark has no field `limit`: a field with the value `undefined` is a different mark for `toStrictEqual`.
+      expect(markOf(marks, "electrical/1:c")).toStrictEqual({ type: "meter", record: "electrical/1:c", kind: "circuit", level: "unknown", label: "Circuit c", value: 90, unit: "W" });
+      expect(checkMarks(marks)).toEqual([]);
+    }
+  });
+
+  it("gives a meter with no limit for a limit that is not a finite number", () => {
+    for (const limit of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
+      const marks = electricalMarks({ ...good, circuits: [{ id: "c", limit }] }, space);
+      const meter = markOf(marks, "electrical/1:c");
+      expect(Object.hasOwn(meter, "limit")).toBe(false);
+      expect(meter).toMatchObject({ type: "meter", value: 90, level: "unknown", unit: "W" });
+      expect(checkMarks(marks)).toEqual([]);
+    }
+  });
+
+  it("gives a correct meter for a circuit with a load that is not a finite number", () => {
+    for (const watts of [Number.POSITIVE_INFINITY, Number.NaN]) {
+      const layer: ElectricalLayer = { ...good, circuits: [{ id: "c", limit: 1440, otherLoad: watts }] };
+      const marks = electricalMarks(layer, space);
+      // The state of the circuit has a finite load and the level `unknown` for this fault, and the meter shows the state.
+      expect(markOf(marks, "electrical/1:c")).toMatchObject({ type: "meter", value: circuitStates(layer)[0]?.watts, limit: 1440, level: "unknown" });
+      expect(checkMarks(marks)).toEqual([]);
     }
   });
 
@@ -104,6 +128,23 @@ describe("electricalMarks", () => {
     const layer: ElectricalLayer = { schema: "electrical/1", circuits: [{ id: "c", limit: 1440 }] };
     const state = circuitStates(layer)[0];
     expect(electricalMarks(layer, space)).toEqual([{ type: "meter", record: "electrical/1:c", kind: "circuit", level: state?.level, label: "Circuit c", value: 0, limit: 1440, unit: "W" }]);
+  });
+
+  it("gives a meter with no limit for a circuit with no load and no limit", () => {
+    const layer: ElectricalLayer = { schema: "electrical/1", circuits: [{ id: "c", name: "Spare" }] };
+    expect(electricalMarks(layer, space)).toStrictEqual([{ type: "meter", record: "electrical/1:c", kind: "circuit", level: "unknown", label: "Circuit Spare", value: 0, unit: "W" }]);
+  });
+
+  it("gives the known load to the meter of a circuit with no limit", () => {
+    const layer: ElectricalLayer = {
+      ...good,
+      circuits: [{ id: "c", otherLoad: 600 }],
+      feeds: [
+        { id: "f", object: "desk", outlet: "o", watts: 90 },
+        { id: "g", object: "lamp", outlet: "o" },
+      ],
+    };
+    expect(markOf(electricalMarks(layer, space), "electrical/1:c")).toStrictEqual({ type: "meter", record: "electrical/1:c", kind: "circuit", level: "unknown", label: "Circuit c", value: 690, unit: "W" });
   });
 
   it("counts the other load of a circuit in its meter", () => {
@@ -261,13 +302,19 @@ describe("the marks of each layer", () => {
 
   const circuit = (id: string): fc.Arbitrary<Circuit> =>
     fc
-      .record({ name: maybe(["Kitchen", "Desk"]), breaker: maybe([15, 20]), voltage: maybe([120, 240]), limit: maybe([0, 600, 1440]), otherLoad: maybe([0, 300]) })
+      .record({
+        name: maybe(["Kitchen", "Desk"]),
+        breaker: maybe([15, 20]),
+        voltage: maybe([120, 240]),
+        limit: maybe([0, 600, 1440, Number.POSITIVE_INFINITY, Number.NaN]),
+        otherLoad: maybe([0, 300, Number.POSITIVE_INFINITY]),
+      })
       .map((fields) => ({ id, ...Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) }));
   const outlet = (id: string): fc.Arbitrary<Outlet> =>
     fc.record({ anchor: fc.constantFrom(...anchors), circuit: maybe([...circuitIds, "none"]) }).map(({ anchor: at, circuit: on }) => ({ id, anchor: at, ...(on === undefined ? {} : { circuit: on }) }));
   const feed = (id: string): fc.Arbitrary<Feed> =>
     fc
-      .record({ object: fc.constantFrom("desk", "lamp", "ghost"), outlet: fc.constantFrom(...outletIds, "none"), watts: maybe([0, 90, 700, 1500]) })
+      .record({ object: fc.constantFrom("desk", "lamp", "ghost"), outlet: fc.constantFrom(...outletIds, "none"), watts: maybe([0, 90, 700, 1500, Number.NaN]) })
       .map(({ object, outlet: from, watts }) => ({ id, object, outlet: from, ...(watts === undefined ? {} : { watts }) }));
   const some = <Value>(ids: readonly string[], make: (id: string) => fc.Arbitrary<Value>): fc.Arbitrary<readonly Value[]> =>
     fc.subarray([...ids]).chain((chosen): fc.Arbitrary<readonly Value[]> => (chosen.length === 0 ? fc.constant<readonly Value[]>([]) : fc.tuple(...chosen.map(make))));
@@ -306,11 +353,22 @@ describe("the marks of each layer", () => {
           expect(link.to.record.startsWith("object:")).toBe(true);
         }
 
-        // A meter for each circuit with a limit above 0, with the numbers and the level of its state.
-        const states = circuitStates(layer).filter((state) => state.limit !== undefined && state.limit > 0);
-        expect(meters.map((mark) => ({ record: mark.record, value: mark.value, limit: mark.limit, level: mark.level, unit: mark.unit }))).toEqual(
-          states.map((state) => ({ record: `electrical/1:${state.circuit}`, value: state.watts, limit: state.limit, level: state.level, unit: "W" })),
+        // A meter for each circuit, with the numbers and the level of its state. Only a finite limit above 0 is in a meter.
+        const states = circuitStates(layer);
+        expect(meters.map((mark) => ({ record: mark.record, value: mark.value, limit: mark.limit, level: mark.level, unit: mark.unit }))).toStrictEqual(
+          states.map((state) => ({
+            record: `electrical/1:${state.circuit}`,
+            value: state.watts,
+            limit: state.limit !== undefined && Number.isFinite(state.limit) && state.limit > 0 ? state.limit : undefined,
+            level: state.level,
+            unit: "W",
+          })),
         );
+        // A meter with no limit has no field `limit`, and its level is not known.
+        for (const meter of meters) {
+          expect(Object.hasOwn(meter, "limit")).toBe(meter.limit !== undefined);
+          if (meter.limit === undefined) expect(meter.level).toBe("unknown");
+        }
       }),
       { seed: 20261116, numRuns: 150 },
     );

@@ -124,7 +124,7 @@ A mark is a record that a viewer draws. A mark has no topic. The marks are in `@
 | A run | A list of frames and a width | A cable, a pipe, a duct |
 | A link | Two ends, each with a record name and a point | A power line from an outlet to a computer |
 | A field | A grid of values on a plane, and a scale | Light in lux, sound in decibels, heat |
-| A meter | A value, a limit and the text of the unit | The load of a circuit against its limit |
+| A meter | A value, the text of the unit, and a limit when there is one | The load of a circuit against its limit |
 
 - Each mark has a record name (`recordName`), a kind, a level and a label. The kind is a word of the add-on, for example `outlet`, for the legend and the filter.
 - The level of a mark is `unknown`, `ok`, `near` or `over`. The add-on calculates the level, so `visuals` has no rule from a value to a level.
@@ -132,7 +132,8 @@ A mark is a record that a viewer draws. A mark has no topic. The marks are in `@
 - Each point of a mark is in the space of the frames: meters, with the z axis up. Each point of a run has its own direction, so a run can cross surfaces.
 - A field has its values row by row, with `null` for a cell with no value. JSON has no NaN.
 - A meter has no place. The page draws it in a panel, and the 3D view ignores it.
-- A meter needs a limit. A record with no limit gives no meter, and the check of its add-on tells the fault.
+- A meter can have no limit: the mark then has no `limit`, and a page shows only the value and the unit.
+  The check of its add-on tells a record with no limit.
 - The entry `@mark1russell7/visuals/marks` has the types, the levels, their shapes and `checkMarks`, with no three.js. The shapes move from `loads.ts` to that entry.
 - A plan view and a 3D view draw the same marks.
 
@@ -185,7 +186,7 @@ The programs evaluate over a tree, which `electricalSpace` makes from a layer. A
 The add-on also has these parts:
 
 - The checks find a duplicate `id`, an unknown circuit, outlet or object, and a number that is not valid. They also find a circuit with no limit or over its limit.
-- The marks: a point for each outlet, a link for each feed, and a meter for each circuit with a limit.
+- The marks: a point for each outlet, a link for each feed, and a meter for each circuit. The meter of a circuit with no limit has no `limit`.
   A link goes from its outlet to the center of its placed object. A record with no place gives no mark.
 - The form: the outlets of each wall and the list of circuits. The site gets them from the add-on, not from the core.
 - `fromSceneV1` moves the electrical records of a `scene/1` to a layer: the outlets, the circuits, the loads and the outlet of each object. The loads of a circuit become its `otherLoad`.
@@ -216,7 +217,11 @@ The input names the add-ons in the field `addOns`, a list of schema names: `{ "s
 
 ## The versions
 
-Step 2 adds to the public API, so it is a PATCH: before 1.0.0, a feature raises PATCH. Step 6 removes records from the public API, so `@mark1russell7/room-view` goes to 0.2.0: before 1.0.0, a break raises MINOR.
+Step 2 adds to the public API, so it is a PATCH: before 1.0.0, a feature raises PATCH, and a break raises MINOR.
+`@mark1russell7/visuals` 0.3 makes the limit of a meter optional.
+The type of a mark is in the public API of the core and of the electrical add-on, so the two packages are 0.2.0 on that version.
+The meter with no limit changes the marks that `electricalMarks` gives, so `@mark1russell7/electrical` goes to 0.3.0.
+Step 6 removes records from the public API, so `@mark1russell7/room-view` then goes to 0.3.0.
 
 - `room/1` and `scene/1` stay readable. `fromSceneV1` of the electrical add-on gives the electrical layer of a `scene/1`. Step 6 adds the move of the scene to `scene/2`.
 - `@mark1russell7/electrical` starts at 0.1.0. It depends on the core of this workspace, so a new version of the core gives a new version of the add-on.
