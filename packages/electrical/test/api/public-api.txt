@@ -68,6 +68,10 @@ ElectricalMarkKind: build/marks.d.ts#ElectricalMarkKind
 electricalAddOnMarks: build/marks.d.ts#electricalAddOnMarks
 electricalMarks: build/marks.d.ts#electricalMarks
 
+## ./form (build/form.d.ts): names
+
+ELECTRICAL_FORM: build/form.d.ts#ELECTRICAL_FORM
+
 ## Declarations
 
 ### build/add-on.d.ts#electrical
@@ -75,6 +79,9 @@ export declare const electrical: AddOn<ElectricalLayer>;
 
 ### build/add-on.d.ts#electricalAddOn
 export declare function electricalAddOn(options?: LoadOptions): AddOn<ElectricalLayer>;
+
+### build/form.d.ts#ELECTRICAL_FORM
+export declare const ELECTRICAL_FORM: LayerForm;
 
 ### build/index.d.ts#ELECTRICAL_CODES
 export declare const ELECTRICAL_CODES: readonly ["id-duplicate", "outlet-circuit", "feed-outlet", "feed-object", "feed-watts", "circuit-number", "circuit-no-limit", "circuit-limits", "circuit-over"];

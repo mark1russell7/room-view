@@ -188,16 +188,67 @@ The add-on also has these parts:
 - The checks find a duplicate `id`, an unknown circuit, outlet or object, and a number that is not valid. They also find a circuit with no limit or over its limit.
 - The marks: a point for each outlet, a link for each feed, and a meter for each circuit. The meter of a circuit with no limit has no `limit`.
   A link goes from its outlet to the center of its placed object. A record with no place gives no mark.
-- The form: the outlets of each wall and the list of circuits. The site gets them from the add-on, not from the core.
+- The form: `ELECTRICAL_FORM` of the entry `/form` has the circuits, the outlets of the walls and the power of each object. The site gets them from the add-on, not from the core.
 - `fromSceneV1` moves the electrical records of a `scene/1` to a layer: the outlets, the circuits, the loads and the outlet of each object. The loads of a circuit become its `otherLoad`.
 
 ## The form of the site
 
-The form "Measure a room" gets its topic fields from the add-ons.
+The form "Measure a room" gets its topic fields from the add-ons. The page has no code of a topic.
 
-- A feature of a wall has a kind from the core (door, window, gap) or from an add-on (an outlet).
-- The store keeps the drafts of each add-on by its schema name.
-- The store of the browser stays. The page reads the old store and moves its outlets and its circuits to the electrical draft. A person loses no number.
+### The form of a layer
+
+An add-on gives the form of its layer as data, a `LayerForm` of the core. A page makes its inputs from this data.
+
+```ts
+interface LayerForm {
+  /** The name of the layer, for example `electrical/1`. */
+  readonly schema: string;
+  /** The collections of the layer, in the sequence of a page. */
+  readonly collections: readonly FormCollection[];
+}
+
+interface FormCollection {
+  /** The field of the layer that has the records, for example `circuits`. */
+  readonly name: string;
+  /** The word of one record for its `id`. For example, `circuit` gives `circuit-1`. */
+  readonly word: string;
+  /** The name of one record and the title of the records in a page. */
+  readonly label: string;
+  readonly title: string;
+  /** The surfaces of the anchor of a record. A collection with no surfaces has records with no place. */
+  readonly on?: readonly AnchorSurface[];
+  /** The usual height of a record on a wall, in meters, for each system of units. */
+  readonly height?: FormUsual;
+  readonly fields: readonly FormField[];
+  /** The text field that gives the words of the `id` of a record. */
+  readonly idFrom?: string;
+  /** The necessary field that names the owner of a record, and the largest number of records of one owner. */
+  readonly owner?: string;
+  readonly most?: number;
+}
+```
+
+- A record of a layer has its `id`, its `anchor` when it has a place, and one value for each field. The electrical layer has this shape.
+- A field has a kind: a text, a number in a fixed unit, the `id` of a record of the same layer, or the `id` of a placed object.
+- A number field can have a usual value for each system of units, `metric` and `imperial`. A record with no value gets the usual value.
+- A collection tells its place in a page. A collection with surfaces is on the walls, and a collection with an owner is with its owner.
+  Each other collection is a list of the level.
+- `formLayer` makes the layer from the records of a form. It is total: a record that the layer cannot have is not in the layer.
+- `formRecords` gives the records of a form from a layer. Its value `more` tells that the layer has data that the form does not keep.
+- `checkForm` gives the faults of a form. The test of an add-on examines its form with this function.
+- The form is in the entry `/form` of the add-on, so the root entry has no text of a page.
+- The read-out of a record comes from the marks of the add-on. For example, the meter of a circuit gives its limit.
+
+### The store of the page
+
+- A feature of a wall has a kind from the core (door, window, gap) or from an add-on. A feature of an add-on names the layer and the collection of its form.
+- The points of an add-on stay in the list of the features of their wall. Thus the sequence of a wall stays, and a wall that goes away takes its points.
+- The store keeps the lists of the level of each add-on by the name of its layer, for example the circuits.
+- A placed object keeps the records that it owns by the name of the layer, for example its power.
+- The store of the browser stays. The page reads the store of version 1, and it moves its outlets, its circuits and the outlet of each object. A person loses no number.
+
+A survey and a level do not have layers before step 6. Until then, the page writes the electrical records of a survey from the records of the form, at one place.
+This bridge goes away in step 6, when a survey and a level get layers.
 
 ## The procedures package
 
@@ -221,6 +272,7 @@ Step 2 adds to the public API, so it is a PATCH: before 1.0.0, a feature raises 
 `@mark1russell7/visuals` 0.3 makes the limit of a meter optional.
 The type of a mark is in the public API of the core and of the electrical add-on, so the two packages are 0.2.0 on that version.
 The meter with no limit changes the marks that `electricalMarks` gives, so `@mark1russell7/electrical` goes to 0.3.0.
+The form of a layer is a feature of the core and of the add-on. Thus `@mark1russell7/room-view` goes to 0.2.2, and `@mark1russell7/electrical` goes to 0.3.2.
 Step 6 removes records from the public API, so `@mark1russell7/room-view` then goes to 0.3.0.
 
 - `room/1` and `scene/1` stay readable. `fromSceneV1` of the electrical add-on gives the electrical layer of a `scene/1`. Step 6 adds the move of the scene to `scene/2`.
@@ -239,6 +291,8 @@ The first steps add, and the last step removes. Thus each step keeps the page an
    Then the form and the store get the topic fields from the add-ons. The viewer draws marks from `@mark1russell7/visuals`, in the move of the viewer to that package.
    The viewer of the entry `/three` is on the stage and the markers of that package (`@mark1russell7/room-view` 0.2.1). Its option `marks` takes the marks of the layers.
    With no list of marks, the viewer makes the marks of the outlets of a `scene/1`, until step 6 removes them.
+   The core has the form of a layer, and the electrical add-on gives its form in its entry `/form` (`@mark1russell7/room-view` 0.2.2, `@mark1russell7/electrical` 0.3.2).
+   Then the store of the page keeps the records of each add-on, and the page makes its inputs from the forms.
 6. The core removes `outlets`, `circuits`, `loads` and `PlacedObject.outlet`, and it gives `room/2` and `scene/2`. This step is the break of the version.
 7. The procedures packages.
 
