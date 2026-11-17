@@ -264,7 +264,26 @@ const marks = layerMarks(scene, addOns, addOnMarks);
 - A layer with a fault of its form gives no marks, and `checkLayers` tells the fault.
 - A mark is plain data in meters, with the z axis up. It has no shape and no color.
 
-`ANCHOR_CODES` and `LAYER_CODES` have the codes of the core. The design of the add-ons is in `docs/ADD-ONS.md` of the repository.
+An add-on can give the form of its layer as data, a `LayerForm` value. It has the collections of the records and the fields of each record. A page makes its inputs from this data, so the page has no code of a topic:
+
+```ts
+import { formLayer, formRecords } from "@mark1russell7/room-view";
+
+// The layer of the records that a person typed, with the usual values of a home with feet and inches:
+const layer = formLayer(form, records, { system: "imperial" });
+// The records of a layer, for the inputs of a page:
+const read = formRecords(form, layer);
+```
+
+- A field is a text, a number in a fixed unit, the `id` of a record of the same layer, or the `id` of a placed object.
+- A collection with surfaces has records with an anchor. A collection with an owner has the records of a placed object or of a different record.
+- `formLayer` is total. A record with a value that is not valid, or with no value of a necessary field, is not in the layer.
+- A number with no value gets the usual value of its field for the system of units, `metric` or `imperial`.
+- `formRecords` gives `more: true` when the layer has data that the form does not keep. Thus a page can tell that an edit loses data.
+- `readFormRecord` gives the first field that stops a record, so a page can show the fault at its input.
+- `checkForm` gives the faults of a form. An add-on examines its form with this function in a test.
+
+`ANCHOR_CODES`, `LAYER_CODES` and `FORM_CODES` have the codes of the core. The design of the add-ons is in `docs/ADD-ONS.md` of the repository.
 
 ## The loads of the circuits
 

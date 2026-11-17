@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package",
   "name": "@mark1russell7/electrical",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Electrical circuits as data: outlets, circuits, feeds and loads, the continuous-load check, and the circuit formulas as Vex programs. An add-on of room-view.",
   "license": "MIT",
   "repository": {
@@ -31,6 +31,7 @@
     "./schema": "./src/schema.ts",
     "./add-on": "./src/add-on.ts",
     "./marks": "./src/marks.ts",
+    "./form": "./src/form.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -85,6 +86,11 @@
         "types": "./build/marks.d.ts",
         "import": "./build/marks.js",
         "default": "./build/marks.js"
+      },
+      "./form": {
+        "types": "./build/form.d.ts",
+        "import": "./build/form.js",
+        "default": "./build/form.js"
       },
       "./package.json": "./package.json"
     }

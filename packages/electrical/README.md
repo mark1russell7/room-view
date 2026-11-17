@@ -14,9 +14,11 @@ The package has no browser part. Each function is a plain function, and each for
 | `@mark1russell7/electrical/schema` | `electricalSchema`, the zod schema of a layer, and `parseElectrical`. |
 | `@mark1russell7/electrical/add-on` | `electrical`, the add-on value for the contract of the core. |
 | `@mark1russell7/electrical/marks` | `electricalMarks` and `electricalAddOnMarks`: the records of a layer as marks for a viewer. |
+| `@mark1russell7/electrical/form` | `ELECTRICAL_FORM`: the form of a layer as data, for the inputs of a page. |
 
 The root entry imports only Vex at run time. Thus a page that shows only the load of a circuit gets no schema library.
 The entry `/marks` uses only the types of `@mark1russell7/visuals`, so it adds no code of a viewer.
+The entry `/form` is data. It has no schema library and no code of a viewer.
 
 ## Install
 
@@ -132,6 +134,41 @@ const all = layerMarks(scene, [electrical], [electricalAddOnMarks()]);
 - Give the options of `electricalAddOn` to `electricalAddOnMarks` too. Thus the levels of the marks agree with the findings.
 
 `ELECTRICAL_MARK_KINDS` has the kinds of the marks, for the legend and the filter of a viewer.
+
+## The form
+
+`ELECTRICAL_FORM` of the entry `/form` is the form of a layer as data, a `LayerForm` of the core. A page makes its inputs from this data, and `formLayer` of the core makes the layer:
+
+```ts
+import { ELECTRICAL_FORM } from "@mark1russell7/electrical/form";
+import { parseElectrical } from "@mark1russell7/electrical/schema";
+import { formLayer, formRecords, type FormRecords } from "@mark1russell7/room-view";
+
+// The records that a person typed. The circuit has no breaker and no voltage.
+const records: FormRecords = {
+  circuits: [{ id: "kitchen", values: { name: "Kitchen" } }],
+  outlets: [{ id: "outlet-1", anchor: { on: "wall", wall: "a", face: "left", offset: 1, height: 0.3 }, values: { circuit: "kitchen" } }],
+  feeds: [{ id: "feed-1", values: { object: "desk", outlet: "outlet-1", watts: 250 } }],
+};
+// The circuit gets the usual values of a home with feet and inches: 15 A at 120 V.
+const layer = formLayer(ELECTRICAL_FORM, records, { system: "imperial" });
+const read = parseElectrical(layer); // => { ok: true, layer }
+// The records of a layer, for the inputs of a page:
+const back = formRecords(ELECTRICAL_FORM, layer); // back.more is false
+```
+
+| Collection | Place in a page | Fields |
+| --- | --- | --- |
+| `circuits` | A list of the level | The name, the rating of the breaker in amperes and the voltage in volts. |
+| `outlets` | A point on a wall | The circuit of the outlet. |
+| `feeds` | With its placed object, one for each object | The outlet that gives the power, and the power in watts. |
+
+- A circuit with no breaker or no voltage gets the usual value: 15 A at 120 V for `imperial`, and 16 A at 230 V for `metric`.
+- An outlet with no height is 0.3048 m above the floor for `imperial`, and 0.3 m for `metric`.
+- A record with a value that is not valid is not in the layer. `readFormRecord` of the core gives the field with the fault.
+- The form does not have the `limit` and the `otherLoad` of a circuit, or an outlet on a floor or on an object.
+  `formRecords` gives `more: true` for a layer with these data. Thus a page can tell that an edit loses them.
+- The limit of a circuit in a page comes from `circuitStates`, or from the meter of the marks.
 
 ## The formulas
 
