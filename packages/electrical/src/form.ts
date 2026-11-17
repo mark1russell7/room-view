@@ -9,7 +9,8 @@ import { ELECTRICAL_SCHEMA } from "./layer.ts";
  * The form of an electrical layer: its circuits, its outlets and its feeds.
  *
  * - A circuit has a name, the rating of its breaker and its voltage.
- *   A home with feet and inches is in North America, thus 15 A at 120 V. A home with meters is in most other countries, thus 16 A at 230 V.
+ *   A home with feet and inches gets 15 A at 120 V, the usual circuit of North America.
+ *   A home with meters gets 16 A at 230 V, the usual circuit of most other countries.
  * - An outlet is on a wall, and it names its circuit. An outlet with no height is 12 in or 0.3 m above the floor.
  * - A feed is the power of a placed object from an outlet, in watts. A page shows one feed for each object.
  *

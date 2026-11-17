@@ -163,7 +163,8 @@ const back = formRecords(ELECTRICAL_FORM, layer); // back.more is false
 | `outlets` | A point on a wall | The circuit of the outlet. |
 | `feeds` | With its placed object, one for each object | The outlet that gives the power, and the power in watts. |
 
-- A circuit with no breaker or no voltage gets the usual value: 15 A at 120 V for `imperial`, and 16 A at 230 V for `metric`.
+- A circuit with no breaker or no voltage gets the usual value.
+- The usual values are 15 A at 120 V for `imperial`, and 16 A at 230 V for `metric`.
 - An outlet with no height is 0.3048 m above the floor for `imperial`, and 0.3 m for `metric`.
 - A record with a value that is not valid is not in the layer. `readFormRecord` of the core gives the field with the fault.
 - The form does not have the `limit` and the `otherLoad` of a circuit, or an outlet on a floor or on an object.

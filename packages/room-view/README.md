@@ -275,7 +275,8 @@ const layer = formLayer(form, records, { system: "imperial" });
 const read = formRecords(form, layer);
 ```
 
-- A field is a text, a number in a fixed unit, the `id` of a record of the same layer, or the `id` of a placed object.
+- A field is a text, a number in a fixed unit, or the `id` of a record or of a placed object.
+- The record of a field is in the same layer.
 - A collection with surfaces has records with an anchor. A collection with an owner has the records of a placed object or of a different record.
 - `formLayer` is total. A record with a value that is not valid, or with no value of a necessary field, is not in the layer.
 - A number with no value gets the usual value of its field for the system of units, `metric` or `imperial`.

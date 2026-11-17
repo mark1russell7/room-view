@@ -30,11 +30,33 @@ ConnectionUse: build/level.chunk.d.ts#ConnectionUse
 FINDING_CODES: build/layers.chunk.d.ts#FINDING_CODES
 FINDING_LEVELS: build/layers.chunk.d.ts#FINDING_LEVELS
 FLOOR_DEPTH: build/solids.chunk.d.ts#FLOOR_DEPTH
+FORM_CODES: build/index.d.ts#FORM_CODES
+FORM_FIELD_KINDS: build/index.d.ts#FORM_FIELD_KINDS
+FORM_SYSTEMS: build/index.d.ts#FORM_SYSTEMS
 Finding: build/layers.chunk.d.ts#Finding
 FindingCode: build/layers.chunk.d.ts#FindingCode
 FindingLevel: build/layers.chunk.d.ts#FindingLevel
 Floor: build/room.chunk.d.ts#Floor
 FloorAnchor: build/anchors.chunk.d.ts#FloorAnchor
+FormCode: build/index.d.ts#FormCode
+FormCollection: build/index.d.ts#FormCollection
+FormFault: build/index.d.ts#FormFault
+FormField: build/index.d.ts#FormField
+FormFieldKind: build/index.d.ts#FormFieldKind
+FormFieldPart: build/index.d.ts#FormFieldPart
+FormLayer: build/index.d.ts#FormLayer
+FormLayerOptions: build/index.d.ts#FormLayerOptions
+FormNumberField: build/index.d.ts#FormNumberField
+FormObjectField: build/index.d.ts#FormObjectField
+FormReading: build/index.d.ts#FormReading
+FormRecord: build/index.d.ts#FormRecord
+FormRecordField: build/index.d.ts#FormRecordField
+FormRecords: build/index.d.ts#FormRecords
+FormRecordsRead: build/index.d.ts#FormRecordsRead
+FormSystem: build/index.d.ts#FormSystem
+FormTextField: build/index.d.ts#FormTextField
+FormUsual: build/index.d.ts#FormUsual
+FormValue: build/index.d.ts#FormValue
 GLASS_THICKNESS: build/solids.chunk.d.ts#GLASS_THICKNESS
 JOIN_TOLERANCE: build/solids.chunk.d.ts#JOIN_TOLERANCE
 JoinOptions: build/solids.chunk.d.ts#JoinOptions
@@ -45,6 +67,7 @@ LEVEL_SCHEMA: build/level.chunk.d.ts#LEVEL_SCHEMA
 LEVEL_SHAPES: build/loads.chunk.d.ts#LEVEL_SHAPES
 LOAD_LEVELS: build/loads.chunk.d.ts#LOAD_LEVELS
 LayerFinding: build/layers.chunk.d.ts#LayerFinding
+LayerForm: build/index.d.ts#LayerForm
 LayerParse: build/layers.chunk.d.ts#LayerParse
 LengthUnit: build/room.chunk.d.ts#LengthUnit
 Level: build/level.chunk.d.ts#Level
@@ -110,6 +133,7 @@ WallFrame: build/frames.chunk.d.ts#WallFrame
 WallSide: build/room.chunk.d.ts#WallSide
 boundsOfSolids: build/solids.chunk.d.ts#boundsOfSolids
 checkAnchor: build/layers.chunk.d.ts#checkAnchor
+checkForm: build/index.d.ts#checkForm
 checkLayers: build/layers.chunk.d.ts#checkLayers
 checkRoom: build/layers.chunk.d.ts#checkRoom
 checkScene: build/layers.chunk.d.ts#checkScene
@@ -117,6 +141,8 @@ circuitStates: build/loads.chunk.d.ts#circuitStates
 convertSurvey: build/level.chunk.d.ts#convertSurvey
 expandLevel: build/level.chunk.d.ts#expandLevel
 expandSurvey: build/level.chunk.d.ts#expandSurvey
+formLayer: build/index.d.ts#formLayer
+formRecords: build/index.d.ts#formRecords
 isLayerName: build/room.chunk.d.ts#isLayerName
 lengthsInRange: build/room.chunk.d.ts#lengthsInRange
 levelShape: build/loads.chunk.d.ts#levelShape
@@ -126,6 +152,7 @@ outletLevels: build/loads.chunk.d.ts#outletLevels
 parseRecordName: build/layers.chunk.d.ts#parseRecordName
 planShape: build/index.d.ts#planShape
 planShapes: build/index.d.ts#planShapes
+readFormRecord: build/index.d.ts#readFormRecord
 readLayer: build/layers.chunk.d.ts#readLayer
 recordName: build/layers.chunk.d.ts#recordName
 roomSolids: build/solids.chunk.d.ts#roomSolids
@@ -263,6 +290,131 @@ declare function wallPoint(frame: WallFrame, along: number, across: number): Poi
 ### build/frames.chunk.d.ts#wallTransform
 declare function wallTransform(frame: WallFrame): Transform3;
 
+### build/index.d.ts#FORM_CODES
+export declare const FORM_CODES: readonly ["form-schema", "form-collection", "form-field"];
+
+### build/index.d.ts#FORM_FIELD_KINDS
+export declare const FORM_FIELD_KINDS: readonly ["text", "number", "record", "object"];
+
+### build/index.d.ts#FORM_SYSTEMS
+export declare const FORM_SYSTEMS: readonly ["metric", "imperial"];
+
+### build/index.d.ts#FormCode
+export type FormCode = (typeof FORM_CODES)[number];
+
+### build/index.d.ts#FormCollection
+export interface FormCollection {
+  readonly name: string;
+  readonly word: string;
+  readonly label: string;
+  readonly title: string;
+  readonly on?: readonly AnchorSurface[] | undefined;
+  readonly height?: FormUsual | undefined;
+  readonly fields: readonly FormField[];
+  readonly idFrom?: string | undefined;
+  readonly owner?: string | undefined;
+  readonly most?: number | undefined;
+}
+
+### build/index.d.ts#FormFault
+export interface FormFault {
+  readonly code: FormCode;
+  readonly at: string;
+  readonly message: string;
+}
+
+### build/index.d.ts#FormField
+export type FormField = FormTextField | FormNumberField | FormRecordField | FormObjectField;
+
+### build/index.d.ts#FormFieldKind
+export type FormFieldKind = (typeof FORM_FIELD_KINDS)[number];
+
+### build/index.d.ts#FormFieldPart
+export interface FormFieldPart {
+  readonly name: string;
+  readonly label: string;
+  readonly needed?: boolean | undefined;
+}
+
+### build/index.d.ts#FormLayer
+export type FormLayer = Readonly<Record<string, unknown>> & {
+  readonly schema: string;
+};
+
+### build/index.d.ts#FormLayerOptions
+export interface FormLayerOptions {
+  readonly system: FormSystem;
+  readonly objects?: ReadonlySet<string> | undefined;
+}
+
+### build/index.d.ts#FormNumberField
+export interface FormNumberField extends FormFieldPart {
+  readonly kind: "number";
+  readonly unit?: string | undefined;
+  readonly usual?: FormUsual | undefined;
+  readonly above?: number | undefined;
+  readonly least?: number | undefined;
+  readonly fault?: string | undefined;
+}
+
+### build/index.d.ts#FormObjectField
+export interface FormObjectField extends FormFieldPart {
+  readonly kind: "object";
+}
+
+### build/index.d.ts#FormReading
+export type FormReading = {
+  readonly state: "ok";
+  readonly values: Readonly<Record<string, FormValue>>;
+} | {
+  readonly state: "empty" | "bad";
+  readonly field: string;
+};
+
+### build/index.d.ts#FormRecord
+export interface FormRecord {
+  readonly id: string;
+  readonly anchor?: Anchor | undefined;
+  readonly values: Readonly<Record<string, FormValue>>;
+}
+
+### build/index.d.ts#FormRecordField
+export interface FormRecordField extends FormFieldPart {
+  readonly kind: "record";
+  readonly of: string;
+  readonly none?: string | undefined;
+  readonly aid?: string | undefined;
+}
+
+### build/index.d.ts#FormRecords
+export type FormRecords = Readonly<Record<string, readonly FormRecord[]>>;
+
+### build/index.d.ts#FormRecordsRead
+export interface FormRecordsRead {
+  readonly records: FormRecords;
+  readonly more: boolean;
+}
+
+### build/index.d.ts#FormSystem
+export type FormSystem = (typeof FORM_SYSTEMS)[number];
+
+### build/index.d.ts#FormTextField
+export interface FormTextField extends FormFieldPart {
+  readonly kind: "text";
+}
+
+### build/index.d.ts#FormUsual
+export type FormUsual = Readonly<Record<FormSystem, number>>;
+
+### build/index.d.ts#FormValue
+export type FormValue = string | number;
+
+### build/index.d.ts#LayerForm
+export interface LayerForm {
+  readonly schema: string;
+  readonly collections: readonly FormCollection[];
+}
+
 ### build/index.d.ts#PlanOptions
 export interface PlanOptions extends SolidOptions {
   readonly cut?: number | undefined;
@@ -278,11 +430,23 @@ export interface PlanShape {
   readonly top: number;
 }
 
+### build/index.d.ts#checkForm
+export declare function checkForm(form: LayerForm): readonly FormFault[];
+
+### build/index.d.ts#formLayer
+export declare function formLayer(form: LayerForm, records: FormRecords, options: FormLayerOptions): FormLayer;
+
+### build/index.d.ts#formRecords
+export declare function formRecords(form: LayerForm, layer: unknown): FormRecordsRead;
+
 ### build/index.d.ts#planShape
 export declare function planShape(solid: Solid): PlanShape;
 
 ### build/index.d.ts#planShapes
 export declare function planShapes(scene: Scene, options?: PlanOptions): readonly PlanShape[];
+
+### build/index.d.ts#readFormRecord
+export declare function readFormRecord(collection: FormCollection, record: FormRecord, system: FormSystem): FormReading;
 
 ### build/layers.chunk.d.ts#ANCHOR_CODES
 declare const ANCHOR_CODES: readonly ["anchor-not-finite", "anchor-wall", "anchor-object", "anchor-floor", "anchor-range", "anchor-direction", "anchor-in-opening", "anchor-outside"];
