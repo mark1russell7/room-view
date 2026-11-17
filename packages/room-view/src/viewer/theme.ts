@@ -16,10 +16,17 @@ export interface ViewerTheme {
   readonly glassOpacity: number;
   /** The color of an outlet with no circuit. */
   readonly outlet: string;
-  /** The color of the outlets of a circuit at each level of its load. */
+  /** The color of the marks of each level, and of the plates of the outlets of a circuit at each level of its load. */
   readonly levels: Readonly<Record<LoadLevel, string>>;
-  /** The color of the line around the marker of an outlet. It is the color of the page, so a marker is clear on each solid. */
+  /** The color of the line around the sign of a mark. It is the color of the page, so a sign is clear on each solid. */
   readonly halo: string;
+  /**
+   * The colors of a field mark, from the value `min` of its scale to the value `max`.
+   * A theme with no such list gives a field the color of its level.
+   */
+  readonly field?: readonly string[] | undefined;
+  /** The part of a field mark that is not clear, from 0 to 1. The default is 0.8. */
+  readonly fieldOpacity?: number | undefined;
   /** The color of a placed object whose kind has no color in `objects`. */
   readonly object: string;
   /** The color of the placed objects of each kind. The key is the field `kind` of a placed object. */

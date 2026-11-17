@@ -237,6 +237,8 @@ The first steps add, and the last step removes. Thus each step keeps the page an
 4. `cluster-design` imports the circuit math from `@mark1russell7/electrical`, and it removes its copy.
 5. The site, in two parts. First, the site reads the limit of a circuit and the levels from `@mark1russell7/electrical`, and it does not import `cluster-design`.
    Then the form and the store get the topic fields from the add-ons. The viewer draws marks from `@mark1russell7/visuals`, in the move of the viewer to that package.
+   The viewer of the entry `/three` is on the stage and the markers of that package (`@mark1russell7/room-view` 0.2.1). Its option `marks` takes the marks of the layers.
+   With no list of marks, the viewer makes the marks of the outlets of a `scene/1`, until step 6 removes them.
 6. The core removes `outlets`, `circuits`, `loads` and `PlacedObject.outlet`, and it gives `room/2` and `scene/2`. This step is the break of the version.
 7. The procedures packages.
 

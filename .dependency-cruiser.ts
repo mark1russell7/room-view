@@ -25,11 +25,18 @@ const config: Config = boundaries(import.meta.dirname, {
       to: { path: `${library}schema\\.ts$`, reachable: true },
     },
     {
-      name: "marks-library-out-of-the-entry-marks",
+      name: "marks-library-only-in-the-visual-entries",
       severity: "error",
-      comment: "Only the entry /marks of a library package imports the visuals package. Thus the root entry has no visual part.",
-      from: { path: library, pathNot: `${library}marks\\.ts$` },
+      comment: "Only the entries /marks and /three of a library package import the visuals package. The folder viewer/ is a part of the entry /three.",
+      from: { path: library, pathNot: `${library}(marks\\.ts$|three\\.ts$|viewer/)` },
       to: { path: "node_modules/@mark1russell7/visuals/" },
+    },
+    {
+      name: "root-entry-gets-to-the-marks-library",
+      severity: "error",
+      comment: "The root entry of a library package does not import the visuals package, directly or through other files. Thus the root entry has no visual part.",
+      from: { path: `${library}index\\.ts$` },
+      to: { path: "node_modules/@mark1russell7/visuals/", reachable: true },
     },
     {
       name: "root-entry-gets-to-an-entry-marks",

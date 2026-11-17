@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Anchor, SceneSpace } from "./anchors.ts";
-import { parseRecordName, recordName } from "./check.ts";
+import { parseRecordName, recordName, solidRecord } from "./check.ts";
 import { checkLayers, readLayer, type AddOn, type AddOnFault, type LayerParse } from "./layers.ts";
 import { isLayerName, type Scene } from "./room.ts";
+import { SAMPLE_SCENE } from "./sample.ts";
+import { sceneSolids } from "./solids.ts";
 
 /** A layer of the test add-on: marks, each on one anchor, each with a size. */
 interface MarkLayer {
@@ -160,6 +162,18 @@ describe("the names of the records", () => {
     expect(parseRecordName(recordName("wall", "a:b"))).toEqual({ kind: "wall", id: "a:b" });
     expect(parseRecordName("desk")).toBeUndefined();
     expect(parseRecordName(":desk")).toBeUndefined();
+  });
+
+  it("gives each solid the name of its record", () => {
+    for (const solid of sceneSolids(SAMPLE_SCENE)) {
+      const kind = solid.kind === "glass" ? "opening" : solid.kind;
+      expect(solidRecord(solid.kind, solid.source), solid.id).toBe(recordName(kind, solid.source));
+    }
+    expect(solidRecord("wall", "south")).toBe("wall:south");
+    expect(solidRecord("object", "desk")).toBe("object:desk");
+    // The glass of a window is a solid of its opening.
+    expect(solidRecord("glass", "window-east")).toBe("opening:window-east");
+    expect(parseRecordName(solidRecord("glass", "window-east"))).toEqual({ kind: "opening", id: "window-east" });
   });
 
   it("tells the form of a layer name", () => {

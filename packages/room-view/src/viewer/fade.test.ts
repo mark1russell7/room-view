@@ -1,9 +1,10 @@
 import type { Point3 } from "@mark1russell7/layout-contract";
+import { cameraPosition } from "@mark1russell7/visuals";
 import { describe, expect, it } from "vitest";
 import type { Room } from "../room.ts";
 import { SAMPLE_ROOM } from "../sample.ts";
 import { hiddenDepth, hidingWalls, wallShades, type WallShade } from "./fade.ts";
-import { cameraPosition, HOME_VIEW, TOP_VIEW, toRoom, toViewer } from "./view.ts";
+import { HOME_VIEW, TOP_VIEW, toRoom, toViewer } from "./view.ts";
 
 /** The center of the sample room, in meters. */
 const CENTER: Point3 = { x: 3, y: 2.5, z: 1.25 };
