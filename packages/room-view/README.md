@@ -282,7 +282,7 @@ import { createRoomViewer, DARK_THEME } from "@mark1russell7/room-view/three";
 
 const viewer = createRoomViewer(container, {
   scene: SAMPLE_SCENE,
-  onSelect: (pick) => console.log(pick?.kind, pick?.source),
+  onSelect: (pick, mark) => console.log(pick?.kind, pick?.source, mark?.label),
 });
 
 viewer?.setTheme(DARK_THEME);
@@ -293,10 +293,12 @@ viewer?.setView("top");
 - The viewer fills its container, so give the container a size.
 - A drag turns the model. The wheel changes the distance only after a click in the picture, so the picture does not stop a page that scrolls.
 - The walls between the camera and the room become almost clear.
-- A click selects the record of a solid. `onSelect` gets the kind and the `id` of the record.
+- A click selects the record of a solid or of a sign. `onSelect` gets the kind and the `id` of the record.
 - With the keyboard, the arrow keys turn the model, and `+` and `-` change the distance. `Home` shows the first view, and `T` shows the plan.
-- Each outlet has a marker with the color and the shape of the level of its circuit. A marker keeps its size in the picture.
-- A marker behind a wall or a machine stays in the picture, and it is less clear.
+- The stage and the signs come from `@mark1russell7/visuals`. Thus each viewer on that package shows the same signs.
+- Each outlet has a sign with the color and the shape of the level of its circuit. A sign keeps its size in the picture.
+- A sign behind a wall or a machine stays in the picture, and it is less clear.
+- The pointer finds a sign before each solid, also behind a solid. `onHover` and `onSelect` get its mark as their second parameter.
 - `highlight` and `select` mark records from your page: the outlets of a circuit, or the row of a table.
 - A marked outlet or object shows a line from the outlet to each object that takes its power from it.
 - The option `loads` has the options of `circuitStates`, for example the part of the limit where the level `near` starts.
@@ -304,6 +306,31 @@ viewer?.setView("top");
 - `createRoomViewer` gives `undefined` in a browser with no WebGL 2. It does not throw.
 
 `LIGHT_THEME` and `DARK_THEME` are the colors, and a theme is plain data. The field `levels` of a theme has the color of each level. `solidGeometry` gives the three.js geometry of one solid, for your own three.js scene.
+
+### The marks of the add-ons
+
+The option `marks` gives the marks of a scene to the viewer. The viewer draws them in place of the signs of the outlets:
+
+```ts
+import { layerMarks } from "@mark1russell7/room-view/marks";
+import { createRoomViewer } from "@mark1russell7/room-view/three";
+
+const marks = layerMarks(scene, addOns, addOnMarks);
+const viewer = createRoomViewer(container, { scene, marks });
+
+viewer?.highlight(["electrical/1:nook-2"]);
+viewer?.showMarks((mark) => mark.kind === "outlet");
+```
+
+- The marks are in the space of the scene: meters, with the z axis up.
+- A point is a sign, a run is a round line, a link is a dashed line and a field is a grid of colors. A meter has no picture.
+- The viewer draws no mark with a fault. `checkMarks` of `@mark1russell7/visuals/marks` tells each fault.
+- `highlight` and `select` accept the record name of a mark, as `recordName` gives it.
+- `solidRecord` of the root entry gives the record name of a solid. Thus a finding, a mark and a solid of one record have one name.
+- `showMarks` shows only the marks that a test accepts, for example the marks of one kind.
+- `setScene` takes the marks of the new scene as its second parameter.
+- An empty list gives a picture with no sign.
+- The fields `field` and `fieldOpacity` of a theme have the colors of a field mark.
 
 ## The plan
 

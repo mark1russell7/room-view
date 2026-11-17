@@ -1,5 +1,5 @@
 import { fromSceneV1, outletLevels } from "@mark1russell7/electrical";
-import { levelShape, planShapes, SHAPE_OUTLINES, shapeRing, type LevelShape, type PlanShape } from "@mark1russell7/room-view";
+import { levelShape, planShapes, SHAPE_OUTLINES, shapeRing, solidRecord, type LevelShape, type PlanShape } from "@mark1russell7/room-view";
 import type { RoomViewer, RoomViewerOptions, ViewerPick, ViewerRecord, ViewerTheme } from "@mark1russell7/room-view/three";
 
 /** The part of a viewer that the page uses. The 3D viewer and the plan have these functions. */
@@ -26,7 +26,8 @@ export function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Readonl
   return element;
 }
 
-const keyOf = (record: ViewerRecord): string => `${record.kind}:${record.source}`;
+/** This function gives the name of a record of the viewer. A record name stays as it is. */
+const keyOf = (record: ViewerRecord | string): string => (typeof record === "string" ? record : solidRecord(record.kind, record.source));
 
 /** This function gives the outline of a shape as the data of a path. The y axis of a plan points up, and that of a picture points down. */
 function pathOf(shape: PlanShape): string {
@@ -95,8 +96,8 @@ export function createPlanView(container: HTMLElement, options: RoomViewerOption
   });
 
   let theme = options.theme;
-  let highlighted: readonly ViewerRecord[] = [];
-  let selected: ViewerRecord | undefined;
+  let highlighted: readonly (ViewerRecord | string)[] = [];
+  let selected: ViewerRecord | string | undefined;
   let hovered: string | undefined;
 
   const kindOf = (source: string): string | undefined => scene.objects?.find((object) => object.id === source)?.kind;

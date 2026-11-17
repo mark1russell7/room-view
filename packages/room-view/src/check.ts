@@ -3,7 +3,7 @@ import type { Anchor, SceneSpace } from "./anchors.ts";
 import { wallFrames, wallHasOutline } from "./frames.ts";
 import { wallFootprints, type JoinOptions } from "./joins.ts";
 import type { PlacedObject, Room, Scene } from "./room.ts";
-import { objectTransforms } from "./solids.ts";
+import { objectTransforms, type SolidKind } from "./solids.ts";
 import { LARGEST_LENGTH, lengthsInRange, metersPer } from "./units.ts";
 
 /** These are the levels of a finding. An error is a fault that the model cannot show. A warning is a fault that the model can show. */
@@ -33,6 +33,14 @@ export type RecordKind = (typeof RECORD_KINDS)[number];
  */
 export function recordName(kind: string, id: string): string {
   return `${kind}:${id}`;
+}
+
+/**
+ * This function gives the name of the record of a solid, as `recordName` gives it. `source` is the field `source` of the solid.
+ * The glass of a window is a solid of its opening, so its name has the kind `opening`.
+ */
+export function solidRecord(kind: SolidKind, source: string): string {
+  return recordName(kind === "glass" ? "opening" : kind, source);
 }
 
 /** This function gives the kind and the `id` of a record name, or `undefined` for a text with no kind. A kind has no colon, so the first colon ends it. */
