@@ -26,6 +26,7 @@ Feed: build/layer.chunk.d.ts#Feed
 KNOWN_LOADS: build/states.chunk.d.ts#KNOWN_LOADS
 LIMITS_DIFFER: build/states.chunk.d.ts#LIMITS_DIFFER
 LOAD_LEVELS: build/states.chunk.d.ts#LOAD_LEVELS
+LevelV1: build/index.d.ts#LevelV1
 LoadLevel: build/states.chunk.d.ts#LoadLevel
 LoadOptions: build/states.chunk.d.ts#LoadOptions
 MISSING_LOADS: build/states.chunk.d.ts#MISSING_LOADS
@@ -35,11 +36,14 @@ NodeKind: build/states.chunk.d.ts#NodeKind
 Outlet: build/layer.chunk.d.ts#Outlet
 RATED_LIMIT: build/states.chunk.d.ts#RATED_LIMIT
 SceneV1: build/index.d.ts#SceneV1
+SurveyV1: build/index.d.ts#SurveyV1
 checkElectrical: build/index.d.ts#checkElectrical
 circuitStates: build/states.chunk.d.ts#circuitStates
 electricalSpace: build/states.chunk.d.ts#electricalSpace
 evaluateCircuit: build/states.chunk.d.ts#evaluateCircuit
+fromLevelV1: build/index.d.ts#fromLevelV1
 fromSceneV1: build/index.d.ts#fromSceneV1
+fromSurveyV1: build/index.d.ts#fromSurveyV1
 joinElectrical: build/index.d.ts#joinElectrical
 loadCurrent: build/states.chunk.d.ts#loadCurrent
 loadRatio: build/states.chunk.d.ts#loadRatio
@@ -95,6 +99,11 @@ export interface ElectricalFault extends AddOnFault {
   readonly code: ElectricalCode;
 }
 
+### build/index.d.ts#LevelV1
+export interface LevelV1 {
+  readonly circuits?: SceneV1["room"]["circuits"];
+}
+
 ### build/index.d.ts#SceneV1
 export interface SceneV1 {
   readonly room: {
@@ -124,11 +133,30 @@ export interface SceneV1 {
   }[] | undefined;
 }
 
+### build/index.d.ts#SurveyV1
+export interface SurveyV1 {
+  readonly outlets?: readonly {
+    readonly id: string;
+    readonly wall: string;
+    readonly offset: number;
+    readonly height: number;
+    readonly circuit?: string | undefined;
+  }[] | undefined;
+  readonly circuits?: SceneV1["room"]["circuits"];
+  readonly objects?: SceneV1["objects"];
+}
+
 ### build/index.d.ts#checkElectrical
 export declare function checkElectrical(layer: ElectricalLayer, space: SceneSpace, options?: LoadOptions): readonly ElectricalFault[];
 
+### build/index.d.ts#fromLevelV1
+export declare function fromLevelV1(level: LevelV1): ElectricalLayer;
+
 ### build/index.d.ts#fromSceneV1
 export declare function fromSceneV1(scene: SceneV1): ElectricalLayer;
+
+### build/index.d.ts#fromSurveyV1
+export declare function fromSurveyV1(survey: SurveyV1): ElectricalLayer;
 
 ### build/index.d.ts#joinElectrical
 export declare function joinElectrical(parts: readonly LayerPart<ElectricalLayer>[]): ElectricalLayer;

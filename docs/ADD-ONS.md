@@ -249,6 +249,8 @@ The add-on also has these parts:
 - The layer of a level: `joinElectrical` is the function `join` of the add-on. An outlet and a feed get the name of their room, for example `kitchen/o1`.
   A circuit keeps its `id`, because one circuit gives power to outlets in more than one room.
 - `fromSceneV1` moves the electrical records of a `scene/1` to a layer: the outlets, the circuits, the loads and the outlet of each object. The loads of a circuit become its `otherLoad`.
+- `fromSurveyV1` and `fromLevelV1` move the old electrical records of a `survey/1` and of a `level/1` to layers.
+  A circuit keeps its `id`, so an outlet of a different room names it.
 
 ## The form of the site
 
@@ -294,6 +296,8 @@ interface FormCollection {
   Each other collection is a list of the level.
 - `formLayer` makes the layer from the records of a form. It is total: a record that the layer cannot have is not in the layer.
 - `formRecords` gives the records of a form from a layer. Its value `more` tells that the layer has data that the form does not keep.
+- The option `outside` of the two functions gives the ids of the records outside the layer that a field can name.
+  For example, the outlet of a room of a level names a circuit of the layer of the level record.
 - `checkForm` gives the faults of a form. The test of an add-on examines its form with this function.
 - The form is in the entry `/form` of the add-on, so the root entry has no text of a page.
 - The read-out of a record comes from the marks of the add-on. For example, the meter of a circuit gives its limit.
@@ -370,9 +374,12 @@ The meter with no limit changes the marks that `electricalMarks` gives, so `@mar
 The form of a layer is a feature of the core and of the add-on. Thus `@mark1russell7/room-view` goes to 0.2.2, and `@mark1russell7/electrical` goes to 0.3.2.
 The layers of a survey and of a level are a feature of the core and of the add-on, and they remove nothing.
 Thus `@mark1russell7/room-view` goes to 0.2.3, and `@mark1russell7/electrical` goes to 0.3.3.
+The ids outside a layer in the form are a feature of the core. The move of an old survey and of an old level is a feature of the add-on.
+Thus `@mark1russell7/room-view` goes to 0.2.4, and `@mark1russell7/electrical` goes to 0.3.4.
 The last part of step 6 removes records from the public API, so `@mark1russell7/room-view` then goes to 0.3.0.
 
 - `room/1` and `scene/1` stay readable. `fromSceneV1` of the electrical add-on gives the electrical layer of a `scene/1`. Step 6 adds the move of the scene to `scene/2`.
+- A page can read the old electrical records of a `survey/1` and of a `level/1`: `fromSurveyV1` and `fromLevelV1` of the electrical add-on give their layers.
 - `@mark1russell7/electrical` starts at 0.1.0. It depends on the core of this workspace, so a new version of the core gives a new version of the add-on.
 - The core rejects `outlets` in a `room/2` with a finding that names `fromSceneV1`.
 
@@ -393,6 +400,8 @@ The first steps add, and the last step removes. Thus each step keeps the page an
 6. The layers go into the files of a person, in three parts. First, a survey and a level get the field `layers`, and the core carries the layers to the room record.
    This part is a feature (`@mark1russell7/room-view` 0.2.3, `@mark1russell7/electrical` 0.3.3).
    Then the page writes the records of each add-on as layers, and the viewer of the page draws the marks of the layers.
+   For this part, the form keeps a field that names a record outside its layer (`@mark1russell7/room-view` 0.2.4).
+   The electrical add-on moves the old records of a survey and of a level to layers (`@mark1russell7/electrical` 0.3.4).
    Last, the core removes `outlets`, `circuits`, `loads` and `PlacedObject.outlet`, also from a survey and from a level.
    It gives `room/2`, `scene/2`, `survey/2` and `level/2`. This part is the break of the version.
 7. The procedures packages.

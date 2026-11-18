@@ -48,10 +48,12 @@ FormLayer: build/index.d.ts#FormLayer
 FormLayerOptions: build/index.d.ts#FormLayerOptions
 FormNumberField: build/index.d.ts#FormNumberField
 FormObjectField: build/index.d.ts#FormObjectField
+FormOutside: build/index.d.ts#FormOutside
 FormReading: build/index.d.ts#FormReading
 FormRecord: build/index.d.ts#FormRecord
 FormRecordField: build/index.d.ts#FormRecordField
 FormRecords: build/index.d.ts#FormRecords
+FormRecordsOptions: build/index.d.ts#FormRecordsOptions
 FormRecordsRead: build/index.d.ts#FormRecordsRead
 FormSystem: build/index.d.ts#FormSystem
 FormTextField: build/index.d.ts#FormTextField
@@ -272,6 +274,7 @@ export type FormLayer = Readonly<Record<string, unknown>> & {
 export interface FormLayerOptions {
   readonly system: FormSystem;
   readonly objects?: ReadonlySet<string> | undefined;
+  readonly outside?: FormOutside | undefined;
 }
 
 ### build/index.d.ts#FormNumberField
@@ -288,6 +291,9 @@ export interface FormNumberField extends FormFieldPart {
 export interface FormObjectField extends FormFieldPart {
   readonly kind: "object";
 }
+
+### build/index.d.ts#FormOutside
+export type FormOutside = ReadonlyMap<string, ReadonlySet<string>>;
 
 ### build/index.d.ts#FormReading
 export type FormReading = {
@@ -315,6 +321,11 @@ export interface FormRecordField extends FormFieldPart {
 
 ### build/index.d.ts#FormRecords
 export type FormRecords = Readonly<Record<string, readonly FormRecord[]>>;
+
+### build/index.d.ts#FormRecordsOptions
+export interface FormRecordsOptions {
+  readonly outside?: FormOutside | undefined;
+}
 
 ### build/index.d.ts#FormRecordsRead
 export interface FormRecordsRead {
@@ -364,7 +375,7 @@ export declare function checkForm(form: LayerForm): readonly FormFault[];
 export declare function formLayer(form: LayerForm, records: FormRecords, options: FormLayerOptions): FormLayer;
 
 ### build/index.d.ts#formRecords
-export declare function formRecords(form: LayerForm, layer: unknown): FormRecordsRead;
+export declare function formRecords(form: LayerForm, layer: unknown, options?: FormRecordsOptions): FormRecordsRead;
 
 ### build/index.d.ts#planShape
 export declare function planShape(solid: Solid): PlanShape;

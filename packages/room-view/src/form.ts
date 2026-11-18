@@ -265,11 +265,12 @@ interface Kept {
 /**
  * This function removes each part that names a record or an object that is not there, one time. It gives true when it removed a part.
  *
- * - A field of a record that is not in its collection loses its value. A field of an object that is not in `objects` loses its value too.
+ * - A field of a record that is not in its collection and not in `outside` loses its value.
+ * - A field of an object that is not in `objects` loses its value too.
  * - A record with no value of a necessary field goes away.
  * - A record after the largest number of records of its owner goes away.
  */
-function settleOnce(form: LayerForm, kept: Map<string, Kept[]>, objects: ReadonlySet<string> | undefined): boolean {
+function settleOnce(form: LayerForm, kept: Map<string, Kept[]>, objects: ReadonlySet<string> | undefined, outside: FormOutside | undefined): boolean {
   let changed = false;
   const ids = new Map<string, ReadonlySet<string>>();
   for (const collection of form.collections) ids.set(collection.name, new Set((kept.get(collection.name) ?? []).map((record) => record.id)));
@@ -281,7 +282,8 @@ function settleOnce(form: LayerForm, kept: Map<string, Kept[]>, objects: Readonl
       for (const field of collection.fields) {
         const value = valueOf(record.values, field.name);
         if (typeof value !== "string" || field.kind === "text" || field.kind === "number") continue;
-        const there = field.kind === "record" ? ids.get(field.of)?.has(value) === true : objects === undefined || objects.has(value);
+        const there =
+          field.kind === "record" ? ids.get(field.of)?.has(value) === true || outside?.get(field.of)?.has(value) === true : objects === undefined || objects.has(value);
         if (there) continue;
         changed = true;
         if (field.needed === true) stays = false;
@@ -307,11 +309,17 @@ function settleOnce(form: LayerForm, kept: Map<string, Kept[]>, objects: Readonl
  * This function removes each part that names a record or an object that is not there. It gives true when it removed a part.
  * A record that goes away can be the record of a field, so the function repeats `settleOnce` until nothing changes.
  */
-function settle(form: LayerForm, kept: Map<string, Kept[]>, objects: ReadonlySet<string> | undefined): boolean {
+function settle(form: LayerForm, kept: Map<string, Kept[]>, objects: ReadonlySet<string> | undefined, outside: FormOutside | undefined): boolean {
   let removed = false;
-  while (settleOnce(form, kept, objects)) removed = true;
+  while (settleOnce(form, kept, objects, outside)) removed = true;
   return removed;
 }
+
+/**
+ * The ids of the records outside a layer that a field of the kind `record` can name, by the name of their collection.
+ * For example, the layer of one room of a level can name a record of the layer of the level record.
+ */
+export type FormOutside = ReadonlyMap<string, ReadonlySet<string>>;
 
 /** The options of `formLayer`. */
 export interface FormLayerOptions {
@@ -319,6 +327,8 @@ export interface FormLayerOptions {
   readonly system: FormSystem;
   /** The ids of the placed objects of the scene. With it, a field of the kind `object` keeps only an `id` of the set. */
   readonly objects?: ReadonlySet<string> | undefined;
+  /** The ids of the records outside the layer. With it, a field of the kind `record` also keeps an `id` of the set of its collection. */
+  readonly outside?: FormOutside | undefined;
 }
 
 /** A layer from the records of a form: its name, and the records of each collection that has records. */
@@ -329,7 +339,8 @@ export type FormLayer = Readonly<Record<string, unknown>> & { readonly schema: s
  *
  * - `readFormRecord` reads each record. A record that it stops is not in the layer.
  * - The ids of a layer are unique. The first record of an `id` stays, in the sequence of the collections.
- * - A field that names a record that is not in the layer has no value. A record with no value of a necessary field is not in the layer.
+ * - A field that names a record that is not in the layer and not in `outside` has no value.
+ * - A record with no value of a necessary field is not in the layer.
  * - A collection with no record is not in the layer.
  *
  * A record of the layer has its `id`, then its `anchor`, then its values in the sequence of the fields. Thus equal records give equal JSON.
@@ -349,7 +360,7 @@ export function formLayer(form: LayerForm, records: FormRecords, options: FormLa
     }
     kept.set(collection.name, list);
   }
-  settle(form, kept, options.objects);
+  settle(form, kept, options.objects, options.outside);
   const layer: [string, unknown][] = [["schema", form.schema]];
   for (const collection of form.collections) {
     const list = kept.get(collection.name) ?? [];
@@ -378,6 +389,12 @@ export interface FormRecordsRead {
   readonly more: boolean;
 }
 
+/** The options of `formRecords`. */
+export interface FormRecordsOptions {
+  /** The ids of the records outside the layer. A layer of `formLayer` with an `outside` needs the same `outside` here. */
+  readonly outside?: FormOutside | undefined;
+}
+
 const isObject = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
@@ -389,12 +406,13 @@ const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
  * - a record with no `id`, or with the `id` of an earlier record
  * - a record of a collection with surfaces that has no anchor on one of them
  * - a value that is not a valid value of its field
- * - a field that names a record that the layer does not have
+ * - a field that names a record that the layer and `outside` do not have
  * - a record after the largest number of records of its owner
  *
  * The records of a layer of `formLayer` are the records that the layer has, and `more` is false for them.
+ * A layer of `formLayer` with an `outside` needs the same `outside` for this result.
  */
-export function formRecords(form: LayerForm, layer: unknown): FormRecordsRead {
+export function formRecords(form: LayerForm, layer: unknown, options: FormRecordsOptions = {}): FormRecordsRead {
   const kept = new Map<string, Kept[]>();
   for (const collection of form.collections) kept.set(collection.name, []);
   let more = false;
@@ -452,7 +470,7 @@ export function formRecords(form: LayerForm, layer: unknown): FormRecordsRead {
       if (list.length !== (kept.get(collection.name) ?? []).length) more = true;
       kept.set(collection.name, list);
     }
-    if (settle(form, kept, undefined)) more = true;
+    if (settle(form, kept, undefined, options.outside)) more = true;
   } else if (layer !== undefined) more = true;
   const records: [string, readonly FormRecord[]][] = form.collections.map((collection) => [
     collection.name,

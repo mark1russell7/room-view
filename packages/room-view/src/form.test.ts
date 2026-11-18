@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import type { Anchor } from "./anchors.ts";
-import { checkForm, formLayer, formRecords, readFormRecord, type FormCollection, type FormRecord, type FormRecords, type LayerForm } from "./form.ts";
+import { checkForm, formLayer, formRecords, readFormRecord, type FormCollection, type FormOutside, type FormRecord, type FormRecords, type LayerForm } from "./form.ts";
 
 /** The form of a test add-on: water lines, taps on walls, and the water of each object. It shows only the contract. */
 const PIPES: LayerForm = {
@@ -76,6 +76,12 @@ const HOME_LAYER = {
   ],
   uses: [{ id: "use-1", object: "sink", tap: "tap-1" }],
 };
+
+/** The records of one room of `HOME`: its taps and its water. The lines are records of the level. */
+const ROOM: FormRecords = { taps: HOME["taps"] ?? [], uses: HOME["uses"] ?? [] };
+const ROOM_LAYER = { schema: "pipe/1", taps: HOME_LAYER.taps, uses: HOME_LAYER.uses };
+/** The ids of the lines of the level. */
+const LEVEL_LINES: FormOutside = new Map([["lines", new Set(["cold", "hot"])]]);
 
 /** This function gives a form with a change of one collection. */
 function withCollection(index: number, change: Partial<FormCollection>): LayerForm {
@@ -279,6 +285,32 @@ describe("formLayer", () => {
     expect(formLayer(PIPES, HOME, { system: "metric", objects: new Set(["sink"]) })).toEqual(HOME_LAYER);
     expect(formLayer(PIPES, HOME, { system: "metric", objects: new Set(["bath"]) })).toEqual({ schema: "pipe/1", lines: HOME_LAYER.lines, taps: HOME_LAYER.taps });
   });
+
+  it("keeps a field that names a record outside the layer, with the ids of those records", () => {
+    // With no ids, the tap loses its line. The tap stays, because the line is not a necessary field.
+    const alone = [
+      { id: "tap-1", anchor: onWall, flow: 9 },
+      { id: "tap-2", anchor: onWall },
+    ];
+    expect(formLayer(PIPES, ROOM, { system: "metric" })).toEqual({ schema: "pipe/1", taps: alone, uses: HOME_LAYER.uses });
+    expect(formLayer(PIPES, ROOM, { system: "metric", outside: LEVEL_LINES })).toEqual(ROOM_LAYER);
+    // The ids are the ids of one collection: a line with the id of a tap is not there.
+    expect(formLayer(PIPES, ROOM, { system: "metric", outside: new Map([["taps", new Set(["cold"])]]) })["taps"]).toEqual(alone);
+    expect(formLayer(PIPES, ROOM, { system: "metric", outside: new Map([["lines", new Set(["hot"])]]) })["taps"]).toEqual(alone);
+  });
+
+  it("keeps a record with a necessary field that names a record outside the layer", () => {
+    const use: FormRecords = { uses: [{ id: "use-1", values: { object: "sink", tap: "tap-9" } }] };
+    expect(formLayer(PIPES, use, { system: "metric" })).toEqual({ schema: "pipe/1" });
+    expect(formLayer(PIPES, use, { system: "metric", outside: new Map([["taps", new Set(["tap-9"])]]) })).toEqual({
+      schema: "pipe/1",
+      uses: [{ id: "use-1", object: "sink", tap: "tap-9" }],
+    });
+  });
+
+  it("keeps a record of the layer with the id of a record outside the layer", () => {
+    expect(formLayer(PIPES, HOME, { system: "metric", outside: LEVEL_LINES })).toEqual(HOME_LAYER);
+  });
 });
 
 describe("formRecords", () => {
@@ -348,6 +380,25 @@ describe("formRecords", () => {
     expect(more({ ...HOME_LAYER, uses })["uses"]).toEqual([{ id: "use-1", values: { object: "sink", tap: "tap-1" } }]);
   });
 
+  it("keeps a field that names a record outside the layer, with the ids of those records", () => {
+    const alone = formRecords(PIPES, ROOM_LAYER);
+    expect(alone.more).toBe(true);
+    expect(alone.records["taps"]).toEqual([
+      { id: "tap-1", anchor: onWall, values: { flow: 9 } },
+      { id: "tap-2", anchor: onWall, values: {} },
+    ]);
+    expect(formRecords(PIPES, ROOM_LAYER, { outside: LEVEL_LINES })).toEqual({ records: { lines: [], ...ROOM }, more: false });
+    // The ids are the ids of one collection.
+    expect(formRecords(PIPES, ROOM_LAYER, { outside: new Map([["taps", new Set(["cold"])]]) })).toEqual(alone);
+    // A necessary field can name a record outside the layer.
+    const use = { schema: "pipe/1", uses: [{ id: "use-1", object: "sink", tap: "tap-9" }] };
+    expect(formRecords(PIPES, use)).toEqual({ records: { lines: [], taps: [], uses: [] }, more: true });
+    expect(formRecords(PIPES, use, { outside: new Map([["taps", new Set(["tap-9"])]]) })).toEqual({
+      records: { lines: [], taps: [], uses: [{ id: "use-1", values: { object: "sink", tap: "tap-9" } }] },
+      more: false,
+    });
+  });
+
   it("keeps a record with no value of a necessary number that has a usual value", () => {
     const form = withCollection(0, { fields: [{ kind: "number", name: "pressure", label: "Pressure", needed: true, usual: { metric: 3, imperial: 3.1 } }] });
     expect(formRecords(form, { schema: "pipe/1", lines: [{ id: "cold" }] })).toEqual({ records: { lines: [{ id: "cold", values: {} }], taps: [], uses: [] }, more: false });
@@ -364,12 +415,20 @@ describe("formRecords", () => {
       values: fc.dictionary(fc.constantFrom("name", "pressure", "line", "flow", "object", "tap", "other"), value),
     });
     const records = fc.record({ lines: fc.array(record, { maxLength: 4 }), taps: fc.array(record, { maxLength: 4 }), uses: fc.array(record, { maxLength: 4 }) });
+    // The ids outside the layer: none, or a line and a tap. The id "z" is the id of no record of the layer.
+    const outside = fc.constantFrom<FormOutside | undefined>(
+      undefined,
+      new Map([
+        ["lines", new Set(["a", "z"])],
+        ["taps", new Set(["b", "z"])],
+      ]),
+    );
     fc.assert(
-      fc.property(records, fc.constantFrom("metric", "imperial"), (given, system) => {
-        const layer = formLayer(PIPES, given, { system });
-        const read = formRecords(PIPES, layer);
+      fc.property(records, fc.constantFrom("metric", "imperial"), outside, (given, system, known) => {
+        const layer = formLayer(PIPES, given, { system, outside: known });
+        const read = formRecords(PIPES, layer, { outside: known });
         expect(read.more).toBe(false);
-        expect(formLayer(PIPES, read.records, { system })).toEqual(layer);
+        expect(formLayer(PIPES, read.records, { system, outside: known })).toEqual(layer);
         // The ids of a layer are unique.
         const ids = Object.values(read.records).flatMap((list) => list.map((item) => item.id));
         expect(new Set(ids).size).toBe(ids.length);
