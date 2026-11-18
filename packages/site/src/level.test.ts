@@ -1,10 +1,14 @@
 import { checkRoom, expandLevel, expandSurvey, LEVEL_SCHEMA, type Level, type LevelResult } from "@mark1russell7/room-view";
 import { SAMPLE_LEVEL, SAMPLE_SURVEY } from "@mark1russell7/room-view/sample";
 import { describe, expect, it } from "vitest";
+import { ELECTRICAL } from "./add-ons.ts";
 import {
+  circuitLists,
+  circuitOf,
   emptyDraft,
   exampleDraft,
   listedObjects,
+  ownedOf,
   statusOf,
   storeOf,
   surveyOf,
@@ -44,14 +48,19 @@ function box(
   };
 }
 
-/** This function gives a door, or a feature of a different kind, with a distance from the start of its wall and a width. */
-function hole(key: string, offset: string, width = "0.9", kind: FeatureKind = "door"): DraftFeature {
-  return { key, kind, from: "start", offset: typed(offset), width: typed(width), height: typed(""), sill: typed("") };
+/**
+ * This function gives a door, or a feature of a different kind, with a distance from the start of its wall and a width.
+ * The kind `outlet` gives an outlet: a point of the collection of the outlets, with no circuit.
+ */
+function hole(key: string, offset: string, width = "0.9", kind: Exclude<FeatureKind, "point"> | "outlet" = "door"): DraftFeature {
+  const base = { from: "start", offset: typed(offset), width: typed(width), height: typed(""), sill: typed("") } as const;
+  if (kind === "outlet") return { key, kind: "point", ...base, point: ownedOf(ELECTRICAL.layer, ELECTRICAL.outlets) };
+  return { key, kind, ...base };
 }
 
 const end = (room: number, feature: string): DraftEnd => ({ room, feature });
 
-/** This function gives a cabinet of 1 m by 0.5 m by 1 m against a wall, with a distance from the start of its wall. `outlet` is the key of its outlet. */
+/** This function gives a cabinet of 1 m by 0.5 m by 1 m against a wall, with a distance from the start of its wall. `outlet` is the key of its outlet: the cabinet then has a feed that names the outlet. */
 function cabinet(key: string, offset: string, outlet = ""): DraftObject {
   return {
     key,
@@ -64,7 +73,7 @@ function cabinet(key: string, offset: string, outlet = ""): DraftObject {
     height: typed("1"),
     gap: typed(""),
     lift: typed(""),
-    outlet,
+    owns: outlet === "" ? [] : [ownedOf(ELECTRICAL.layer, ELECTRICAL.feeds, { points: { [ELECTRICAL.outlet]: outlet } })],
     holds: [],
   };
 }
@@ -92,17 +101,17 @@ const statusAll = (store: Store): Status => levelStatus(store.rooms, store.rooms
 const withB = (store: Store, room: Draft): Store => ({ ...store, rooms: [A, room] });
 
 /**
- * Two rooms with one outlet each, on the circuit `Kitchen` of 20 A. The second circuit has no name and no numbers.
+ * Two rooms with one outlet each, on the circuit `Kitchen` of 20 A, with the key `r1`. The second circuit has no name and no numbers.
  * The rooms are in meters, so each empty field gets its usual value: 16 A or 230 V.
  */
 const WIRED: Store = (() => {
   const base = withNewCircuit(withNewCircuit(storeOf([box("A", { 0: [hole("f3", "1", "", "outlet")] }), box("B", { 2: [hole("f1", "2", "", "outlet")] })])));
-  const named = withCircuit(base, "c1", { name: "Kitchen", breaker: "20" });
-  return { ...named, rooms: named.rooms.map((room, index) => withOutletCircuit(room, index === 0 ? "f3" : "f1", "c1")) };
+  const named = withCircuit(base, "r1", { name: "Kitchen", breaker: "20" });
+  return { ...named, rooms: named.rooms.map((room, index) => withOutletCircuit(room, index === 0 ? "f3" : "f1", "r1")) };
 })();
 
 /** This function gives the circuit of each feature of each room. */
-const circuitsOf = (rooms: readonly Draft[]): readonly (readonly (string | undefined)[])[] => rooms.map((room) => room.sides.flatMap((side) => side.features.map((item) => item.circuit)));
+const circuitsOf = (rooms: readonly Draft[]): readonly (readonly (string | undefined)[])[] => rooms.map((room) => room.sides.flatMap((side) => side.features.map((item) => circuitOf(item))));
 
 describe("roomIds", () => {
   it("gives the words of each name, and a number to a room with no name", () => {
@@ -143,7 +152,7 @@ describe("levelOf", () => {
   });
 
   it("gives no outlet a circuit with a bad number", () => {
-    const level = levelOf(withCircuit(WIRED, "c1", { breaker: "0" }));
+    const level = levelOf(withCircuit(WIRED, "r1", { breaker: "0" }));
     expect(level.circuits?.map((item) => item.id)).toEqual(["circuit-2"]);
     expect(level.rooms.map((room) => room.survey.outlets?.map((item) => item.circuit))).toEqual([[undefined], [undefined]]);
   });
@@ -191,7 +200,8 @@ describe("draftsOf", () => {
     ]);
     expect(circuitsOf(drafts.rooms)).toEqual([["c1"], ["c1"]]);
     expect(drafts.more).toBe(false);
-    expect(levelOf({ ...storeOf(drafts.rooms), circuits: drafts.circuits })).toEqual(levelOf(WIRED));
+    // The ids of a level come from the names of the circuits, so new keys give the same level.
+    expect(levelOf({ ...storeOf(drafts.rooms), lists: circuitLists(drafts.circuits) })).toEqual(levelOf(WIRED));
   });
 
   it("keeps the first circuit of an id, from the level or from a survey", () => {
@@ -299,7 +309,7 @@ describe("surveyDrafts", () => {
   });
 
   it("reads the survey of a room of a store again", () => {
-    const records = { ids: new Map([["c1", "kitchen"]]), records: [{ id: "kitchen", name: "Kitchen", breaker: 20, voltage: 230, limit: 3680 }] };
+    const records = { ids: new Map([["r1", "kitchen"]]), records: [{ id: "kitchen", name: "Kitchen", breaker: 20, voltage: 230, limit: 3680 }] };
     const drafts = surveyDrafts(surveyOf(WIRED.rooms[0] ?? A, records));
     expect(drafts.circuits).toEqual([{ key: "c1", name: "Kitchen", breaker: "20", voltage: "230" }]);
     expect(circuitsOf(drafts.rooms)).toEqual([["c1"]]);

@@ -30,16 +30,18 @@ export interface WalkLabel {
   readonly text: string;
 }
 
-/** A door, a window, an opening or an outlet of a wall of the drawing. */
+/** A door, a window, an opening or a point of a wall of the drawing. A point is a record of an add-on, for example an outlet. */
 export interface WalkFeature {
   /** The position of the wall in the walk, from 0. */
   readonly side: number;
   /** The key of the feature in the page. */
   readonly key: string;
   readonly kind: FeatureKind;
-  /** The edge of the feature that is nearer to the start of its wall. An outlet has its center. */
+  /** The name of the kind for the page and the drawing. A point has the word of its add-on, for example `outlet`. */
+  readonly tag: string;
+  /** The edge of the feature that is nearer to the start of its wall. A point has its center. */
   readonly from: Pixel;
-  /** The edge of the feature that is nearer to the end of its wall. An outlet has its center. */
+  /** The edge of the feature that is nearer to the end of its wall. A point has its center. */
   readonly to: Pixel;
   /** The direction from the wall into the room: a vector with a length of 1. */
   readonly inner: Pixel;
@@ -193,7 +195,7 @@ export function drawWalkAt(
     const from = at(span.from);
     const to = at(span.to);
     const inner: Pixel = [(outer * dy) / length, (outer * (0 - dx)) / length];
-    return [{ side: span.side, key: span.key, kind: span.kind, from, to, inner, reach: span.corner === "start" ? [wall.from, from] : [wall.to, to], fault: span.fault }];
+    return [{ side: span.side, key: span.key, kind: span.kind, tag: span.tag, from, to, inner, reach: span.corner === "start" ? [wall.from, from] : [wall.to, to], fault: span.fault }];
   });
 
   const start = pixel(first);

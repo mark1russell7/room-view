@@ -6,20 +6,25 @@ import { circuitName, circuitRecords, readCircuit, usualCircuit, type CircuitFie
 import { isDark, onThemeChange } from "./dark.ts";
 import {
   areaText,
+  circuitLists,
+  circuitOf,
+  circuitsOf,
   circuitUse,
   defaultMode,
   dimensionText,
   emptyDraft,
   exampleDraft,
   FEATURE_FIELDS,
-  FEATURE_KINDS,
   FEATURE_NAMES,
   featureFaults,
+  featureLabel,
   featureOf,
   featureSpans,
+  featureTag,
   fieldsOf,
   fileName,
   isExample,
+  isOutlet,
   LENGTH_MODES,
   lengthText,
   listedObjects,
@@ -36,8 +41,10 @@ import {
   objectMarks,
   objectOf,
   objectWords,
+  outletOf,
   parseStore,
   placedFeatures,
+  pointKinds,
   readLength,
   roomName,
   roomState,
@@ -49,7 +56,7 @@ import {
   storeText,
   surveyOf,
   typedOf,
-  usualOf,
+  usualFor,
   usualSize,
   withActive,
   withCircuit,
@@ -60,10 +67,12 @@ import {
   withNewCircuit,
   withNewFeature,
   withNewObject,
+  withNewPoint,
   withNewRoom,
   withNewRooms,
   withNewSide,
   withObject,
+  withObjectOutlet,
   withoutCircuit,
   withoutFeature,
   withOutletCircuit,
@@ -76,6 +85,7 @@ import {
   type Draft,
   type DraftCircuit,
   type DraftEnd,
+  type DraftFeature,
   type DraftSide,
   type FeatureEnd,
   type FeatureFault,
@@ -87,6 +97,7 @@ import {
   type ObjectField,
   type ObjectPlace,
   type PlacedFeature,
+  type PointKind,
   type RoomState,
   type Status,
   type StatusLevel,
@@ -259,18 +270,27 @@ function lengthFields(box: HTMLElement, typed: TypedLength, label: string, usual
   box.replaceChildren(...fields);
 }
 
-/** The name of each button that adds a feature to a wall. */
-const ADD_NAMES: Readonly<Record<FeatureKind, string>> = { door: "Door", window: "Window", gap: "Opening with no door", outlet: "Outlet" };
+/** A kind of hole of a wall: a door, a window or an opening. A point is the fourth kind of feature, and an add-on gives its name. */
+type HoleKind = Exclude<FeatureKind, "point">;
 
-/** The name of the number of the features of each kind, in the numbers of the room. */
-const COUNT_NAMES: Readonly<Record<FeatureKind, string>> = { door: "Doors", window: "Windows", gap: "Openings", outlet: "Outlets" };
+/** The kinds of hole, in the sequence of the buttons that add them. */
+const HOLE_KINDS: readonly HoleKind[] = ["door", "window", "gap"];
 
-/** This function gives the sign of a kind of feature: its symbol in the drawing, on a short part of a wall. */
+/** The name of each button that adds a hole to a wall. The button of a kind of point has the label of its collection. */
+const ADD_NAMES: Readonly<Record<HoleKind, string>> = { door: "Door", window: "Window", gap: "Opening with no door" };
+
+/** The name of the number of the holes of each kind, in the numbers of the room. The points of a collection have its title. */
+const COUNT_NAMES: Readonly<Record<HoleKind, string>> = { door: "Doors", window: "Windows", gap: "Openings" };
+
+/** The name of the number of the points of a collection that the page does not know, in the numbers of the room. */
+const COUNT_POINTS = "Points";
+
+/** This function gives the sign of a kind of feature: its symbol in the drawing, on a short part of a wall. A point is a circle on the side of the room. */
 function featureSign(kind: FeatureKind): SVGSVGElement {
   const sign = svg("svg", { class: "sign", viewBox: "0 0 30 16", width: "30", height: "16", "aria-hidden": "true" });
   const stroke = (className: string, x1: number, y1: number, x2: number, y2: number): SVGLineElement =>
     svg("line", { class: className, x1: String(x1), y1: String(y1), x2: String(x2), y2: String(y2) });
-  if (kind === "outlet") {
+  if (kind === "point") {
     sign.append(stroke("sign-wall", 1, 4, 29, 4), stroke("sign-thin", 15, 4, 15, 8), svg("circle", { class: "sign-outlet", cx: "15", cy: "11", r: "3" }));
     return sign;
   }
@@ -299,19 +319,19 @@ function alongName(side: number, end: FeatureEnd, held: boolean): string {
 function fieldName(kind: FeatureKind, field: FeatureField, side: number, end: FeatureEnd): string {
   if (field === "width") return "Width";
   if (field === "sill") return "Bottom above the floor";
-  if (field === "height") return kind === "outlet" ? "Above the floor" : "Height";
+  if (field === "height") return kind === "point" ? "Above the floor" : "Height";
   return alongName(side, end, false);
 }
 
-/** This function gives the fields of a door, a window, an opening or an outlet. */
+/** This function gives the fields of a door, a window, an opening or a point. A point has the name of its add-on, for example an outlet. */
 function featureItem(item: PlacedFeature): HTMLLIElement {
   const { feature, side } = item;
-  const title = `${FEATURE_NAMES[feature.kind]} ${String(item.number)}`;
+  const title = `${featureLabel(feature)} ${String(item.number)}`;
   const name = title.toLowerCase();
   const remove = h("button", { class: "remove", type: "button", "data-action": "remove-feature", "aria-label": `Remove ${name}`, title: `Remove ${name}` }, "×");
   const rows = fieldsOf(feature.kind).map((field) => {
     const words = fieldName(feature.kind, field, side, feature.from);
-    const usual = usualOf(feature.kind, field, draft.mode);
+    const usual = usualFor(feature, field, draft.mode);
     const length = h("span", { class: "length", "data-of": field });
     lengthFields(length, feature[field], `${title}, ${words.toLowerCase()}`, usual === undefined ? undefined : typedOf(usual, draft.mode));
     if (field !== "offset") return h("div", { class: "field" }, h("span", { class: "field-name" }, words), length);
@@ -322,7 +342,7 @@ function featureItem(item: PlacedFeature): HTMLLIElement {
   note.hidden = true;
   return h(
     "li",
-    { class: "feature", "data-key": feature.key, "data-kind": feature.kind },
+    { class: "feature", "data-key": feature.key, "data-kind": featureTag(feature) },
     h("div", { class: "feature-head" }, featureSign(feature.kind), h("span", { class: "feature-name" }, title), remove),
     rows,
     note,
@@ -366,25 +386,31 @@ const NO_CIRCUIT = "Not known yet";
  * A store with no circuit shows an aid in place of the field. A door, a window and an opening have no circuit.
  */
 function circuitRows(item: PlacedFeature, title: string): readonly HTMLElement[] {
-  if (item.feature.kind !== "outlet") return [];
-  if (store.circuits.length === 0) return [h("p", { class: "join-aid" }, "To tell the breaker of this outlet, add the breaker in Circuits, below the walls.")];
-  const options = store.circuits.map((circuit, index) => {
+  if (!isOutlet(item.feature)) return [];
+  const circuits = circuitsOf(store);
+  if (circuits.length === 0) return [h("p", { class: "join-aid" }, "To tell the breaker of this outlet, add the breaker in Circuits, below the walls.")];
+  const current = circuitOf(item.feature);
+  const options = circuits.map((circuit, index) => {
     const option = h("option", { value: circuit.key }, circuitName(circuit, index));
-    option.selected = circuit.key === item.feature.circuit;
+    option.selected = circuit.key === current;
     return option;
   });
   const select = h("select", { class: "text-field", "data-part": "circuit", "aria-label": `Circuit of ${title.toLowerCase()}` }, h("option", { value: "" }, NO_CIRCUIT), options);
   return [h("div", { class: "field" }, h("span", { class: "field-name" }, "Circuit"), select)];
 }
 
-/** This function gives the control that adds a feature to a wall: one button that shows a button for each kind. */
+/**
+ * This function gives the control that adds a feature to a wall: one button that shows a button for each kind.
+ * The kinds are the three kinds of hole, then each kind of point of the add-ons of the page.
+ */
 function addControl(side: DraftSide, number: string): HTMLElement {
   const id = `kinds-${side.key}`;
   const open = h("button", { class: "feature-open", type: "button", "data-action": "features", "aria-expanded": "false", "aria-controls": id }, "Add a door, a window or an outlet");
   const kinds = h(
     "div",
     { id, class: "feature-kinds", role: "group", "aria-label": `Add to wall ${number}` },
-    FEATURE_KINDS.map((kind) => h("button", { class: "tool", type: "button", "data-action": "add-feature", "data-kind": kind }, featureSign(kind), ADD_NAMES[kind])),
+    HOLE_KINDS.map((kind) => h("button", { class: "tool", type: "button", "data-action": "add-feature", "data-kind": kind }, featureSign(kind), ADD_NAMES[kind])),
+    pointKinds().map((kind) => h("button", { class: "tool", type: "button", "data-action": "add-feature", "data-kind": kind.tag }, featureSign("point"), kind.collection.label)),
   );
   kinds.hidden = true;
   return h("div", { class: "feature-add" }, open, kinds);
@@ -451,8 +477,8 @@ function objectRow(item: ListedObject, field: ObjectField, extra: HTMLElement | 
 
 /** This function tells if a person typed a value in a field of the box "More" of an object. Such a box is open when the form shows the object. */
 function hasMoreText(item: ListedObject): boolean {
-  const { name, gap, lift, outlet } = item.object;
-  return name !== "" || outlet !== "" || [gap, lift].some((length) => length.value !== "" || length.inches !== "");
+  const { name, gap, lift } = item.object;
+  return name !== "" || outletOf(item.object) !== "" || [gap, lift].some((length) => length.value !== "" || length.inches !== "");
 }
 
 /**
@@ -499,9 +525,10 @@ function objectItem(item: ListedObject, listed: readonly ListedObject[], outlets
   let power: HTMLElement;
   if (outlets.length === 0) power = h("p", { class: "object-aid" }, "To give it power, add an outlet to a wall.");
   else {
+    const current = outletOf(object);
     const options = outlets.map((outlet) => {
       const option = h("option", { value: outlet.feature.key }, `Outlet ${String(outlet.number)}, wall ${String(outlet.side + 1)}`);
-      option.selected = outlet.feature.key === object.outlet;
+      option.selected = outlet.feature.key === current;
       return option;
     });
     const select = h("select", { class: "text-field", "data-part": "outlet", "aria-label": `Outlet of ${words}` }, h("option", { value: "" }, "No outlet"), options);
@@ -542,7 +569,7 @@ function sideItem(side: DraftSide, index: number, placed: readonly PlacedFeature
   const number = String(index + 1);
   const features = placed.filter((item) => item.side === index);
   const objects = listed.filter((item) => item.side === index && item.holder === undefined);
-  const outlets = placed.filter((item) => item.feature.kind === "outlet");
+  const outlets = placed.filter((item) => isOutlet(item.feature));
   const length = h("span", { class: "length", "data-of": "side" });
   lengthFields(length, side.length, `Length of wall ${number}`);
   const remove = h("button", { class: "remove", type: "button", "data-action": "remove", "aria-label": `Remove wall ${number}`, title: `Remove wall ${number}` }, "×");
@@ -667,6 +694,11 @@ function showStatus(): void {
 
 type Fact = readonly [name: string, value: string];
 
+/** This function tells if a feature is a point of a kind of point: a record of its collection. */
+function isOfKind(feature: DraftFeature, kind: PointKind): boolean {
+  return feature.point?.layer === kind.layer && feature.point.collection === kind.collection.name;
+}
+
 /** This function gives the numbers of the room that the page shows. */
 function roomFacts(): readonly Fact[] {
   const lengths = draft.sides.map((side) => readLength(side.length, draft.mode));
@@ -677,12 +709,17 @@ function roomFacts(): readonly Fact[] {
     ["Around the room", around > 0 ? lengthText(around, draft.mode) : "No length yet"],
   ];
   if (status.level === "closed" && ring !== undefined) rows.push(["Floor area", areaText(regionArea({ kind: "polygon", points: ring }), draft.mode)]);
-  const kinds = draft.sides.flatMap((side) => side.features.map((feature) => feature.kind));
-  for (const kind of FEATURE_KINDS) {
-    const count = kinds.filter((item) => item === kind).length;
-    if (count > 0) rows.push([COUNT_NAMES[kind], String(count)]);
-  }
-  const circuits = new Set(draft.sides.flatMap((side) => side.features.flatMap((feature) => (feature.circuit === undefined ? [] : [feature.circuit]))));
+  const features = draft.sides.flatMap((side) => side.features);
+  const count = (name: string, has: (feature: DraftFeature) => boolean): void => {
+    const number = features.filter(has).length;
+    if (number > 0) rows.push([name, String(number)]);
+  };
+  for (const kind of HOLE_KINDS) count(COUNT_NAMES[kind], (feature) => feature.kind === kind);
+  // The points of each collection of an add-on have one number. A point of a collection that the page does not know is in the last number.
+  const kinds = pointKinds();
+  for (const kind of kinds) count(kind.collection.title, (feature) => isOfKind(feature, kind));
+  count(COUNT_POINTS, (feature) => feature.kind === "point" && !kinds.some((kind) => isOfKind(feature, kind)));
+  const circuits = new Set(features.flatMap((feature) => circuitOf(feature) ?? []));
   if (circuits.size > 0) rows.push(["Circuits", String(circuits.size)]);
   const objects = listedObjects(draft).length;
   if (objects > 0) rows.push(["Furniture and equipment", String(objects)]);
@@ -699,7 +736,8 @@ function levelFacts(level: Whole): readonly Fact[] {
     rows.push(["Floor area", areaText(area, store.rooms[0]?.mode ?? "m")]);
   }
   rows.push(["Doors between rooms", String(level.joints.length)]);
-  if (store.circuits.length > 0) rows.push(["Circuits", String(store.circuits.length)]);
+  const circuits = circuitsOf(store).length;
+  if (circuits > 0) rows.push(["Circuits", String(circuits)]);
   const objects = store.rooms.reduce((sum, room) => sum + listedObjects(room).length, 0);
   if (objects > 0) rows.push(["Furniture and equipment", String(objects)]);
   return rows;
@@ -734,18 +772,18 @@ const ARROW = { base: 13, tip: 25, half: 5 };
  * The sizes of the symbols of the features, in pixels. `jamb` is half of the line at each edge of an opening.
  * `glass` is half of the space between the two lines of a window.
  *
- * `outlet` is the distance from the wall to the center of an outlet, and `radius` is its radius.
+ * `outlet` is the distance from the wall to the center of a point, and `radius` is its radius.
  * `reach` is the distance from the wall to the line of the measured distance. `tick` is half of the line at each end of that line.
- * `touch` is the radius of the area that selects an outlet.
+ * `touch` is the radius of the area that selects a point.
  */
 const SYMBOL = { jamb: 5.5, glass: 2.25, outlet: 9, radius: 3.5, reach: 13, tick: 4, touch: 14 };
 
 /**
  * This function draws a feature of a wall. An opening is a break in the line of the wall: a door has one thin line, and a window has two.
- * An outlet is a circle on the side of the room.
+ * A point is a circle on the side of the room, for example an outlet.
  */
 function featureMark(feature: WalkFeature): SVGGElement {
-  const group = svg("g", { class: "walk-feature", "data-key": feature.key, "data-kind": feature.kind });
+  const group = svg("g", { class: "walk-feature", "data-key": feature.key, "data-kind": feature.tag });
   if (feature.fault !== undefined) group.dataset["fault"] = feature.fault;
   const [nx, ny] = feature.inner;
   const move = ([x, y]: Pixel, distance: number): Pixel => [x + nx * distance, y + ny * distance];
@@ -756,7 +794,7 @@ function featureMark(feature: WalkFeature): SVGGElement {
     line("walk-reach", move(corner, SYMBOL.reach - SYMBOL.tick), move(corner, SYMBOL.reach + SYMBOL.tick)),
     line("walk-reach", move(near, SYMBOL.reach - SYMBOL.tick), move(near, SYMBOL.reach + SYMBOL.tick)),
   );
-  if (feature.kind === "outlet") {
+  if (feature.kind === "point") {
     const center = move(feature.from, SYMBOL.outlet);
     group.append(
       line("walk-thin", feature.from, move(feature.from, SYMBOL.outlet - SYMBOL.radius)),
@@ -778,7 +816,7 @@ function featureHit(feature: WalkFeature): SVGElement {
   const [x, y] = feature.from;
   const [nx, ny] = feature.inner;
   const hit =
-    feature.kind === "outlet"
+    feature.kind === "point"
       ? svg("circle", { class: "walk-touch", cx: number(x + nx * SYMBOL.outlet), cy: number(y + ny * SYMBOL.outlet), r: String(SYMBOL.touch) })
       : line("walk-hit", feature.from, feature.to);
   hit.dataset["feature"] = feature.key;
@@ -974,7 +1012,7 @@ function roomOf(): Room {
   const level = shownWhole();
   if (level !== undefined) return shownLevel(level.result);
   // The checks of the room run with no circuit, so the record gets the circuits only here.
-  const circuits = circuitRecords(store.circuits, circuitMode());
+  const circuits = circuitRecords(circuitsOf(store), circuitMode());
   return shownRoom(circuits.records.length === 0 ? result.room : expandSurvey(surveyOf(draft, circuits)).room, faults);
 }
 
@@ -1316,7 +1354,7 @@ form.addEventListener("change", (event) => {
   }
   if (target instanceof HTMLSelectElement && target.dataset["part"] === "outlet") {
     const object = target.closest<HTMLElement>("li.object")?.dataset["key"];
-    if (object !== undefined) change(withObject(draft, object, { outlet: target.value }));
+    if (object !== undefined) change(withObjectOutlet(draft, object, target.value));
     return;
   }
   if (target instanceof HTMLSelectElement && target.dataset["part"] === "circuit") {
@@ -1361,10 +1399,13 @@ form.addEventListener("click", (event) => {
     return;
   }
   if (action === "add-feature") {
-    const kind = FEATURE_KINDS.find((item) => item === target.dataset["kind"]);
-    if (kind === undefined) return;
+    // A button adds a hole of its kind, or a point of the collection of an add-on with its name.
+    const kind = HOLE_KINDS.find((item) => item === target.dataset["kind"]);
+    const point = kind === undefined ? pointKinds().find((item) => item.tag === target.dataset["kind"]) : undefined;
+    if (kind === undefined && point === undefined) return;
     const before = new Set(draft.sides.flatMap((side) => side.features.map((item) => item.key)));
-    change(withNewFeature(draft, key, kind));
+    if (kind !== undefined) change(withNewFeature(draft, key, kind));
+    else if (point !== undefined) change(withNewPoint(draft, key, point.layer, point.collection.name));
     renderSides();
     const added = draft.sides.flatMap((side) => side.features).find((item) => !before.has(item.key));
     if (added !== undefined) featureField(added.key)?.focus();
@@ -1555,7 +1596,7 @@ function circuitItem(circuit: DraftCircuit, index: number): HTMLLIElement {
 
 /** This function shows the fields of each circuit of the store. */
 function renderCircuits(): void {
-  circuitList.replaceChildren(...store.circuits.map(circuitItem));
+  circuitList.replaceChildren(...circuitsOf(store).map(circuitItem));
   showCircuits();
 }
 
@@ -1578,7 +1619,7 @@ function circuitNote(circuit: DraftCircuit): readonly [text: string, bad: Circui
 
 /** This function shows, under each circuit, its limit and its outlets, or the field that needs a number. The fields do not change, so a field keeps the focus. */
 function showCircuits(): void {
-  for (const circuit of store.circuits) {
+  for (const circuit of circuitsOf(store)) {
     const item = circuitList.querySelector<HTMLElement>(`li.circuit[data-key="${CSS.escape(circuit.key)}"]`);
     const note = item?.querySelector<HTMLElement>(".circuit-note");
     if (item === null || item === undefined || note === null || note === undefined) continue;
@@ -1588,12 +1629,12 @@ function showCircuits(): void {
     else item.dataset["fault"] = "error";
     for (const input of item.querySelectorAll<HTMLInputElement>(".number-field")) input.setAttribute("aria-invalid", String(input.dataset["part"] === bad));
   }
-  addCircuit.disabled = store.circuits.length >= MOST_CIRCUITS;
+  addCircuit.disabled = circuitsOf(store).length >= MOST_CIRCUITS;
 }
 
 /** This function gives the new names of the circuits to the fields of the outlets. */
 function showCircuitNames(): void {
-  store.circuits.forEach((circuit, index) => {
+  circuitsOf(store).forEach((circuit, index) => {
     for (const option of sidesList.querySelectorAll<HTMLOptionElement>(`select[data-part="circuit"] option[value="${CSS.escape(circuit.key)}"]`)) option.textContent = circuitName(circuit, index);
   });
 }
@@ -1630,7 +1671,7 @@ circuitList.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('button[data-action="remove-circuit"]') : null;
   const key = target?.closest<HTMLElement>("li.circuit")?.dataset["key"];
   if (key === undefined) return;
-  const index = store.circuits.findIndex((circuit) => circuit.key === key);
+  const index = circuitsOf(store).findIndex((circuit) => circuit.key === key);
   changeCircuits(withoutCircuit(store, key));
   renderCircuits();
   // The outlets of the circuit have no circuit now.
@@ -1654,7 +1695,7 @@ addCircuit.addEventListener("click", () => {
 const LEVEL_FILE = "rooms";
 
 /** This function gives the measurements as text: the survey record of the room with the circuits, or the level record of the rooms together. */
-const surveyText = (): string => JSON.stringify(shownWhole() === undefined ? surveyOf(draft, circuitRecords(store.circuits, circuitMode())) : levelOf(store), null, 2);
+const surveyText = (): string => JSON.stringify(shownWhole() === undefined ? surveyOf(draft, circuitRecords(circuitsOf(store), circuitMode())) : levelOf(store), null, 2);
 
 /** This function gives a text to the visitor as a file. */
 function download(name: string, text: string): void {
@@ -1748,10 +1789,10 @@ byId("open-survey").addEventListener("click", () => {
  * When the page cannot keep each new room and each new circuit, the function tells it with the instruction `again`, and it gives `false`.
  */
 function addRooms(drafts: LevelDrafts, again: string): boolean {
-  const next = withNewRooms(store, drafts.rooms, drafts.connections, true, drafts.circuits);
+  const next = withNewRooms(store, drafts.rooms, drafts.connections, true, circuitLists(drafts.circuits));
   if (next === store) {
     keepNote.textContent =
-      store.circuits.length + drafts.circuits.length > MOST_CIRCUITS
+      circuitsOf(store).length + drafts.circuits.length > MOST_CIRCUITS
         ? `The page keeps ${String(MOST_CIRCUITS)} circuits at most. Remove a circuit, then try again.`
         : `The page keeps ${String(MOST_ROOMS)} rooms at most. ${again}`;
     return false;

@@ -13,6 +13,7 @@ import {
 } from "@mark1russell7/room-view";
 import { circuitDrafts, circuitRecords } from "./circuits.ts";
 import {
+  circuitsOf,
   draftKeys,
   FEATURE_NAMES,
   featureFaults,
@@ -63,7 +64,7 @@ export function roomIds(rooms: readonly Draft[]): readonly string[] {
 export function levelOf(store: Store): Level {
   const ids = roomIds(store.rooms);
   const mode = store.rooms[0]?.mode ?? "m";
-  const circuits = circuitRecords(store.circuits, mode);
+  const circuits = circuitRecords(circuitsOf(store), mode);
   const openings = store.rooms.map((room) => new Map(placedFeatures(room).map((item): [string, string] => [item.feature.key, item.id])));
   const end = (item: DraftEnd): ConnectionEnd => ({ room: ids[item.room] ?? "", opening: openings[item.room]?.get(item.feature) ?? "" });
   const connections = store.connections.map((connection): LevelConnection => {

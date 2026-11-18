@@ -356,11 +356,11 @@ const keptRoom = (): KeptRoom | undefined => {
 };
 const keptKinds = (): string => (keptRoom()?.sides ?? []).map((side) => (side.features ?? []).map((feature) => feature.kind ?? "").join("+")).join(",");
 check("the page keeps the room in the browser", keptRoom()?.name === "Main bedroom" && keptRoom()?.sides?.length === 6, localStorage.getItem(STORE_KEY)?.slice(0, 120));
-check("the page keeps the door and the outlet with their walls", keptKinds() === "door,outlet,,,,", keptKinds());
+check("the page keeps the door and the outlet with their walls", keptKinds() === "door,point,,,,", keptKinds());
 
 // The removal of a feature.
 press(`${door} [data-action="remove-feature"]`);
-check("the removal of a door removes its fields, its symbol and its number", features() === 1 && marks("door").length === 0 && marks("outlet").length === 1 && fact("Doors") === "" && keptKinds() === ",outlet,,,,", [features(), text("#facts"), keptKinds()]);
+check("the removal of a door removes its fields, its symbol and its number", features() === 1 && marks("door").length === 0 && marks("outlet").length === 1 && fact("Doors") === "" && keptKinds() === ",point,,,,", [features(), text("#facts"), keptKinds()]);
 
 // The rooms of the page: a person adds a room, goes from room to room, and removes a room.
 const nameField = document.querySelector<HTMLInputElement>("#name");
@@ -377,7 +377,7 @@ check("the name of a new room has the focus", document.activeElement !== null &&
 check("the drawing shows no feature of the first room", $$("#plan-box .walk-feature").length === 0 && fact("Outlets") === "", [$$("#plan-box .walk-feature").length, text("#facts")]);
 enter(nameField, "Hall");
 check("the list of the rooms shows a name while a person types it", roomNames() === `Main bedroom:${firstState},Hall:typing*`, roomNames());
-check("the page keeps the two rooms in the browser", keptRooms() === 2 && keptRoom()?.name === "Main bedroom" && keptKinds() === ",outlet,,,,", [keptRooms(), keptKinds()]);
+check("the page keeps the two rooms in the browser", keptRooms() === 2 && keptRoom()?.name === "Main bedroom" && keptKinds() === ",point,,,,", [keptRooms(), keptKinds()]);
 // A person with a keyboard goes to the room with the key Tab, so the button has the focus before the click.
 rooms()[0]?.focus();
 press('#room-list button[data-room="0"]');

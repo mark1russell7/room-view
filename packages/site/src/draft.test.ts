@@ -1,9 +1,14 @@
-import { checkRoom, expandSurvey, type Survey } from "@mark1russell7/room-view";
+import { ELECTRICAL_FORM } from "@mark1russell7/electrical/form";
+import { checkForm, checkRoom, expandSurvey, type LayerForm, type Survey } from "@mark1russell7/room-view";
 import { SAMPLE_SURVEY } from "@mark1russell7/room-view/sample";
 import { describe, expect, it } from "vitest";
+import { collectionOf, ELECTRICAL } from "./add-ons.ts";
 import {
   angleOf,
   areaText,
+  circuitLists,
+  circuitOf,
+  circuitsOf,
   circuitUse,
   convertTyped,
   defaultMode,
@@ -14,20 +19,26 @@ import {
   exampleDraft,
   featureAt,
   featureFaults,
+  featureLabel,
   featureOf,
   featureSpans,
+  featureTag,
+  featureWord,
   fieldsOf,
   fileName,
   hasFault,
   hasMore,
   isExample,
+  isOutlet,
   joinedTo,
   LENGTH_MODES,
   lengthText,
   listedObjects,
+  listRecords,
   idsOf,
   MOST_CIRCUITS,
   MOST_LEVELS,
+  MOST_RECORDS,
   MOST_ROOMS,
   nameWords,
   numberOf,
@@ -35,11 +46,17 @@ import {
   objectMarks,
   objectOf,
   objectWords,
+  outletOf,
+  ownedBy,
+  ownedOf,
   parseStore,
   placedFeatures,
+  pointKinds,
   readFeature,
   readObject,
   readLength,
+  recordOf,
+  recordUse,
   roomName,
   roomState,
   sameDraft,
@@ -49,8 +66,10 @@ import {
   storeOf,
   storeText,
   surveyOf,
+  textOf,
   turnOf,
   typedOf,
+  usualFor,
   usualOf,
   usualSize,
   walksRight,
@@ -63,16 +82,23 @@ import {
   withNewCircuit,
   withNewFeature,
   withNewObject,
+  withNewPoint,
+  withNewRecord,
   withNewRoom,
   withNewRooms,
   withNewSide,
   withObject,
+  withObjectOutlet,
   withoutCircuit,
   withoutFeature,
   withOutletCircuit,
   withoutObject,
+  withoutRecord,
   withoutRoom,
   withoutSide,
+  withOwned,
+  withPoint,
+  withRecord,
   withRoom,
   withSide,
   type Corner,
@@ -81,6 +107,7 @@ import {
   type DraftConnection,
   type DraftEnd,
   type DraftFeature,
+  type DraftList,
   type DraftObject,
   type DraftSide,
   type FeatureEnd,
@@ -109,10 +136,18 @@ function room(mode: LengthMode, walls: readonly Wall[]): Draft {
   return { ...emptyDraft(mode), sides: walls.map((item, index) => ({ key: `s${String(index + 1)}`, ...item })) };
 }
 
-/** This function gives a feature with one number for each length of a list. Each other length has no text. */
-function feature(key: string, kind: FeatureKind, lengths: Partial<Readonly<Record<FeatureField, string>>> = {}, from: FeatureEnd = "start"): DraftFeature {
+/** The kind of a feature of a test. An `outlet` is a point of the electrical layer. */
+type TestKind = Exclude<FeatureKind, "point"> | "outlet";
+
+/**
+ * This function gives a feature with one number for each length of a list. Each other length has no text.
+ * The kind `outlet` gives an outlet: a point of the collection of the outlets, with no circuit.
+ */
+function feature(key: string, kind: TestKind, lengths: Partial<Readonly<Record<FeatureField, string>>> = {}, from: FeatureEnd = "start"): DraftFeature {
   const typed = (text: string | undefined): TypedLength => ({ value: text ?? "", inches: "" });
-  return { key, kind, from, offset: typed(lengths.offset), width: typed(lengths.width), height: typed(lengths.height), sill: typed(lengths.sill) };
+  const base = { from, offset: typed(lengths.offset), width: typed(lengths.width), height: typed(lengths.height), sill: typed(lengths.sill) };
+  if (kind === "outlet") return { key, kind: "point", ...base, point: ownedOf(ELECTRICAL.layer, ELECTRICAL.outlets) };
+  return { key, kind, ...base };
 }
 
 /** This function gives a draft with the features of a list on the wall at a position, from 0. */
@@ -381,7 +416,7 @@ describe("draftOf", () => {
 
   it("reads the features of each wall of the sample survey, in the sequence of their distances", () => {
     const draft = draftOf(SAMPLE_SURVEY);
-    expect(draft.sides.map((side) => side.features.map((item) => item.kind))).toEqual([
+    expect(draft.sides.map((side) => side.features.map((item) => featureTag(item)))).toEqual([
       ["door", "outlet", "outlet"],
       ["outlet", "window"],
       [],
@@ -400,7 +435,7 @@ describe("draftOf", () => {
       sill: NO_TEXT,
     });
     expect(draft.sides[1]?.features).toEqual([
-      { key: "f4", kind: "outlet", from: "start", offset: { value: "0.4", inches: "" }, width: NO_TEXT, height: { value: "0.3", inches: "" }, sill: NO_TEXT },
+      feature("f4", "outlet", { offset: "0.4", height: "0.3" }),
       { key: "f5", kind: "window", from: "start", offset: { value: "0.8", inches: "" }, width: { value: "1.4", inches: "" }, height: { value: "1.2", inches: "" }, sill: { value: "0.9", inches: "" } },
     ]);
     expect(faultsFor(draft)).toEqual([]);
@@ -487,7 +522,7 @@ describe("the example room and the empty room", () => {
 
   it("have a door, an outlet and a window in the example, and no feature in the empty room", () => {
     for (const mode of LENGTH_MODES) {
-      expect(exampleDraft(mode).sides.map((side) => side.features.map((item) => `${item.key} ${item.kind}`)), mode).toEqual([["f1 door"], ["f2 outlet"], ["f3 window"], []]);
+      expect(exampleDraft(mode).sides.map((side) => side.features.map((item) => `${item.key} ${featureTag(item)}`)), mode).toEqual([["f1 door"], ["f2 outlet"], ["f3 window"], []]);
       expect(emptyDraft(mode).sides.map((side) => side.features), mode).toEqual([[], [], [], []]);
     }
     expect(featureOf(exampleDraft("ft-in"), "f1")).toEqual({
@@ -507,7 +542,7 @@ describe("fieldsOf", () => {
     expect(fieldsOf("door")).toEqual(["offset", "width", "height"]);
     expect(fieldsOf("gap")).toEqual(["offset", "width", "height"]);
     expect(fieldsOf("window")).toEqual(["offset", "width", "sill", "height"]);
-    expect(fieldsOf("outlet")).toEqual(["offset", "height"]);
+    expect(fieldsOf("point")).toEqual(["offset", "height"]);
   });
 });
 
@@ -517,18 +552,42 @@ describe("usualOf", () => {
     expect(usualOf("gap", "height", "in")).toBe(80);
     expect(usualOf("window", "height", "in")).toBe(48);
     expect(usualOf("window", "sill", "ft-in")).toBe(36);
-    expect(usualOf("outlet", "height", "in")).toBe(12);
     expect(usualOf("door", "height", "m")).toBe(2.03);
     expect(usualOf("window", "height", "cm")).toBe(120);
     expect(usualOf("window", "sill", "cm")).toBe(90);
-    expect(usualOf("outlet", "height", "m")).toBe(0.3);
   });
 
   it("gives no usual value for a distance, for a width, and for the bottom of a kind that is not a window", () => {
     expect(usualOf("door", "offset", "m")).toBeUndefined();
     expect(usualOf("window", "width", "m")).toBeUndefined();
     expect(usualOf("door", "sill", "m")).toBeUndefined();
-    expect(usualOf("outlet", "sill", "ft-in")).toBeUndefined();
+    expect(usualOf("point", "sill", "ft-in")).toBeUndefined();
+  });
+
+  it("gives a point the usual height of its form, and no height with no form", () => {
+    expect(usualOf("point", "height", "in", { imperial: 0.3048, metric: 0.3 })).toBe(12);
+    expect(usualOf("point", "height", "cm", { imperial: 0.3048, metric: 0.3 })).toBe(30);
+    expect(usualOf("point", "height", "in")).toBeUndefined();
+    expect(usualOf("point", "offset", "m", { imperial: 0.3048, metric: 0.3 })).toBeUndefined();
+  });
+});
+
+describe("usualFor", () => {
+  it("gives an outlet the usual height of the form of the outlets", () => {
+    expect(usualFor(feature("f1", "outlet"), "height", "in")).toBe(12);
+    expect(usualFor(feature("f1", "outlet"), "height", "m")).toBe(0.3);
+    expect(usualFor(feature("f1", "outlet"), "sill", "m")).toBeUndefined();
+  });
+
+  it("gives an opening the usual value of its kind", () => {
+    expect(usualFor(feature("f1", "door"), "height", "m")).toBe(2.03);
+    expect(usualFor(feature("f1", "window"), "sill", "ft-in")).toBe(36);
+  });
+
+  it("gives no usual height to a point of a layer that the forms do not have", () => {
+    const stray: DraftFeature = { ...feature("f1", "outlet"), point: ownedOf("plumbing/1", "taps") };
+    expect(usualFor(stray, "height", "m")).toBeUndefined();
+    expect(usualFor(feature("f1", "outlet"), "height", "m", [])).toBeUndefined();
   });
 });
 
@@ -713,10 +772,18 @@ describe("featureSpans", () => {
     const first = [feature("f1", "door", { offset: "1", width: "1" }), feature("f2", "outlet", { offset: "3" })];
     const second = [feature("f3", "window", { offset: "0.75", width: "1.5" }, "end")];
     expect(featureSpans(onWall(onWall(BOX, 0, first), 1, second), [])).toEqual([
-      { side: 0, key: "f1", kind: "door", from: 0.25, to: 0.5, corner: "start", fault: undefined },
-      { side: 0, key: "f2", kind: "outlet", from: 0.75, to: 0.75, corner: "start", fault: undefined },
-      { side: 1, key: "f3", kind: "window", from: 0.25, to: 0.75, corner: "end", fault: undefined },
+      { side: 0, key: "f1", kind: "door", tag: "door", from: 0.25, to: 0.5, corner: "start", fault: undefined },
+      { side: 0, key: "f2", kind: "point", tag: "outlet", from: 0.75, to: 0.75, corner: "start", fault: undefined },
+      { side: 1, key: "f3", kind: "window", tag: "window", from: 0.25, to: 0.75, corner: "end", fault: undefined },
     ]);
+  });
+
+  it("gives a point of a layer that the forms do not have the tag of a point", () => {
+    // The page has no usual height for such a point, so the point has a place only with a height.
+    const stray: DraftFeature = { ...feature("f1", "outlet", { offset: "1", height: "0.5" }), point: ownedOf("plumbing/1", "taps") };
+    expect(featureSpans(onWall(BOX, 0, [stray]), []).map((span) => span.tag)).toEqual(["point"]);
+    expect(featureSpans(onWall(BOX, 0, [{ ...stray, height: NO_TEXT }]), [])).toEqual([]);
+    expect(featureSpans(onWall(BOX, 0, [feature("f1", "outlet", { offset: "1", height: "0.5" })]), [], []).map((span) => span.tag)).toEqual(["point"]);
   });
 
   it("keeps each place in its wall, and tells the level of a fault of the place", () => {
@@ -795,8 +862,19 @@ describe("the changes of a draft", () => {
     const draft = withNewFeature(exampleDraft("m"), "s1", "window");
     expect(draft.sides[0]?.features.map((item) => item.key)).toEqual(["f1", "f4"]);
     expect(featureOf(draft, "f4")).toEqual({ key: "f4", kind: "window", from: "start", offset: NO_TEXT, width: NO_TEXT, height: NO_TEXT, sill: NO_TEXT });
-    expect(withNewFeature(emptyDraft("m"), "s2", "outlet").sides.map((side) => side.features.map((item) => item.key))).toEqual([[], ["f1"], [], []]);
+    expect(withNewFeature(emptyDraft("m"), "s2", "gap").sides.map((side) => side.features.map((item) => item.key))).toEqual([[], ["f1"], [], []]);
     expect(withNewFeature(draft, "s9", "door")).toEqual(draft);
+  });
+
+  it("adds a point of a collection of a layer, with no lengths and no fields", () => {
+    const draft = withNewPoint(exampleDraft("m"), "s1", ELECTRICAL.layer, ELECTRICAL.outlets);
+    expect(draft.sides[0]?.features.map((item) => item.key)).toEqual(["f1", "f4"]);
+    expect(featureOf(draft, "f4")).toEqual(feature("f4", "outlet"));
+    expect(isOutlet(featureOf(draft, "f4") ?? feature("f4", "door"))).toBe(true);
+    expect(withNewPoint(draft, "s9", ELECTRICAL.layer, ELECTRICAL.outlets)).toEqual(draft);
+    // The store knows no topic: a point of each layer has a place in it.
+    const tap = featureOf(withNewPoint(emptyDraft("m"), "s2", "plumbing/1", "taps"), "f1");
+    expect(tap?.point).toEqual({ layer: "plumbing/1", collection: "taps", values: {}, records: {}, points: {} });
   });
 
   it("removes only the feature with the key, and changes only the feature with the key", () => {
@@ -943,7 +1021,7 @@ describe("the store", () => {
   const store: Store = storeOf([exampleDraft("ft-in"), room("m", TRIANGLE)], 1);
 
   it("starts with no connection", () => {
-    expect(store).toEqual({ version: 1, rooms: [exampleDraft("ft-in"), room("m", TRIANGLE)], connections: [], circuits: [], active: 1 });
+    expect(store).toEqual({ version: 2, rooms: [exampleDraft("ft-in"), room("m", TRIANGLE)], connections: [], lists: [], active: 1 });
     expect(storeOf([BOX]).active).toBe(0);
   });
 
@@ -960,7 +1038,8 @@ describe("the store", () => {
       "not json",
       "null",
       "[]",
-      JSON.stringify({ ...store, version: 2 }),
+      JSON.stringify({ ...store, version: 3 }),
+      JSON.stringify({ ...store, version: "2" }),
       JSON.stringify({ ...store, rooms: [] }),
       JSON.stringify({ ...store, active: 2 }),
       JSON.stringify({ ...store, active: 0.5 }),
@@ -1008,8 +1087,32 @@ describe("the store", () => {
       { ...BOX, sides: [{ ...first, features: [door] }, { ...second, features: [door] }, ...others] },
       withFirst(Array.from({ length: 101 }, (_, index) => ({ ...door, key: `f${String(index)}` }))),
     ];
-    for (const [index, item] of rooms.entries()) expect(parseStore(JSON.stringify({ version: 1, rooms: [item], active: 0 })), String(index)).toBeUndefined();
-    expect(parseStore(JSON.stringify({ version: 1, rooms: [withFirst([door])], active: 0 }))).toEqual(storeOf([onWall(BOX, 0, [door])]));
+    for (const version of [1, 2]) {
+      for (const [index, item] of rooms.entries()) expect(parseStore(JSON.stringify({ version, rooms: [item], active: 0 })), `${String(version)} ${String(index)}`).toBeUndefined();
+      expect(parseStore(JSON.stringify({ version, rooms: [withFirst([door])], active: 0 })), String(version)).toEqual(storeOf([onWall(BOX, 0, [door])]));
+    }
+  });
+
+  it("refuses a point with no valid record, and removes the record of a feature that is not a point", () => {
+    const point = feature("f1", "outlet", { offset: "1" });
+    const door = feature("f2", "door", { offset: "2", width: "1" });
+    const [first, ...others] = BOX.sides;
+    const read = (features: unknown): Store | undefined => parseStore(JSON.stringify({ version: 2, rooms: [{ ...BOX, sides: [{ ...first, features }, ...others] }], active: 0 }));
+    expect(read([point])).toEqual(storeOf([onWall(BOX, 0, [point])]));
+    const bad: readonly unknown[] = [
+      { ...point, point: undefined },
+      { ...point, point: null },
+      { ...point, point: { ...point.point, layer: "" } },
+      { ...point, point: { ...point.point, collection: 7 } },
+      { ...point, point: { ...point.point, values: null } },
+      { ...point, point: { ...point.point, values: { size: 7 } } },
+      { ...point, point: { ...point.point, records: Object.fromEntries([["__proto__", "r1"]]) } },
+      { ...point, point: { layer: ELECTRICAL.layer, collection: ELECTRICAL.outlets, values: {}, records: {} } },
+      { ...point, point: { ...point.point, values: { note: "n".repeat(81) } } },
+      { ...point, point: { ...point.point, values: Object.fromEntries(Array.from({ length: 41 }, (_, index) => [`n${String(index)}`, "1"])) } },
+    ];
+    for (const [index, item] of bad.entries()) expect(read([item]), String(index)).toBeUndefined();
+    expect(read([{ ...door, point: point.point }])).toEqual(storeOf([onWall(BOX, 0, [door])]));
   });
 });
 
@@ -1265,9 +1368,16 @@ describe("the rooms of a store", () => {
   });
 });
 
-/** This function gives an object with one number for each length of a list. Each other length has no text. */
-function thing(key: string, kind: string, lengths: Partial<Readonly<Record<ObjectField, string>>> = {}, more: Partial<Pick<DraftObject, "name" | "from" | "outlet" | "holds">> = {}): DraftObject {
+/** The parts of an object of a test that are not lengths. `outlet` is the key of the outlet that gives power to the object. */
+type ThingParts = Partial<Pick<DraftObject, "name" | "from" | "holds">> & { readonly outlet?: string };
+
+/**
+ * This function gives an object with one number for each length of a list. Each other length has no text.
+ * An object with an `outlet` has one record of the electrical layer: its feed, which names the outlet.
+ */
+function thing(key: string, kind: string, lengths: Partial<Readonly<Record<ObjectField, string>>> = {}, parts: ThingParts = {}): DraftObject {
   const typed = (text: string | undefined): TypedLength => ({ value: text ?? "", inches: "" });
+  const { outlet, ...more } = parts;
   return {
     key,
     kind,
@@ -1279,10 +1389,22 @@ function thing(key: string, kind: string, lengths: Partial<Readonly<Record<Objec
     height: typed(lengths.height),
     gap: typed(lengths.gap),
     lift: typed(lengths.lift),
-    outlet: "",
+    owns: outlet === undefined || outlet === "" ? [] : [ownedOf(ELECTRICAL.layer, ELECTRICAL.feeds, { points: { [ELECTRICAL.outlet]: outlet } })],
     holds: [],
     ...more,
   };
+}
+
+/** This function gives the key of the outlet of an object of a draft. An object with no outlet gives the empty text. */
+function powerOf(draft: Draft, key: string): string | undefined {
+  const object = objectOf(draft, key);
+  return object === undefined ? undefined : outletOf(object);
+}
+
+/** This function gives the key of the circuit of an outlet of a draft. An outlet with no circuit gives `none`. */
+function circuitAt(draft: Draft | undefined, key: string): string | undefined {
+  const outlet = draft === undefined ? undefined : featureOf(draft, key);
+  return outlet === undefined ? undefined : (circuitOf(outlet) ?? "none");
 }
 
 /** This function gives a draft with the objects of a list against the wall at a position, from 0. */
@@ -1419,9 +1541,11 @@ describe("the objects of the draft of a survey record", () => {
     };
     const draft = draftOf(survey);
     expect(draft.sides.map((side) => side.objects.map((item) => `${item.key} ${item.kind}`))).toEqual([["o1 desk", "o3 Lamp"], [], ["o4 other"], []]);
-    expect(objectOf(draft, "o1")).toMatchObject({ name: "Standing desk", from: "start", offset: { value: "0.5" }, gap: { value: "0.05" }, lift: NO_TEXT, outlet: "f1" });
+    expect(objectOf(draft, "o1")).toMatchObject({ name: "Standing desk", from: "start", offset: { value: "0.5" }, gap: { value: "0.05" }, lift: NO_TEXT });
+    expect(powerOf(draft, "o1")).toBe("f1");
     expect(objectOf(draft, "o1")?.holds.map((item) => `${item.key} ${item.kind}`)).toEqual(["o2 display"]);
-    expect(objectOf(draft, "o3")).toMatchObject({ gap: NO_TEXT, lift: { value: "0" }, outlet: "" });
+    expect(objectOf(draft, "o3")).toMatchObject({ gap: NO_TEXT, lift: { value: "0" }, owns: [] });
+    expect(powerOf(draft, "o3")).toBe("");
     // A size of 0 stays as text, so the page tells the fault.
     expect(objectOf(draft, "o4")).toMatchObject({ offset: { value: "0" }, width: { value: "0" } });
     expect(hasMore(survey)).toBe(false);
@@ -1484,7 +1608,8 @@ describe("the example room with furniture", () => {
     for (const mode of LENGTH_MODES) {
       const example = exampleDraft(mode);
       expect(example.sides.map((side) => side.objects.map((item) => `${item.key} ${item.kind}`)), mode).toEqual([[], ["o1 rack"], ["o2 desk"], []]);
-      expect(objectOf(example, "o1")?.outlet, mode).toBe("f2");
+      expect(powerOf(example, "o1"), mode).toBe("f2");
+      expect(objectOf(example, "o2")?.owns, mode).toEqual([]);
       expect(objectOf(example, "o2")?.holds.map((item) => `${item.key} ${item.kind}`), mode).toEqual(["o3 display"]);
       expect(objectFaultsFor(example), mode).toEqual([]);
       expect(expandSurvey(surveyOf(example)).objects, mode).toHaveLength(3);
@@ -1503,7 +1628,15 @@ describe("the example room with furniture", () => {
   });
 
   it("replaces the example of the page from before the furniture", () => {
-    const sides = bare("m").sides.map(({ key, length, corner, angle, features }) => ({ key, length, corner, angle, features }));
+    // The old store has an outlet as a kind of feature, and its walls have no list of objects.
+    const sides = bare("m").sides.map(({ key, length, corner, angle, features }) => ({
+      key,
+      length,
+      corner,
+      angle,
+      features: features.map(({ point, ...rest }) => (point === undefined ? rest : { ...rest, kind: "outlet" })),
+    }));
+    expect(sides.flatMap((side) => side.features.map((item) => item.kind))).toEqual(["door", "outlet", "window"]);
     const old = parseStore(JSON.stringify({ version: 1, rooms: [{ ...bare("m"), sides }], active: 0 }));
     if (old === undefined) throw new Error("the page does not read the old store");
     expect(old).toEqual(storeOf([bare("m")]));
@@ -1564,12 +1697,29 @@ describe("the changes of the objects of a draft", () => {
     const outlets = [feature("f1", "outlet", { offset: "1" }), feature("f2", "outlet", { offset: "2" })];
     const draft = against(onWall(BOX, 1, outlets), 0, [thing("o1", "rack", { offset: "0.5" }, { outlet: "f1", holds: [thing("o2", "computer", { offset: "0.1" }, { outlet: "f2" })] })]);
     const less = withoutFeature(draft, "f2");
-    expect(objectOf(less, "o1")?.outlet).toBe("f1");
-    expect(objectOf(less, "o2")?.outlet).toBe("");
+    expect(powerOf(less, "o1")).toBe("f1");
+    expect(powerOf(less, "o2")).toBe("");
+    // The feed of the computer had only the name of its outlet, so the feed goes away with the outlet.
+    expect(objectOf(less, "o2")?.owns).toEqual([]);
     const none = withoutSide(draft, "s2");
-    expect(objectOf(none, "o1")?.outlet).toBe("");
-    expect(objectOf(none, "o2")?.outlet).toBe("");
+    expect(powerOf(none, "o1")).toBe("");
+    expect(powerOf(none, "o2")).toBe("");
+    expect(listedObjects(none).map((item) => item.object.owns)).toEqual([[], []]);
     expect(withoutSide(draft, "s1").sides.flatMap((side) => side.objects)).toEqual([]);
+  });
+
+  it("gives an object its outlet, and removes the feed with its last field", () => {
+    const draft = against(onWall(BOX, 1, [feature("f1", "outlet", { offset: "1" })]), 0, [thing("o1", "rack", { offset: "0.5" })]);
+    const fed = withObjectOutlet(draft, "o1", "f1");
+    expect(objectOf(fed, "o1")).toEqual(thing("o1", "rack", { offset: "0.5" }, { outlet: "f1" }));
+    expect(withObjectOutlet(fed, "o1", "f1")).toBe(fed);
+    expect(withObjectOutlet(fed, "o1", "")).toEqual(draft);
+    expect(withObjectOutlet(draft, "o9", "f1")).toBe(draft);
+    // A feed with a second field stays when it loses its outlet.
+    const watts = withOwned(fed, "o1", ELECTRICAL.layer, ELECTRICAL.feeds, { values: { watts: "300" } });
+    const feed = ownedBy(objectOf(withObjectOutlet(watts, "o1", ""), "o1") ?? thing("o1", "rack"), ELECTRICAL.layer, ELECTRICAL.feeds);
+    expect(feed).toEqual(ownedOf(ELECTRICAL.layer, ELECTRICAL.feeds, { values: { watts: "300" } }));
+    expect(objectOf(withoutFeature(watts, "f1"), "o1")?.owns).toEqual([feed]);
   });
 
   it("keeps each length of an object in a different mode", () => {
@@ -1589,7 +1739,7 @@ describe("the objects of a store", () => {
   const stack = (levels: number, from = 1): DraftObject => thing(`o${String(from)}`, "other", { offset: "0" }, levels > 1 ? { holds: [stack(levels - 1, from + 1)] } : {});
   /** This function gives a number of objects with keys from a number. */
   const many = (from: number, count: number): DraftObject[] => Array.from({ length: count }, (_, index) => ({ ...desk, key: `o${String(from + index)}` }));
-  const read = (item: unknown): Store | undefined => parseStore(JSON.stringify({ version: 1, rooms: [item], active: 0 }));
+  const read = (item: unknown): Store | undefined => parseStore(JSON.stringify({ version: 2, rooms: [item], active: 0 }));
 
   it("reads its own text with the objects of each level", () => {
     const store = storeOf([against(BOX, 0, [thing("o1", "desk", { offset: "1" }, { name: "Desk", holds: [thing("o2", "display", { offset: "0.2" }, { from: "end" })] })])]);
@@ -1599,12 +1749,27 @@ describe("the objects of a store", () => {
 
   it("removes an outlet that the room does not have", () => {
     const rack = thing("o1", "rack", { offset: "0.5" }, { outlet: "f9" });
-    expect(read(against(BOX, 0, [rack]))).toEqual(storeOf([against(BOX, 0, [{ ...rack, outlet: "" }])]));
-    // A door is not an outlet.
+    // The feed has only the name of its outlet, so the feed goes away with the name.
+    expect(read(against(BOX, 0, [rack]))).toEqual(storeOf([against(BOX, 0, [thing("o1", "rack", { offset: "0.5" })])]));
+    // A door is not a point.
     const door = against(onWall(BOX, 1, [feature("f9", "door", { offset: "1", width: "0.9" })]), 0, [rack]);
-    expect(read(door)?.rooms[0]?.sides[0]?.objects[0]?.outlet).toBe("");
+    expect(read(door)?.rooms[0]?.sides[0]?.objects[0]?.owns).toEqual([]);
     const outlet = against(onWall(BOX, 1, [feature("f9", "outlet", { offset: "1" })]), 0, [rack]);
     expect(read(outlet)).toEqual(storeOf([outlet]));
+    // A point of a different layer is not a point of the layer of the feed.
+    const tap: DraftFeature = { ...feature("f9", "outlet", { offset: "1" }), point: ownedOf("plumbing/1", "taps") };
+    expect(read(against(onWall(BOX, 1, [tap]), 0, [rack]))?.rooms[0]?.sides[0]?.objects[0]?.owns).toEqual([]);
+  });
+
+  it("keeps a record of an object as given: a record with no field stays, and a field with no form stays", () => {
+    const empty = ownedOf(ELECTRICAL.layer, ELECTRICAL.feeds);
+    const other = ownedOf("plumbing/1", "drains", { values: { size: "40 mm" }, records: { stack: "r7" } });
+    const desk2: DraftObject = { ...desk, owns: [empty, other] };
+    const store = read(withFirst([desk2]));
+    expect(store?.rooms[0]?.sides[0]?.objects[0]?.owns).toEqual([empty, ownedOf("plumbing/1", "drains", { values: { size: "40 mm" } })]);
+    // The store has no list with the record `r7`, so its name goes away. The value stays.
+    expect(storeText(store ?? storeOf([BOX]))).toContain("40 mm");
+    expect(storeText(store ?? storeOf([BOX]))).not.toContain("r7");
   });
 
   it("refuses an object that is not an object of the page", () => {
@@ -1616,7 +1781,11 @@ describe("the objects of a store", () => {
       withFirst([{ ...desk, key: 1 }]),
       withFirst([{ ...desk, kind: "k".repeat(81) }]),
       withFirst([{ ...desk, name: 5 }]),
-      withFirst([{ ...desk, outlet: null }]),
+      withFirst([{ ...desk, owns: null }]),
+      withFirst([{ ...desk, owns: undefined }]),
+      withFirst([{ ...desk, owns: [null] }]),
+      withFirst([{ ...desk, owns: [{ layer: ELECTRICAL.layer, collection: ELECTRICAL.feeds }] }]),
+      withFirst([{ ...desk, owns: Array.from({ length: 21 }, () => ownedOf(ELECTRICAL.layer, ELECTRICAL.feeds)) }]),
       withFirst([{ ...desk, holds: "none" }]),
       withFirst([{ ...desk, holds: [{ ...desk, key: "o2", lift: 0 }] }]),
       withFirst([desk, desk]),
@@ -1744,26 +1913,44 @@ describe("the circuits of a store", () => {
   /** Room A has two outlets on circuit `c1`. Room B has one outlet on circuit `c1` and a door. */
   const A = withOutletCircuit(withOutletCircuit(onWall(BOX, 0, [outlet("f1", "1"), outlet("f2", "2")]), "f1", "c1"), "f2", "c1");
   const B = withOutletCircuit(onWall(BOX, 1, [outlet("f1", "1"), feature("f2", "door", { offset: "2", width: "0.9" })]), "f1", "c1");
-  const store: Store = { ...storeOf([A, B]), circuits: [circuit("c1", "Kitchen"), circuit("c2")] };
-  const full: Store = { ...storeOf([BOX]), circuits: Array.from({ length: MOST_CIRCUITS }, (_, index) => circuit(`c${String(index + 1)}`)) };
+  const store: Store = { ...storeOf([A, B]), lists: circuitLists([circuit("c1", "Kitchen"), circuit("c2")]) };
+  const full: Store = { ...storeOf([BOX]), lists: circuitLists(Array.from({ length: MOST_CIRCUITS }, (_, index) => circuit(`c${String(index + 1)}`))) };
 
-  it("adds a circuit with a key that no circuit of the store has", () => {
+  it("adds a circuit with a key that no record of the store has", () => {
     const one = withNewCircuit(storeOf([BOX]));
-    expect(one.circuits).toEqual([circuit("c1")]);
+    expect(circuitsOf(one)).toEqual([circuit("r1")]);
     const two = withNewCircuit(one);
-    expect(two.circuits.map((item) => item.key)).toEqual(["c1", "c2"]);
-    expect(withNewCircuit(withoutCircuit(two, "c1")).circuits.map((item) => item.key)).toEqual(["c2", "c3"]);
+    expect(circuitsOf(two).map((item) => item.key)).toEqual(["r1", "r2"]);
+    expect(circuitsOf(withNewCircuit(withoutCircuit(two, "r1"))).map((item) => item.key)).toEqual(["r2", "r3"]);
+    // The keys of an old store stay, and a new key comes after the largest number.
+    expect(circuitsOf(withNewCircuit(store)).map((item) => item.key)).toEqual(["c1", "c2", "r3"]);
     expect(withNewCircuit(full)).toBe(full);
   });
 
+  it("gives the circuits as the records of one list, and no circuit gives no list", () => {
+    expect(circuitLists([])).toEqual([]);
+    expect(storeOf([BOX]).lists).toEqual([]);
+    expect(circuitsOf(storeOf([BOX]))).toEqual([]);
+    expect(store.lists).toEqual([{ layer: ELECTRICAL.layer, collection: ELECTRICAL.circuits, records: [recordOf("c1", { values: { name: "Kitchen" } }), recordOf("c2")] }]);
+    expect(circuitsOf(store)).toEqual([circuit("c1", "Kitchen"), circuit("c2")]);
+  });
+
   it("changes the fields of one circuit", () => {
-    expect(withCircuit(store, "c2", { name: "Hall", breaker: "20" }).circuits).toEqual([circuit("c1", "Kitchen"), { key: "c2", name: "Hall", breaker: "20", voltage: "" }]);
+    expect(circuitsOf(withCircuit(store, "c2", { name: "Hall", breaker: "20" }))).toEqual([circuit("c1", "Kitchen"), { key: "c2", name: "Hall", breaker: "20", voltage: "" }]);
+    // An empty text removes the field of the record.
+    expect(listRecords(withCircuit(store, "c1", { name: "" }), ELECTRICAL.layer, ELECTRICAL.circuits)[0]).toEqual(recordOf("c1"));
+    // A store with no change stays the same store.
+    expect(withCircuit(store, "c1", { name: "Kitchen" })).toBe(store);
+    expect(withCircuit(store, "c9", { name: "Hall" })).toBe(store);
   });
 
   it("gives a circuit only to an outlet, and the empty key removes it", () => {
-    expect(featureOf(A, "f1")).toMatchObject({ kind: "outlet", circuit: "c1" });
-    expect(featureOf(withOutletCircuit(A, "f1", ""), "f1")).not.toHaveProperty("circuit");
-    expect(featureOf(withOutletCircuit(B, "f2", "c1"), "f2")).not.toHaveProperty("circuit");
+    expect(circuitAt(A, "f1")).toBe("c1");
+    expect(circuitAt(withOutletCircuit(A, "f1", ""), "f1")).toBe("none");
+    expect(withOutletCircuit(A, "f1", "c1")).toBe(A);
+    // A door has no circuit.
+    expect(withOutletCircuit(B, "f2", "c1")).toBe(B);
+    expect(featureOf(B, "f2")).not.toHaveProperty("point");
   });
 
   it("counts the outlets of a circuit and their rooms", () => {
@@ -1773,49 +1960,56 @@ describe("the circuits of a store", () => {
 
   it("removes a circuit from each outlet of each room", () => {
     const without = withoutCircuit(store, "c1");
-    expect(without.circuits).toEqual([circuit("c2")]);
+    expect(circuitsOf(without)).toEqual([circuit("c2")]);
     expect(circuitUse(without, "c1")).toEqual({ outlets: 0, rooms: 0 });
-    expect(featureOf(without.rooms[1] ?? BOX, "f1")).not.toHaveProperty("circuit");
+    expect(circuitAt(without.rooms[0], "f2")).toBe("none");
+    expect(circuitAt(without.rooms[1], "f1")).toBe("none");
     // A room with no outlet of the circuit stays the same draft.
     const second = withoutCircuit(store, "c2");
     expect(second.rooms[0]).toBe(store.rooms[0]);
+    expect(circuitsOf(second)).toEqual([circuit("c1", "Kitchen")]);
     expect(withoutCircuit(store, "c9")).toBe(store);
+    // The list goes away with its last record.
+    expect(withoutCircuit(second, "c1").lists).toEqual([]);
   });
 
-  it("keeps the circuits in its text, and removes each circuit that is not a circuit of the page", () => {
+  it("keeps the circuits in its text, and removes each record that is not a record of a list", () => {
     expect(parseStore(storeText(store))).toEqual(store);
     const raw = JSON.parse(storeText(store)) as Record<string, unknown>;
-    const circuits: readonly unknown[] = [
-      { key: "c2", name: "A", breaker: "15", voltage: "" },
-      { key: "c2", name: "B", breaker: "", voltage: "" },
-      { key: "", name: "", breaker: "", voltage: "" },
-      { key: "c3", name: 1, breaker: "", voltage: "" },
-      { key: "c4", name: "", breaker: 15, voltage: "" },
+    const records: readonly unknown[] = [
+      { key: "c2", values: { name: "A", breaker: "15" }, records: {} },
+      { key: "c2", values: { name: "B" }, records: {} },
+      { key: "", values: {}, records: {} },
+      { key: "c3", values: { name: 1 }, records: {} },
+      { key: "c4", values: {} },
+      { key: "c5", values: { name: "n".repeat(81) }, records: {} },
       null,
     ];
-    const parsed = parseStore(JSON.stringify({ ...raw, circuits }));
-    expect(parsed?.circuits).toEqual([{ key: "c2", name: "A", breaker: "15", voltage: "" }]);
-    // The circuit c1 is not in the store now, so no outlet keeps it.
+    const parsed = parseStore(JSON.stringify({ ...raw, lists: [{ layer: ELECTRICAL.layer, collection: ELECTRICAL.circuits, records }] }));
+    expect(parsed === undefined ? undefined : circuitsOf(parsed)).toEqual([{ key: "c2", name: "A", breaker: "15", voltage: "" }]);
+    // The store does not have the circuit c1, so no outlet keeps it.
     expect(parsed === undefined ? undefined : circuitUse(parsed, "c1")).toEqual({ outlets: 0, rooms: 0 });
-  });
-
-  it("reads a circuit of a feature: a text that is not a circuit refuses the store, and a door does not keep one", () => {
-    const [first, ...others] = BOX.sides;
-    const withFirst = (features: unknown): unknown => ({ version: 1, rooms: [{ ...BOX, sides: [{ ...first, features }, ...others] }], circuits: [circuit("c1")], active: 0 });
-    expect(parseStore(JSON.stringify(withFirst([{ ...outlet("f1", "1"), circuit: 7 }])))).toBeUndefined();
-    const door = feature("f1", "door", { offset: "1", width: "1" });
-    expect(parseStore(JSON.stringify(withFirst([{ ...door, circuit: "c1" }])))?.rooms[0]).toEqual(onWall(BOX, 0, [door]));
+    expect(circuitAt(parsed?.rooms[0], "f1")).toBe("none");
   });
 
   it("adds the circuits of new rooms with new keys, and the outlets of the new rooms keep them", () => {
     const base = withNewCircuit(storeOf([BOX]));
     const room = withOutletCircuit(onWall(BOX, 0, [outlet("f1", "1")]), "f1", "c1");
-    const next = withNewRooms(base, [room], [], false, [{ key: "c1", name: "Kitchen", breaker: "20", voltage: "" }]);
-    expect(next.circuits).toEqual([circuit("c1"), { key: "c2", name: "Kitchen", breaker: "20", voltage: "" }]);
-    expect(featureOf(next.rooms[1] ?? BOX, "f1")).toMatchObject({ circuit: "c2" });
+    const next = withNewRooms(base, [room], [], false, circuitLists([{ key: "c1", name: "Kitchen", breaker: "20", voltage: "" }]));
+    expect(circuitsOf(next)).toEqual([circuit("r1"), { key: "r2", name: "Kitchen", breaker: "20", voltage: "" }]);
+    expect(circuitAt(next.rooms[1], "f1")).toBe("r2");
     // An outlet of a circuit that the new rooms do not have gets no circuit.
-    expect(featureOf(withNewRooms(base, [room], []).rooms[1] ?? BOX, "f1")).not.toHaveProperty("circuit");
-    expect(withNewRooms(full, [room], [], false, [circuit("c1")])).toBe(full);
+    expect(circuitAt(withNewRooms(base, [room], []).rooms[1], "f1")).toBe("none");
+    expect(withNewRooms(full, [room], [], false, circuitLists([circuit("c1")]))).toBe(full);
+    // A new circuit with the key of a circuit of the store gets a new key. The rooms of the store keep their circuit.
+    const joined = withNewRooms(store, [room], [], false, circuitLists([circuit("c1", "Garage")]));
+    expect(circuitsOf(joined).map((item) => [item.key, item.name])).toEqual([
+      ["c1", "Kitchen"],
+      ["c2", ""],
+      ["r3", "Garage"],
+    ]);
+    expect(circuitAt(joined.rooms[0], "f1")).toBe("c1");
+    expect(circuitAt(joined.rooms[2], "f1")).toBe("r3");
   });
 
   it("gives the survey record the circuits, and `draftKeys` gives the outlets their circuits again", () => {
@@ -1827,11 +2021,364 @@ describe("the circuits of a store", () => {
     expect(surveyOf(A).outlets?.map((item) => item.circuit)).toEqual([undefined, undefined]);
     expect(hasMore(survey)).toBe(false);
     const { draft } = draftKeys(survey, new Map([["kitchen", "c1"]]));
-    expect(draft.sides[0]?.features.map((item) => item.circuit)).toEqual(["c1", "c1"]);
-    expect(draftKeys(survey).draft.sides[0]?.features.map((item) => item.circuit)).toEqual([undefined, undefined]);
+    expect(draft.sides[0]?.features.map((item) => circuitOf(item))).toEqual(["c1", "c1"]);
+    expect(draftKeys(survey).draft.sides[0]?.features.map((item) => circuitOf(item))).toEqual([undefined, undefined]);
   });
 
   it("gives an id to each name, with a number for a name with no words and for a second name", () => {
     expect(idsOf(["Kitchen", "", "kitchen", " "], "circuit")).toEqual(["kitchen", "circuit-2", "kitchen-2", "circuit-4"]);
+  });
+});
+
+describe("a store of version 1", () => {
+  const typed = (value: string): TypedLength => ({ value, inches: "" });
+  const [first, ...others] = BOX.sides;
+  /** An outlet of circuit `c1`, as version 1 of the page kept it. */
+  const outletV1 = { key: "f1", kind: "outlet", from: "start", offset: typed("1"), width: NO_TEXT, height: typed("0.3"), sill: NO_TEXT, circuit: "c1" };
+  /** A rack with its power from the outlet `f1`, as version 1 of the page kept it. */
+  const rackV1 = { key: "o1", kind: "rack", name: "Rack", from: "start", offset: typed("0.5"), width: typed("0.6"), depth: typed("1"), height: typed("2"), gap: NO_TEXT, lift: NO_TEXT, outlet: "f1", holds: [] };
+  const circuitsV1 = [
+    { key: "c1", name: "Kitchen", breaker: "20", voltage: "120" },
+    { key: "c2", name: "", breaker: "", voltage: "" },
+  ];
+  /**
+   * This function gives the text of a store of version 1 with one room. The first wall of the room has the features and the objects.
+   * `more` replaces fields of the store.
+   */
+  const textV1 = (features: readonly unknown[], objects: readonly unknown[] = [], more: Readonly<Record<string, unknown>> = {}): string =>
+    JSON.stringify({ version: 1, rooms: [{ ...BOX, sides: [{ ...first, features, objects }, ...others] }], circuits: circuitsV1, active: 0, ...more });
+
+  it("reads the circuits, the circuit of an outlet and the outlet of an object, and each key stays", () => {
+    const bare = { ...outletV1, key: "f2", from: "end", offset: typed("2"), height: NO_TEXT, circuit: "" };
+    const parsed = parseStore(textV1([outletV1, bare], [rackV1]));
+    expect(parsed?.version).toBe(2);
+    expect(parsed === undefined ? undefined : circuitsOf(parsed)).toEqual(circuitsV1);
+    const outlets = [feature("f1", "outlet", { offset: "1", height: "0.3" }), feature("f2", "outlet", { offset: "2" }, "end")];
+    const rack = thing("o1", "rack", { offset: "0.5", width: "0.6", depth: "1", height: "2" }, { name: "Rack", outlet: "f1" });
+    expect(parsed?.rooms[0]).toEqual(against(withOutletCircuit(onWall(BOX, 0, outlets), "f1", "c1"), 0, [rack]));
+    expect(circuitAt(parsed?.rooms[0], "f1")).toBe("c1");
+    expect(circuitAt(parsed?.rooms[0], "f2")).toBe("none");
+    expect(parsed === undefined ? undefined : circuitUse(parsed, "c1")).toEqual({ outlets: 1, rooms: 1 });
+    // The text of the new store gives the same store.
+    expect(parsed === undefined ? undefined : parseStore(storeText(parsed))).toEqual(parsed);
+  });
+
+  it("refuses a store with a circuit of an outlet, or an outlet of an object, that is not a text", () => {
+    expect(parseStore(textV1([outletV1], [rackV1]))).toBeDefined();
+    expect(parseStore(textV1([{ ...outletV1, circuit: 7 }]))).toBeUndefined();
+    expect(parseStore(textV1([{ ...outletV1, circuit: null }]))).toBeUndefined();
+    expect(parseStore(textV1([outletV1], [{ ...rackV1, outlet: null }]))).toBeUndefined();
+    // An object of version 1 has a text for its outlet. An object with no outlet has the empty text.
+    expect(parseStore(textV1([outletV1], [{ ...rackV1, outlet: undefined }]))).toBeUndefined();
+    expect(parseStore(textV1([outletV1], [{ ...rackV1, outlet: "" }]))?.rooms[0]?.sides[0]?.objects[0]?.owns).toEqual([]);
+  });
+
+  it("removes a name with no record: a circuit that the store does not have, and an outlet that the room does not have", () => {
+    const door = feature("f3", "door", { offset: "1", width: "1" });
+    const parsed = parseStore(
+      textV1(
+        [
+          { ...outletV1, circuit: "c9" },
+          { ...door, circuit: "c1" },
+        ],
+        [
+          { ...rackV1, outlet: "f9" },
+          { ...rackV1, key: "o2", outlet: "f3" },
+        ],
+      ),
+    );
+    const room = parsed?.rooms[0];
+    expect(circuitAt(room, "f1")).toBe("none");
+    // A door of version 1 with a circuit loses it, and a door is not an outlet.
+    expect(room === undefined ? undefined : featureOf(room, "f3")).toEqual(door);
+    expect(room?.sides[0]?.objects.map((object) => object.owns)).toEqual([[], []]);
+  });
+
+  it("removes each circuit that is not a circuit of the page, and the rooms stay", () => {
+    const circuits: readonly unknown[] = [
+      { key: "c2", name: "A", breaker: "15", voltage: "" },
+      { key: "c2", name: "B", breaker: "", voltage: "" },
+      { key: "", name: "", breaker: "", voltage: "" },
+      { key: "c3", name: 1, breaker: "", voltage: "" },
+      { key: "c4", name: "", breaker: 15, voltage: "" },
+      { key: "c5", name: "" },
+      null,
+    ];
+    const parsed = parseStore(textV1([outletV1], [], { circuits }));
+    expect(parsed === undefined ? undefined : circuitsOf(parsed)).toEqual([{ key: "c2", name: "A", breaker: "15", voltage: "" }]);
+    // The store does not have the circuit c1, so the outlet does not keep it.
+    expect(circuitAt(parsed?.rooms[0], "f1")).toBe("none");
+    expect(parsed?.rooms[0]).toEqual(onWall(BOX, 0, [feature("f1", "outlet", { offset: "1", height: "0.3" })]));
+    // A store from before the circuits has no list.
+    expect(parseStore(textV1([outletV1], [], { circuits: undefined }))?.lists).toEqual([]);
+    expect(parseStore(textV1([outletV1], [], { circuits: "c1" }))?.lists).toEqual([]);
+  });
+});
+
+describe("the fields of a record of an add-on", () => {
+  it("keeps the texts by name in one form: the names in sequence, with no empty text", () => {
+    const owned = ownedOf("plumbing/1", "taps", { values: { size: "15 mm", flow: "", brand: "Acme" }, records: { stack: "r1" }, points: { drain: "f2" } });
+    expect(JSON.stringify(owned)).toBe('{"layer":"plumbing/1","collection":"taps","values":{"brand":"Acme","size":"15 mm"},"records":{"stack":"r1"},"points":{"drain":"f2"}}');
+    expect(JSON.stringify(recordOf("r1", { values: { b: "2", a: "1" } }))).toBe('{"key":"r1","values":{"a":"1","b":"2"},"records":{}}');
+    expect(recordOf("r1")).toEqual({ key: "r1", values: {}, records: {} });
+    expect(ownedOf("plumbing/1", "taps")).toEqual({ layer: "plumbing/1", collection: "taps", values: {}, records: {}, points: {} });
+  });
+
+  it("keeps only the names and the texts that a store can have", () => {
+    expect(ownedOf("plumbing/1", "taps", { values: { note: "n".repeat(90) } }).values["note"]).toHaveLength(80);
+    expect(Object.keys(ownedOf("plumbing/1", "taps", { values: Object.fromEntries([["__proto__", "x"]]) }).values)).toEqual([]);
+    expect(Object.keys(recordOf("r1", { records: { ["n".repeat(81)]: "r2" } }).records)).toEqual([]);
+  });
+
+  it("gives the text of a name, and no text for a name with no field", () => {
+    const { values } = ownedOf("plumbing/1", "taps", { values: { size: "15 mm" } });
+    expect(textOf(values, "size")).toBe("15 mm");
+    expect(textOf(values, "flow")).toBeUndefined();
+    // A name of the base of each object is not a field.
+    expect(textOf(values, "toString")).toBeUndefined();
+  });
+
+  it("changes the fields of the record of a point, and an empty text removes its field", () => {
+    const draft = onWall(BOX, 0, [feature("f1", "outlet", { offset: "1" }), feature("f2", "door", { offset: "2", width: "0.9" })]);
+    const rated = withPoint(draft, "f1", { values: { rating: "20 A", note: "" } });
+    expect(featureOf(rated, "f1")?.point).toEqual(ownedOf(ELECTRICAL.layer, ELECTRICAL.outlets, { values: { rating: "20 A" } }));
+    expect(featureOf(withPoint(rated, "f1", { values: { rating: "" } }), "f1")?.point).toEqual(ownedOf(ELECTRICAL.layer, ELECTRICAL.outlets));
+    // The store has no form, so a field that the form does not have stays in its text.
+    expect(parseStore(storeText(storeOf([rated])))?.rooms[0]).toEqual(rated);
+    // A change with no effect gives the same draft. A door has no record, and a key with no feature changes no feature.
+    expect(withPoint(rated, "f1", { values: { rating: "20 A" } })).toBe(rated);
+    expect(withPoint(rated, "f1", {})).toBe(rated);
+    expect(withPoint(rated, "f2", { values: { rating: "20 A" } })).toBe(rated);
+    expect(withPoint(rated, "f9", { values: { rating: "20 A" } })).toBe(rated);
+    // A record keeps a limited number of fields in each group.
+    const many = Object.fromEntries(Array.from({ length: 41 }, (_, index) => [`n${String(index)}`, "x"]));
+    expect(withPoint(draft, "f1", { values: many })).toBe(draft);
+  });
+});
+
+describe("the names of the electrical add-on", () => {
+  it("has the names of the form of the add-on", () => {
+    expect(checkForm(ELECTRICAL_FORM)).toEqual([]);
+    expect(ELECTRICAL.layer).toBe(ELECTRICAL_FORM.schema);
+    const fields = (collection: string): readonly string[] | undefined => collectionOf(ELECTRICAL.layer, collection)?.fields.map((field) => field.name);
+    expect(fields(ELECTRICAL.circuits)).toEqual([ELECTRICAL.name, ELECTRICAL.breaker, ELECTRICAL.voltage]);
+    expect(fields(ELECTRICAL.outlets)).toEqual([ELECTRICAL.circuit]);
+    expect(fields(ELECTRICAL.feeds)).toContain(ELECTRICAL.outlet);
+  });
+
+  it("names the list of each field that names a record", () => {
+    const field = (collection: string, name: string): unknown => collectionOf(ELECTRICAL.layer, collection)?.fields.find((item) => item.name === name);
+    expect(field(ELECTRICAL.outlets, ELECTRICAL.circuit)).toMatchObject({ kind: "record", of: ELECTRICAL.circuits });
+    expect(field(ELECTRICAL.feeds, ELECTRICAL.outlet)).toMatchObject({ kind: "record", of: ELECTRICAL.outlets });
+  });
+
+  it("gives no collection for a name that the forms do not have", () => {
+    expect(collectionOf(ELECTRICAL.layer, "taps")).toBeUndefined();
+    expect(collectionOf("plumbing/1", ELECTRICAL.outlets)).toBeUndefined();
+    expect(collectionOf(ELECTRICAL.layer, ELECTRICAL.outlets, [])).toBeUndefined();
+  });
+
+  it("gives one kind of point: the outlets", () => {
+    expect(pointKinds().map((kind) => [kind.layer, kind.collection.name, kind.tag])).toEqual([[ELECTRICAL.layer, ELECTRICAL.outlets, "outlet"]]);
+    expect(pointKinds([])).toEqual([]);
+  });
+});
+
+/** A false add-on for the tests: taps on a wall, and stacks in a list. The page has no code for it. */
+const PLUMBING_FORM: LayerForm = {
+  schema: "plumbing/1",
+  collections: [
+    { name: "stacks", word: "stack", label: "Stack", title: "Stacks", fields: [{ kind: "text", name: "name", label: "Name" }] },
+    {
+      name: "taps",
+      word: "Water tap",
+      label: "Tap",
+      title: "Taps",
+      on: ["wall"],
+      height: { imperial: 0.9144, metric: 0.9 },
+      fields: [{ kind: "record", name: "stack", label: "Stack", of: "stacks" }],
+    },
+  ],
+};
+
+describe("the points of a second add-on", () => {
+  const forms = [ELECTRICAL_FORM, PLUMBING_FORM];
+  const tap: DraftFeature = { ...feature("f1", "outlet", { offset: "1" }), point: ownedOf("plumbing/1", "taps") };
+  const draft = onWall(BOX, 0, [tap, feature("f2", "outlet", { offset: "2" }), { ...tap, key: "f3", offset: { value: "3", inches: "" } }]);
+
+  it("is a valid form with one kind of point", () => {
+    expect(checkForm(PLUMBING_FORM)).toEqual([]);
+    expect(pointKinds(forms).map((kind) => [kind.layer, kind.collection.name, kind.tag])).toEqual([
+      [ELECTRICAL.layer, ELECTRICAL.outlets, "outlet"],
+      ["plumbing/1", "taps", "water-tap"],
+    ]);
+  });
+
+  it("gives a point the word, the label and the tag of its collection", () => {
+    expect([featureWord(tap, forms), featureLabel(tap, forms), featureTag(tap, forms)]).toEqual(["water tap", "Tap", "water-tap"]);
+    // The page does not know the add-on, so the point is a point with no kind.
+    expect([featureWord(tap), featureLabel(tap), featureTag(tap)]).toEqual(["point", "Point", "point"]);
+    expect(isOutlet(tap)).toBe(false);
+    // The records of a collection that is not on a wall are not points.
+    const stack: DraftFeature = { ...tap, point: ownedOf("plumbing/1", "stacks") };
+    expect([featureWord(stack, forms), featureLabel(stack, forms), featureTag(stack, forms)]).toEqual(["point", "Point", "point"]);
+  });
+
+  it("gives each point a number in the points with its word", () => {
+    expect(placedFeatures(draft, forms).map((item) => item.id)).toEqual(["water-tap-1", "outlet-1", "water-tap-2"]);
+    expect(placedFeatures(draft).map((item) => item.id)).toEqual(["point-1", "outlet-1", "point-2"]);
+  });
+
+  it("gives a point the usual height of its collection", () => {
+    expect(usualFor(tap, "height", "m", forms)).toBe(0.9);
+    expect(usualFor(tap, "height", "in", forms)).toBe(36);
+    expect(usualFor(tap, "height", "m")).toBeUndefined();
+    expect(readFeature(tap, 4, "m", forms)).toEqual({ state: "ok", numbers: { start: 1, width: 0, height: 0.9, sill: 0 } });
+    expect(readFeature(tap, 4, "m")).toEqual({ state: "empty", field: "height" });
+  });
+
+  it("gives the place and the faults of a point with the word of its collection", () => {
+    expect(featureSpans(draft, [], forms).map((span) => [span.key, span.kind, span.tag, span.from])).toEqual([
+      ["f1", "point", "water-tap", 0.25],
+      ["f2", "point", "outlet", 0.5],
+      ["f3", "point", "water-tap", 0.75],
+    ]);
+    expect(featureSpans(draft, []).map((span) => span.key)).toEqual(["f2"]);
+    const blank = onWall(BOX, 0, [{ ...tap, key: "f4", offset: NO_TEXT }]);
+    const result = expandSurvey(surveyOf(blank));
+    expect(featureFaults(blank, result, forms)).toEqual([
+      { side: 0, key: "f4", id: "water-tap-1", level: "typing", field: "offset", text: "Type the distance from the corner of water tap 1 on wall 1.", note: "Type its distance from the corner." },
+    ]);
+    expect(featureFaults(blank, result).map((fault) => fault.text)).toEqual(["Type the distance from the corner of point 1 on wall 1."]);
+  });
+
+  it("keeps the points in the text of a store, and the survey record has only the outlets", () => {
+    const sized = withPoint(draft, "f1", { values: { size: "15 mm" } });
+    expect(parseStore(storeText(storeOf([sized])))?.rooms[0]).toEqual(sized);
+    expect(storeText(storeOf([sized]))).toContain("15 mm");
+    expect(surveyOf(sized).outlets?.map((item) => item.id)).toEqual(["outlet-1"]);
+    expect(surveyOf(sized)).not.toHaveProperty("openings");
+  });
+});
+
+describe("the lists of a store", () => {
+  const base = storeOf([BOX]);
+  const tap: DraftFeature = { ...feature("f1", "outlet", { offset: "1" }), point: ownedOf("plumbing/1", "taps", { records: { stack: "r1" } }) };
+
+  it("adds a record to the list of a collection, and makes the list for its first record", () => {
+    const one = withNewRecord(base, "plumbing/1", "stacks");
+    expect(one.lists).toEqual([{ layer: "plumbing/1", collection: "stacks", records: [recordOf("r1")] }]);
+    // Each record of a store has its own key, in all the lists.
+    const two = withNewRecord(withNewRecord(one, ELECTRICAL.layer, ELECTRICAL.circuits), "plumbing/1", "stacks");
+    expect(two.lists.map((list) => [list.collection, ...list.records.map((record) => record.key)])).toEqual([
+      ["stacks", "r1", "r3"],
+      [ELECTRICAL.circuits, "r2"],
+    ]);
+    expect(listRecords(two, "plumbing/1", "stacks").map((record) => record.key)).toEqual(["r1", "r3"]);
+    expect(listRecords(two, "plumbing/1", "taps")).toEqual([]);
+    // A name that a layer or a collection cannot have makes no list.
+    expect(withNewRecord(base, "", "stacks")).toBe(base);
+    expect(withNewRecord(base, "plumbing/1", "__proto__")).toBe(base);
+  });
+
+  it("keeps a limited number of records in a list, and a limited number of lists", () => {
+    const records = Array.from({ length: MOST_RECORDS }, (_, index) => recordOf(`r${String(index + 1)}`));
+    const fullList: Store = { ...base, lists: [{ layer: "plumbing/1", collection: "stacks", records }] };
+    expect(withNewRecord(fullList, "plumbing/1", "stacks")).toBe(fullList);
+    // A different list of the same store gets a record.
+    expect(listRecords(withNewRecord(fullList, "plumbing/1", "valves"), "plumbing/1", "valves")).toEqual([recordOf(`r${String(MOST_RECORDS + 1)}`)]);
+    // The reader keeps the first records of a list.
+    const long = { layer: "plumbing/1", collection: "stacks", records: [...records, recordOf("r999")] };
+    expect(parseStore(JSON.stringify({ ...base, lists: [long] }))?.lists[0]?.records).toEqual(records);
+    // A store has 50 lists at most.
+    const lists: readonly DraftList[] = Array.from({ length: 50 }, (_, index) => ({ layer: "plumbing/1", collection: `c${String(index)}`, records: [recordOf(`r${String(index + 1)}`)] }));
+    const fullStore: Store = { ...base, lists };
+    expect(withNewRecord(fullStore, "plumbing/1", "stacks")).toBe(fullStore);
+    expect(withNewRecord(fullStore, "plumbing/1", "c0").lists[0]?.records.map((record) => record.key)).toEqual(["r1", "r51"]);
+    expect(parseStore(storeText(fullStore))).toEqual(fullStore);
+    // New rooms with a record of a new collection do not come in. New rooms with a record of a list of the store come in.
+    const stack = (collection: string): readonly DraftList[] => [{ layer: "plumbing/1", collection, records: [recordOf("r1")] }];
+    expect(withNewRooms(fullStore, [BOX], [], false, stack("stacks"))).toBe(fullStore);
+    expect(withNewRooms(fullStore, [BOX], [], false, stack("c0")).lists[0]?.records.map((record) => record.key)).toEqual(["r1", "r51"]);
+    // The reader keeps the first lists.
+    const over = [...lists, { layer: "plumbing/1", collection: "stacks", records: [recordOf("r99")] }];
+    expect(parseStore(JSON.stringify({ ...base, lists: over }))?.lists).toEqual(lists);
+  });
+
+  it("changes and removes a record, and no record keeps the name of a removed record", () => {
+    const drain = ownedOf("plumbing/1", "drains", { values: { size: "40 mm" }, records: { stack: "r1" } });
+    const sink: DraftObject = { ...thing("o1", "other"), owns: [drain, ownedOf("plumbing/1", "vents", { records: { stack: "r1" } })] };
+    const draft = against(onWall(BOX, 0, [tap]), 1, [sink]);
+    const lists: readonly DraftList[] = [
+      { layer: "plumbing/1", collection: "stacks", records: [recordOf("r1", { values: { name: "North" } }), recordOf("r2")] },
+      { layer: "plumbing/1", collection: "valves", records: [recordOf("r3", { records: { stack: "r1" } })] },
+    ];
+    const store: Store = { ...storeOf([draft, BOX]), lists };
+    expect(parseStore(storeText(store))).toEqual(store);
+    expect(recordUse(store, "r1")).toEqual({ records: 3, rooms: 1 });
+    expect(recordUse(store, "r2")).toEqual({ records: 0, rooms: 0 });
+
+    const named = withRecord(store, "r2", { values: { name: "South", note: "" }, records: { next: "r1" } });
+    expect(listRecords(named, "plumbing/1", "stacks")[1]).toEqual(recordOf("r2", { values: { name: "South" }, records: { next: "r1" } }));
+    expect(named.rooms).toBe(store.rooms);
+    expect(withRecord(store, "r1", { values: { name: "North" } })).toBe(store);
+    expect(withRecord(store, "r9", { values: { name: "East" } })).toBe(store);
+
+    const without = withoutRecord(store, "r1");
+    expect(without.lists).toEqual([
+      { layer: "plumbing/1", collection: "stacks", records: [recordOf("r2")] },
+      { layer: "plumbing/1", collection: "valves", records: [recordOf("r3")] },
+    ]);
+    expect(recordUse(without, "r1")).toEqual({ records: 0, rooms: 0 });
+    // The tap stays with no stack. The drain keeps its size, and the vent goes away with its last field.
+    expect(featureOf(without.rooms[0] ?? BOX, "f1")?.point).toEqual(ownedOf("plumbing/1", "taps"));
+    expect(objectOf(without.rooms[0] ?? BOX, "o1")?.owns).toEqual([ownedOf("plumbing/1", "drains", { values: { size: "40 mm" } })]);
+    // A room with no name of the record stays the same draft.
+    expect(without.rooms[1]).toBe(store.rooms[1]);
+    expect(withoutRecord(store, "r9")).toBe(store);
+  });
+
+  it("reads the lists of a store: a list that is not valid goes away, and the rooms stay", () => {
+    const first = { layer: ELECTRICAL.layer, collection: ELECTRICAL.circuits, records: [recordOf("c1", { values: { name: "Kitchen" } })] };
+    const lists: readonly unknown[] = [
+      first,
+      // The second list of a collection.
+      { ...first, records: [recordOf("c7")] },
+      { layer: "", collection: "taps", records: [recordOf("r1")] },
+      { layer: "plumbing/1", collection: "__proto__", records: [recordOf("r2")] },
+      { layer: "plumbing/1", collection: "stacks", records: null },
+      // A list with no record.
+      { layer: "plumbing/1", collection: "taps", records: [] },
+      // The record c1 has the key of a record of a different list. The record r3 names a record that no list has, and a record of a different layer.
+      { layer: "plumbing/1", collection: "drains", records: [recordOf("c1"), recordOf("r3", { values: { size: "40 mm" }, records: { stack: "r9", circuit: "c1" } })] },
+      null,
+      7,
+    ];
+    const room = withOutletCircuit(onWall(BOX, 0, [feature("f1", "outlet", { offset: "1" })]), "f1", "c1");
+    const parsed = parseStore(JSON.stringify({ ...storeOf([room]), lists }));
+    expect(parsed?.lists).toEqual([first, { layer: "plumbing/1", collection: "drains", records: [recordOf("r3", { values: { size: "40 mm" } })] }]);
+    expect(parsed?.rooms).toEqual([room]);
+    // A store from before the lists has none.
+    expect(parseStore(JSON.stringify({ ...storeOf([BOX]), lists: undefined }))?.lists).toEqual([]);
+  });
+
+  it("gives new keys to the records of new rooms, and each name follows its record", () => {
+    const room = withOutletCircuit(onWall(BOX, 0, [tap, feature("f2", "outlet", { offset: "2" })]), "f2", "r1");
+    const added: readonly DraftList[] = [
+      { layer: "plumbing/1", collection: "stacks", records: [recordOf("r1", { values: { name: "North" } }), recordOf("r1", { values: { name: "Twice" } })] },
+      { layer: "plumbing/1", collection: "valves", records: [recordOf("r2", { records: { stack: "r1", main: "r7" } })] },
+    ];
+    const present = withNewRecord(withNewRecord(base, "plumbing/1", "stacks"), "plumbing/1", "stacks");
+    const next = withNewRooms(present, [room], [], false, added);
+    // The second new record of a key does not come in. The name of a record that did not come in goes away.
+    expect(next.lists).toEqual([
+      { layer: "plumbing/1", collection: "stacks", records: [recordOf("r1"), recordOf("r2"), recordOf("r3", { values: { name: "North" } })] },
+      { layer: "plumbing/1", collection: "valves", records: [recordOf("r4", { records: { stack: "r3" } })] },
+    ]);
+    expect(next.active).toBe(1);
+    // The tap names the new record, not the record of the store with its old key.
+    expect(featureOf(next.rooms[1] ?? BOX, "f1")?.point).toEqual(ownedOf("plumbing/1", "taps", { records: { stack: "r3" } }));
+    // A record keeps only the name of a record of its layer.
+    expect(circuitAt(next.rooms[1], "f2")).toBe("none");
   });
 });
