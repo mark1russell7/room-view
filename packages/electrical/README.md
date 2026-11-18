@@ -230,6 +230,22 @@ const scene = { ...SAMPLE_SCENE, layers: { "electrical/1": layer } };
 - The sum of the loads of a circuit becomes its `otherLoad`. Thus the circuit keeps its level.
 - The outlet of an object becomes a feed with no watts, because a `scene/1` does not have the power of each object.
 
+A `survey/1` and a `level/1` of room-view keep the same records. `fromSurveyV1` and `fromLevelV1` move them to the layer of a survey and of a level record:
+
+```ts
+import { fromLevelV1, fromSurveyV1 } from "@mark1russell7/electrical";
+import { SAMPLE_LEVEL, SAMPLE_SURVEY } from "@mark1russell7/room-view/sample";
+
+const survey = { ...SAMPLE_SURVEY, layers: { "electrical/1": fromSurveyV1(SAMPLE_SURVEY) } };
+const level = { ...SAMPLE_LEVEL, layers: { "electrical/1": fromLevelV1(SAMPLE_LEVEL) } };
+```
+
+- An outlet of a survey is on the inner face of its side. `expandSurvey` puts its wall anchor on that face.
+- A circuit keeps its `id`, because an outlet of a different room of a level can name it.
+- An outlet with the `id` of a circuit gets the `id` `outlet-` and its old `id`, and each feed that names it follows.
+- The lengths stay in the unit of the survey.
+- `fromLevelV1` moves only the circuits of the level record. `fromSurveyV1` gives the layer of the survey of each room.
+
 ## License
 
 MIT
