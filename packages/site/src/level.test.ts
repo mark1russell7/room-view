@@ -1,17 +1,15 @@
 import { checkRoom, expandLevel, expandSurvey, LEVEL_SCHEMA, type Level, type LevelResult } from "@mark1russell7/room-view";
 import { SAMPLE_LEVEL, SAMPLE_SURVEY } from "@mark1russell7/room-view/sample";
 import { describe, expect, it } from "vitest";
-import { ELECTRICAL } from "./add-ons.ts";
 import {
-  circuitLists,
   circuitOf,
+  circuitsOf as storeCircuits,
   emptyDraft,
   exampleDraft,
   listedObjects,
   ownedOf,
   statusOf,
   storeOf,
-  surveyOf,
   withCircuit,
   withConnection,
   withNewCircuit,
@@ -19,7 +17,9 @@ import {
   withOutletCircuit,
   type Draft,
   type DraftEnd,
+  type DraftCircuit,
   type DraftFeature,
+  type DraftList,
   type DraftObject,
   type DraftSide,
   type FeatureKind,
@@ -27,6 +27,8 @@ import {
   type Store,
   type TypedLength,
 } from "./draft.ts";
+import { ELECTRICAL } from "./electrical.ts";
+import { roomSurvey, storeLists } from "./layers.ts";
 import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, roomIds, shownLevel, shownLevelObjects, surveyDrafts, type Joint } from "./level.ts";
 
 const typed = (text: string): TypedLength => ({ value: text, inches: "" });
@@ -94,7 +96,7 @@ const TWICE = withConnection(PAIR, end(0, "f2"), end(1, "f1"));
 
 const expand = (store: Store): LevelResult => expandLevel(levelOf(store));
 const joints = (store: Store): readonly Joint[] => jointsOf(store, expand(store));
-const statusFor = (draft: Draft): Status => statusOf(draft, expandSurvey(surveyOf(draft)));
+const statusFor = (draft: Draft): Status => statusOf(draft, expandSurvey(roomSurvey(draft)));
 const statusAll = (store: Store): Status => levelStatus(store.rooms, store.rooms.map(statusFor), expand(store), joints(store));
 
 /** This function gives a store with a different room B. */
@@ -112,6 +114,9 @@ const WIRED: Store = (() => {
 
 /** This function gives the circuit of each feature of each room. */
 const circuitsOf = (rooms: readonly Draft[]): readonly (readonly (string | undefined)[])[] => rooms.map((room) => room.sides.flatMap((side) => side.features.map((item) => circuitOf(item))));
+
+/** This function gives the circuits of the lists of the rooms of a file, as a store has them. */
+const listed = (drafts: { readonly lists: readonly DraftList[] }): readonly DraftCircuit[] => storeCircuits({ ...storeOf([A]), lists: drafts.lists });
 
 describe("roomIds", () => {
   it("gives the words of each name, and a number to a room with no name", () => {
@@ -184,24 +189,24 @@ describe("draftsOf", () => {
     // The sample has a name and connections with a thickness. The page keeps its circuits.
     expect(drafts.more).toBe(true);
     // The circuit C of the level comes first. The survey of the living room lists the circuits A and B.
-    expect(drafts.circuits).toEqual([
-      { key: "c1", name: "Circuit C", breaker: "15", voltage: "120" },
-      { key: "c2", name: "Circuit A", breaker: "15", voltage: "120" },
-      { key: "c3", name: "Circuit B", breaker: "15", voltage: "120" },
+    expect(listed(drafts)).toEqual([
+      { key: "r1", name: "Circuit C", breaker: "15", voltage: "120" },
+      { key: "r2", name: "Circuit A", breaker: "15", voltage: "120" },
+      { key: "r3", name: "Circuit B", breaker: "15", voltage: "120" },
     ]);
-    expect(circuitsOf(drafts.rooms).map((list) => list.filter((item) => item !== undefined).sort())).toEqual([["c2", "c2", "c2", "c2", "c2", "c3", "c3"], ["c1"], ["c1"], ["c1", "c1", "c1"]]);
+    expect(circuitsOf(drafts.rooms).map((list) => list.filter((item) => item !== undefined).sort())).toEqual([["r2", "r2", "r2", "r2", "r2", "r3", "r3"], ["r1"], ["r1"], ["r1", "r1", "r1"]]);
   });
 
   it("reads the circuits of the level record of a store again", () => {
     const drafts = draftsOf(levelOf(WIRED));
-    expect(drafts.circuits).toEqual([
-      { key: "c1", name: "Kitchen", breaker: "20", voltage: "230" },
-      { key: "c2", name: "", breaker: "16", voltage: "230" },
+    expect(listed(drafts)).toEqual([
+      { key: "r1", name: "Kitchen", breaker: "20", voltage: "230" },
+      { key: "r2", name: "", breaker: "16", voltage: "230" },
     ]);
-    expect(circuitsOf(drafts.rooms)).toEqual([["c1"], ["c1"]]);
+    expect(circuitsOf(drafts.rooms)).toEqual([["r1"], ["r1"]]);
     expect(drafts.more).toBe(false);
     // The ids of a level come from the names of the circuits, so new keys give the same level.
-    expect(levelOf({ ...storeOf(drafts.rooms), lists: circuitLists(drafts.circuits) })).toEqual(levelOf(WIRED));
+    expect(levelOf({ ...storeOf(drafts.rooms), lists: drafts.lists })).toEqual(levelOf(WIRED));
   });
 
   it("keeps the first circuit of an id, from the level or from a survey", () => {
@@ -209,20 +214,20 @@ describe("draftsOf", () => {
     const kitchen = level.circuits?.[0];
     const withSurvey = (circuits: Level["circuits"]): Level => ({ ...level, rooms: level.rooms.map((room, index) => (index === 1 ? { ...room, survey: { ...room.survey, circuits } } : room)) });
     const same = draftsOf(withSurvey([...(kitchen === undefined ? [] : [kitchen]), { id: "hall", limit: 2944 }]));
-    expect(same.circuits.map((item) => [item.key, item.name])).toEqual([
-      ["c1", "Kitchen"],
-      ["c2", ""],
-      ["c3", ""],
+    expect(listed(same).map((item) => [item.key, item.name])).toEqual([
+      ["r1", "Kitchen"],
+      ["r2", ""],
+      ["r3", ""],
     ]);
     expect(same.more).toBe(false);
     const other = draftsOf(withSurvey([{ id: "kitchen", breaker: 15, voltage: 120, limit: 1440 }]));
-    expect(other.circuits[0]).toEqual({ key: "c1", name: "Kitchen", breaker: "20", voltage: "230" });
+    expect(listed(other)[0]).toEqual({ key: "r1", name: "Kitchen", breaker: "20", voltage: "230" });
     expect(other.more).toBe(true);
   });
 
   it("tells an outlet of a circuit that the level does not have", () => {
     const drafts = draftsOf({ ...levelOf(WIRED), circuits: [] });
-    expect(drafts.circuits).toEqual([]);
+    expect(listed(drafts)).toEqual([]);
     expect(circuitsOf(drafts.rooms)).toEqual([[undefined], [undefined]]);
     expect(drafts.more).toBe(true);
   });
@@ -296,26 +301,30 @@ describe("surveyDrafts", () => {
     const drafts = surveyDrafts(SAMPLE_SURVEY);
     expect(drafts.rooms.map((room) => room.name)).toEqual(["Sample room"]);
     expect(drafts.connections).toEqual([]);
-    expect(drafts.circuits).toEqual([
-      { key: "c1", name: "Circuit A", breaker: "15", voltage: "120" },
-      { key: "c2", name: "Circuit B", breaker: "15", voltage: "120" },
+    expect(listed(drafts)).toEqual([
+      { key: "r1", name: "Circuit A", breaker: "15", voltage: "120" },
+      { key: "r2", name: "Circuit B", breaker: "15", voltage: "120" },
     ]);
     expect(
       circuitsOf(drafts.rooms)
         .flat()
         .filter((item) => item !== undefined)
         .sort(),
-    ).toEqual(["c1", "c1", "c1", "c1", "c1", "c2", "c2"]);
+    ).toEqual(["r1", "r1", "r1", "r1", "r1", "r2", "r2"]);
   });
 
   it("reads the survey of a room of a store again", () => {
-    const records = { ids: new Map([["r1", "kitchen"]]), records: [{ id: "kitchen", name: "Kitchen", breaker: 20, voltage: 230, limit: 3680 }] };
-    const drafts = surveyDrafts(surveyOf(WIRED.rooms[0] ?? A, records));
-    expect(drafts.circuits).toEqual([{ key: "c1", name: "Kitchen", breaker: "20", voltage: "230" }]);
-    expect(circuitsOf(drafts.rooms)).toEqual([["c1"]]);
+    const room = WIRED.rooms[0] ?? A;
+    const drafts = surveyDrafts(roomSurvey(room, storeLists(WIRED), true));
+    expect(listed(drafts)).toEqual([
+      { key: "r1", name: "Kitchen", breaker: "20", voltage: "230" },
+      { key: "r2", name: "", breaker: "16", voltage: "230" },
+    ]);
+    expect(circuitsOf(drafts.rooms)).toEqual([["r1"]]);
     expect(drafts.more).toBe(false);
     // An outlet of a circuit that the survey does not list loses its circuit, and the page tells it.
-    const lost = surveyDrafts(surveyOf(WIRED.rooms[0] ?? A, { ids: records.ids, records: [] }));
+    const lost = surveyDrafts(roomSurvey(room, storeLists(WIRED)));
+    expect(listed(lost)).toEqual([]);
     expect(circuitsOf(lost.rooms)).toEqual([[undefined]]);
     expect(lost.more).toBe(true);
   });

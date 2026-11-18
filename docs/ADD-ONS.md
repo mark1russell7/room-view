@@ -246,9 +246,11 @@ interface FormCollection {
 - The store keeps the lists of the level of each add-on by the name of its layer, for example the circuits.
 - A placed object keeps the records that it owns by the name of the layer, for example its power.
 - The store of the browser stays. The page reads the store of version 1, and it moves its outlets, its circuits and the outlet of each object. A person loses no number.
+- The page reads and writes the records of each add-on from its form: points of a wall, records of an object and lists. That code names no topic.
 
-A survey and a level do not have layers before step 6. Until then, the page writes the electrical records of a survey from the records of the form, at one place.
-This bridge goes away in step 6, when a survey and a level get layers.
+A survey and a level do not have layers before step 6. Until then, an add-on of the page can have a bridge.
+The bridge changes the records of the form to the fields of a survey and of a level, and back. The electrical add-on has the only bridge, in one file.
+The bridge goes away in step 6, when a survey and a level get layers.
 
 ## The procedures package
 

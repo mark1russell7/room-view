@@ -2,11 +2,11 @@ import { rectInRegion, regionArea, regionHitsRect, type Region } from "@mark1rus
 import { expandLevel, expandSurvey, SCENE_SCHEMA, type LevelResult, type Room, type Scene, type SurveyResult } from "@mark1russell7/room-view";
 import type { RoomViewer, ViewerTheme } from "@mark1russell7/room-view/three";
 import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome";
-import { circuitName, circuitRecords, readCircuit, usualCircuit, type CircuitField } from "./circuits.ts";
+import { collectionOf } from "./add-ons.ts";
+import { circuitName, readCircuit, usualCircuit, type CircuitField } from "./circuits.ts";
 import { isDark, onThemeChange } from "./dark.ts";
 import {
   areaText,
-  circuitLists,
   circuitOf,
   circuitsOf,
   circuitUse,
@@ -28,10 +28,12 @@ import {
   LENGTH_MODES,
   lengthText,
   listedObjects,
+  listRecords,
   MODE_NAMES,
   MOST_CIRCUITS,
   MOST_LEVELS,
   MOST_OBJECTS,
+  MOST_RECORDS,
   MOST_ROOMS,
   MOST_TEXT,
   OBJECT_FIELDS,
@@ -54,7 +56,6 @@ import {
   statusOf,
   storeOf,
   storeText,
-  surveyOf,
   typedOf,
   usualFor,
   usualSize,
@@ -105,6 +106,7 @@ import {
   type TypedLength,
 } from "./draft.ts";
 import { drawLevel, type PlanInput } from "./floorplan.ts";
+import { roomSurvey, storeLists } from "./layers.ts";
 import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, shownLevel, shownLevelObjects, surveyDrafts, type Joint, type JointState, type LevelDrafts } from "./level.ts";
 import { svg } from "./plan.ts";
 import { drawWalk, pathOf, type PictureSize, type Pixel, type WalkFeature, type WalkObject } from "./walk.ts";
@@ -138,7 +140,7 @@ let draft: Draft = store.rooms[store.active] ?? exampleDraft("m");
  * Thus the first units show the typed numbers again, with no error from a second conversion.
  */
 let typed: Draft = draft;
-let result: SurveyResult = expandSurvey(surveyOf(draft));
+let result: SurveyResult = expandSurvey(roomSurvey(draft));
 /** The faults of the doors, the windows, the openings and the outlets. */
 let faults: readonly FeatureFault[] = featureFaults(draft, result);
 /** The faults of the furniture and the equipment. */
@@ -147,7 +149,7 @@ let status: Status = statusOf(draft, result, faults, objectList);
 
 /** This function gives the status of a room that the page does not show. */
 function statusFor(room: Draft): Status {
-  return statusOf(room, expandSurvey(surveyOf(room)));
+  return statusOf(room, expandSurvey(roomSurvey(room)));
 }
 
 /** The status of each room of the store. A change of a room calculates only the status of that room. */
@@ -1006,14 +1008,13 @@ planBox.addEventListener("click", (event) => {
 
 /**
  * This function gives the room record that the page shows and saves. It has no feature that has an error.
- * For the rooms together, it has each room that closes. The record has the circuits of the store, and each outlet names its circuit.
+ * For the rooms together, it has each room that closes. The record has the records of the lists of the store, and each outlet names its circuit.
  */
 function roomOf(): Room {
   const level = shownWhole();
   if (level !== undefined) return shownLevel(level.result);
-  // The checks of the room run with no circuit, so the record gets the circuits only here.
-  const circuits = circuitRecords(circuitsOf(store), circuitMode());
-  return shownRoom(circuits.records.length === 0 ? result.room : expandSurvey(surveyOf(draft, circuits)).room, faults);
+  // The checks of the room run with no list of the store, so the record gets the records of the lists only here.
+  return shownRoom(store.lists.length === 0 ? result.room : expandSurvey(roomSurvey(draft, storeLists(store), true)).room, faults);
 }
 
 /**
@@ -1154,7 +1155,7 @@ function showScope(): void {
 
 /** This function calculates the room of the draft and the rooms together, and shows them. */
 function refresh(): void {
-  result = expandSurvey(surveyOf(draft));
+  result = expandSurvey(roomSurvey(draft));
   faults = featureFaults(draft, result);
   objectList = objectFaults(draft, result);
   status = statusOf(draft, result, faults, objectList);
@@ -1695,7 +1696,7 @@ addCircuit.addEventListener("click", () => {
 const LEVEL_FILE = "rooms";
 
 /** This function gives the measurements as text: the survey record of the room with the circuits, or the level record of the rooms together. */
-const surveyText = (): string => JSON.stringify(shownWhole() === undefined ? surveyOf(draft, circuitRecords(circuitsOf(store), circuitMode())) : levelOf(store), null, 2);
+const surveyText = (): string => JSON.stringify(shownWhole() === undefined ? roomSurvey(draft, storeLists(store), true) : levelOf(store), null, 2);
 
 /** This function gives a text to the visitor as a file. */
 function download(name: string, text: string): void {
@@ -1785,16 +1786,18 @@ byId("open-survey").addEventListener("click", () => {
 /**
  * This function adds rooms to the rooms of the page, with the doors between them. No room of the visitor goes away.
  * The page then shows the new room, or the rooms together when there are two new rooms or more.
- * The circuits of the new rooms go at the end of the circuits of the page.
- * When the page cannot keep each new room and each new circuit, the function tells it with the instruction `again`, and it gives `false`.
+ * The records of the lists of the new rooms, for example their circuits, go at the end of the lists of the page.
+ * When the page cannot keep each new room and each new record, the function tells it with the instruction `again`, and it gives `false`.
  */
 function addRooms(drafts: LevelDrafts, again: string): boolean {
-  const next = withNewRooms(store, drafts.rooms, drafts.connections, true, circuitLists(drafts.circuits));
+  const next = withNewRooms(store, drafts.rooms, drafts.connections, true, drafts.lists);
   if (next === store) {
+    const full = drafts.lists.find((list) => listRecords(store, list.layer, list.collection).length + list.records.length > MOST_RECORDS);
+    const title = full === undefined ? undefined : (collectionOf(full.layer, full.collection)?.title ?? full.collection);
     keepNote.textContent =
-      circuitsOf(store).length + drafts.circuits.length > MOST_CIRCUITS
-        ? `The page keeps ${String(MOST_CIRCUITS)} circuits at most. Remove a circuit, then try again.`
-        : `The page keeps ${String(MOST_ROOMS)} rooms at most. ${again}`;
+      title === undefined
+        ? `The page keeps ${String(MOST_ROOMS)} rooms at most. ${again}`
+        : `The page keeps ${String(MOST_RECORDS)} records in the list "${title}" at most. Remove a record of that list, then try again.`;
     return false;
   }
   closeConfirm();
