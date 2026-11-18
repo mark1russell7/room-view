@@ -10,11 +10,12 @@ The package has no browser part. Each function is a plain function, and each for
 
 | Entry | What it has |
 | --- | --- |
-| `@mark1russell7/electrical` | The records of a layer, the circuit formulas, the states, the checks, the layer of a level and the move of an old scene. |
-| `@mark1russell7/electrical/schema` | `electricalSchema`, the zod schema of a layer, and `parseElectrical`. |
+| `@mark1russell7/electrical` | The records of a layer, the circuit formulas, the states, the checks, the layer of a level and the moves of the old records. |
+| `@mark1russell7/electrical/schema` | `electricalSchema`, the schema of a layer in `zod/mini`, `parseElectrical`, and `electricalV1`, the read of the old records. |
 | `@mark1russell7/electrical/add-on` | `electrical`, the add-on value for the contract of the core. |
 | `@mark1russell7/electrical/marks` | `electricalMarks` and `electricalAddOnMarks`: the records of a layer as marks for a viewer. |
 | `@mark1russell7/electrical/form` | `ELECTRICAL_FORM`: the form of a layer as data, for the inputs of a page. |
+| `@mark1russell7/electrical/sample` | The samples of the core with an electrical layer, for demos and tests. |
 
 The root entry imports only Vex at run time. Thus a page that shows only the load of a circuit gets no schema library.
 The entry `/marks` uses only the types of `@mark1russell7/visuals`, so it adds no code of a viewer.
@@ -58,7 +59,7 @@ circuitStates(layer);
 
 The units are fixed: a breaker in amperes, a voltage in volts, and a limit and a load in watts. The ids of one layer are unique, so `recordName("electrical/1", id)` of the core names one record.
 
-`parseElectrical` of the entry `/schema` reads the JSON of a layer. It gives the layer, or the faults of its form with the place of each fault. `electricalSchema` is the zod schema.
+`parseElectrical` of the entry `/schema` reads the JSON of a layer. It gives the layer, or the faults of its form with the place of each fault. `electricalSchema` is the schema in `zod/mini`. The read gives the English messages of zod.
 
 ## The limit and the level of a circuit
 
@@ -214,31 +215,35 @@ evaluate(ratedLimit(ref("volts"), ref("amps")), { space: supplies, origin: "rack
 | `CIRCUIT_LEVEL` | The level. |
 | `LIMITS_DIFFER` | `true` when the field `limit` and the rated limit are not equal. |
 
-## From a `scene/1`
+## The samples
 
-A `scene/1` of room-view keeps outlets and circuits in its room, and the total load of each circuit. `fromSceneV1` moves these records to a layer:
+The entry `/sample` has the samples of room-view with an electrical layer: `SAMPLE_ELECTRICAL_SCENE`, `SAMPLE_ELECTRICAL_SURVEY` and `SAMPLE_ELECTRICAL_LEVEL`.
+`SAMPLE_SCENE_LAYER` and `SAMPLE_SURVEY_LAYER` are their layers. Each sample has no fault.
+
+## The records of version 1
+
+A record of version 1 of room-view keeps outlets and circuits in fields of its own. `readRecord` of the core reads it with the add-on, and the result has an electrical layer:
 
 ```ts
-import { fromSceneV1 } from "@mark1russell7/electrical";
-import { SAMPLE_SCENE } from "@mark1russell7/room-view/sample";
+import { electrical } from "@mark1russell7/electrical/add-on";
+import { readRecord } from "@mark1russell7/room-view/schema";
 
-const layer = fromSceneV1(SAMPLE_SCENE);
-const scene = { ...SAMPLE_SCENE, layers: { "electrical/1": layer } };
+const read = readRecord(JSON.parse(text), [electrical]);
+// A scene/1 with outlets gives { ok: true, kind: "scene", version: 1, record, findings: [] }.
+// The record is a scene/2 with the layer "electrical/1".
 ```
+
+- The value `v1` of the add-on is `electricalV1` of the entry `/schema`. It names the old fields, and it reads them.
+- A record with no old record gets no layer, for example a record with empty lists.
+- A circuit of version 1 has a limit, and an outlet of a survey has no `face`. A different form is a fault of the read.
+
+`fromSceneV1`, `fromSurveyV1` and `fromLevelV1` of the root entry are the moves of the read. A `scene/1` keeps outlets and circuits in its room, and the total load of each circuit:
 
 - An outlet keeps its `id`, and its place on the wall becomes a wall anchor.
 - The sum of the loads of a circuit becomes its `otherLoad`. Thus the circuit keeps its level.
 - The outlet of an object becomes a feed with no watts, because a `scene/1` does not have the power of each object.
 
-A `survey/1` and a `level/1` of room-view keep the same records. `fromSurveyV1` and `fromLevelV1` move them to the layer of a survey and of a level record:
-
-```ts
-import { fromLevelV1, fromSurveyV1 } from "@mark1russell7/electrical";
-import { SAMPLE_LEVEL, SAMPLE_SURVEY } from "@mark1russell7/room-view/sample";
-
-const survey = { ...SAMPLE_SURVEY, layers: { "electrical/1": fromSurveyV1(SAMPLE_SURVEY) } };
-const level = { ...SAMPLE_LEVEL, layers: { "electrical/1": fromLevelV1(SAMPLE_LEVEL) } };
-```
+A `survey/1` and a `level/1` keep the same records. `fromSurveyV1` and `fromLevelV1` move them to the layer of a survey and of a level record:
 
 - An outlet of a survey is on the inner face of its side. `expandSurvey` puts its wall anchor on that face.
 - A circuit keeps its `id`, because an outlet of a different room of a level can name it.

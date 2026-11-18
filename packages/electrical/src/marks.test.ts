@@ -10,8 +10,8 @@ import { circuitStates, outletLevels } from "./states.ts";
 
 /** One wall along the x axis, a desk and a lamp with a name. */
 const scene: Scene = {
-  schema: "scene/1",
-  room: { schema: "room/1", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "a", from: [0, 0], to: [4, 0] }] },
+  schema: "scene/2",
+  room: { schema: "room/2", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "a", from: [0, 0], to: [4, 0] }] },
   objects: [
     { id: "desk", kind: "desk", size: [2, 1, 0.75], at: [2, 1.5] },
     { id: "lamp", kind: "lamp", name: "Floor lamp", size: [0.3, 0.3, 1.5], at: [3.5, 1.5] },
@@ -190,8 +190,8 @@ describe("electricalMarks", () => {
 
   it("gives each point in meters for a room in a different unit", () => {
     const small: Scene = {
-      schema: "scene/1",
-      room: { schema: "room/1", unit: "cm", height: 240, wallThickness: 20, walls: [{ id: "a", from: [0, 0], to: [400, 0] }] },
+      schema: "scene/2",
+      room: { schema: "room/2", unit: "cm", height: 240, wallThickness: 20, walls: [{ id: "a", from: [0, 0], to: [400, 0] }] },
       objects: [{ id: "desk", kind: "desk", size: [200, 100, 75], at: [200, 150] }],
     };
     const layer: ElectricalLayer = { ...good, outlets: [{ id: "o", anchor: { on: "wall", wall: "a", face: "left", offset: 100, height: 30 }, circuit: "c" }] };

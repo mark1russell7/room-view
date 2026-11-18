@@ -58,6 +58,7 @@ withOutletAnchors: build/index.d.ts#withOutletAnchors
 ## ./schema (build/schema.d.ts): names
 
 electricalSchema: build/schema.d.ts#electricalSchema
+electricalV1: build/schema.d.ts#electricalV1
 parseElectrical: build/schema.d.ts#parseElectrical
 
 ## ./add-on (build/add-on.d.ts): names
@@ -76,6 +77,14 @@ electricalMarks: build/marks.d.ts#electricalMarks
 ## ./form (build/form.d.ts): names
 
 ELECTRICAL_FORM: build/form.d.ts#ELECTRICAL_FORM
+
+## ./sample (build/sample.d.ts): names
+
+SAMPLE_ELECTRICAL_LEVEL: build/sample.d.ts#SAMPLE_ELECTRICAL_LEVEL
+SAMPLE_ELECTRICAL_SCENE: build/sample.d.ts#SAMPLE_ELECTRICAL_SCENE
+SAMPLE_ELECTRICAL_SURVEY: build/sample.d.ts#SAMPLE_ELECTRICAL_SURVEY
+SAMPLE_SCENE_LAYER: build/sample.d.ts#SAMPLE_SCENE_LAYER
+SAMPLE_SURVEY_LAYER: build/sample.d.ts#SAMPLE_SURVEY_LAYER
 
 ## Declarations
 
@@ -218,8 +227,26 @@ export declare function electricalAddOnMarks(options?: LoadOptions): AddOnMarks<
 ### build/marks.d.ts#electricalMarks
 export declare function electricalMarks(layer: ElectricalLayer, space: SceneSpace, options?: LoadOptions): readonly Mark[];
 
+### build/sample.d.ts#SAMPLE_ELECTRICAL_LEVEL
+export declare const SAMPLE_ELECTRICAL_LEVEL: Level;
+
+### build/sample.d.ts#SAMPLE_ELECTRICAL_SCENE
+export declare const SAMPLE_ELECTRICAL_SCENE: Scene;
+
+### build/sample.d.ts#SAMPLE_ELECTRICAL_SURVEY
+export declare const SAMPLE_ELECTRICAL_SURVEY: Survey;
+
+### build/sample.d.ts#SAMPLE_SCENE_LAYER
+export declare const SAMPLE_SCENE_LAYER: ElectricalLayer;
+
+### build/sample.d.ts#SAMPLE_SURVEY_LAYER
+export declare const SAMPLE_SURVEY_LAYER: ElectricalLayer;
+
 ### build/schema.d.ts#electricalSchema
-export declare const electricalSchema: z.ZodType<ElectricalLayer>;
+export declare const electricalSchema: z.ZodMiniType<ElectricalLayer>;
+
+### build/schema.d.ts#electricalV1
+export declare const electricalV1: AddOnV1<ElectricalLayer>;
 
 ### build/schema.d.ts#parseElectrical
 export declare function parseElectrical(value: unknown): LayerParse<ElectricalLayer>;

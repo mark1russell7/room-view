@@ -5,8 +5,8 @@ import type { ElectricalLayer } from "./layer.ts";
 
 /** One wall along the x axis, a desk and a lamp. */
 const scene: Scene = {
-  schema: "scene/1",
-  room: { schema: "room/1", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "a", from: [0, 0], to: [4, 0] }] },
+  schema: "scene/2",
+  room: { schema: "room/2", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "a", from: [0, 0], to: [4, 0] }] },
   objects: [
     { id: "desk", kind: "desk", size: [2, 1, 0.75], at: [2, 1.5] },
     { id: "lamp", kind: "lamp", size: [0.3, 0.3, 1.5], at: [3.5, 1.5] },
