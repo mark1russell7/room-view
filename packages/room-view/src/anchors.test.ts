@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sceneSpace, type Anchor, type AnchorFrame } from "./anchors.ts";
+import { scaleAnchor, sceneSpace, type Anchor, type AnchorFrame } from "./anchors.ts";
 import { checkAnchor, type AnchorFault } from "./check.ts";
 import type { Room, Scene } from "./room.ts";
 
@@ -168,5 +168,31 @@ describe("checkAnchor", () => {
     expect(checkAnchor({ on: "ceiling", at: [5, 1] }, space)[0]?.message).toBe("The anchor is not above a floor of the room.");
     // A room with no floors has no such fault.
     expect(checkAnchor({ on: "floor", at: [5, 1] }, sceneSpace(scene({}, { floors: [] })))).toEqual([]);
+  });
+});
+
+describe("scaleAnchor", () => {
+  it("gives an anchor on a wall with its offset and its height times the factor", () => {
+    expect(scaleAnchor({ on: "wall", wall: "a", face: "right", offset: 2, height: 0.5 }, 12)).toEqual({ on: "wall", wall: "a", face: "right", offset: 24, height: 6 });
+  });
+
+  it("gives an anchor on the floor and on the ceiling with its point times the factor", () => {
+    expect(scaleAnchor({ on: "floor", at: [1, -2], floor: "f" }, 100)).toEqual({ on: "floor", at: [100, -200], floor: "f" });
+    const ceiling = scaleAnchor({ on: "ceiling", at: [0.5, 3] }, 2);
+    expect(ceiling).toEqual({ on: "ceiling", at: [1, 6] });
+    expect("floor" in ceiling).toBe(false);
+  });
+
+  it("gives an anchor on an object with its point times the factor, and keeps its direction", () => {
+    expect(scaleAnchor({ on: "object", object: "desk", at: [1, 2, 3], out: [0, 1, 0] }, 10)).toEqual({ on: "object", object: "desk", at: [10, 20, 30], out: [0, 1, 0] });
+    // An anchor with no point has no length, so it is the result.
+    const bare: Anchor = { on: "object", object: "desk", out: [1, 0, 0] };
+    expect(scaleAnchor(bare, 10)).toBe(bare);
+  });
+
+  it("does not change the anchor of the argument", () => {
+    const anchor: Anchor = { on: "floor", at: [1, 2] };
+    scaleAnchor(anchor, 3);
+    expect(anchor).toEqual({ on: "floor", at: [1, 2] });
   });
 });

@@ -29,7 +29,7 @@ const packages = (name: string): readonly string[] => [...packagesOf(new URL(nam
 describe("the root entry", () => {
   it("has the format, the anchors, the programs, the states, the check and the move", () => {
     expect(entry.ELECTRICAL_SCHEMA).toBe("electrical/1");
-    for (const name of ["outletAnchors", "withOutletAnchors", "ratedLimit", "loadCurrent", "loadRatio", "ratioLevel", "electricalSpace", "circuitStates", "outletLevels", "checkElectrical", "fromSceneV1"] as const) {
+    for (const name of ["outletAnchors", "withOutletAnchors", "joinElectrical", "ratedLimit", "loadCurrent", "loadRatio", "ratioLevel", "electricalSpace", "circuitStates", "outletLevels", "checkElectrical", "fromSceneV1"] as const) {
       expect(entry[name]).toBeTypeOf("function");
     }
   });

@@ -1,10 +1,28 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import type { Anchor } from "./anchors.ts";
 import { checkRoom, checkScene } from "./check.ts";
+import { markAddOn, type MarkLayer } from "./layers.fixture.ts";
+import { checkLayers } from "./layers.ts";
 import type { PlacedObject, PlanPoint, Wall } from "./room.ts";
 import { SAMPLE_ROOM, SAMPLE_SCENE, SAMPLE_SURVEY } from "./sample.ts";
 import { objectTransforms, sceneSolids, solidCorners } from "./solids.ts";
-import { CLOSURE_LIMIT, convertSurvey, expandSurvey, SQUARE_TURNS, SURVEY_SCHEMA, type Survey, type SurveyObject, type SurveyResult, type SurveySide, type SurveyTurn } from "./survey.ts";
+import {
+  CLOSURE_LIMIT,
+  convertSurvey,
+  expandSurvey,
+  resultScene,
+  SQUARE_TURNS,
+  SURVEY_FLOOR,
+  SURVEY_SCHEMA,
+  surveyAnchor,
+  type Survey,
+  type SurveyFrame,
+  type SurveyObject,
+  type SurveyResult,
+  type SurveySide,
+  type SurveyTurn,
+} from "./survey.ts";
 import { LENGTH_UNITS, metersPer, unitsPer } from "./units.ts";
 
 /** The sides `s0`, `s1` and so on, from a list of lengths and a list of turns. */
@@ -877,5 +895,220 @@ describe("convertSurvey, the objects of a survey", () => {
       expect(same?.lift ?? 0).toBeCloseTo((object.lift ?? 0) * 1000, 6);
       object.size.forEach((size, axis) => expect(same?.size[axis]).toBeCloseTo(size * 1000, 6));
     });
+  });
+});
+
+/** A layer of the test add-on with one mark at each anchor. The marks have the ids `m0`, `m1` and so on. */
+function marks(...anchors: readonly Anchor[]): MarkLayer {
+  return { marks: anchors.map((anchor, index) => ({ id: `m${index}`, anchor, size: 1 })) };
+}
+
+/** The anchors of the layer `mark/1` of a record of layers, in the order of the marks. */
+function anchorsOf(layers: Readonly<Record<string, unknown>> | undefined): readonly Anchor[] {
+  return ((layers?.["mark/1"] as MarkLayer | undefined)?.marks ?? []).map((mark) => mark.anchor);
+}
+
+const MARK = markAddOn("mark/1");
+
+describe("surveyAnchor", () => {
+  const frame: SurveyFrame = { face: "right", start: [10, 20], heading: 90, factors: { s0: 0.5 } };
+
+  it("gives an anchor on a wall the face of the frame, and its offset times the factor of its side", () => {
+    expect(surveyAnchor({ on: "wall", wall: "s0", face: "left", offset: 4, height: 1.2 }, frame)).toEqual({ on: "wall", wall: "s0", face: "right", offset: 2, height: 1.2 });
+  });
+
+  it("keeps the offset on a side with no factor", () => {
+    expect(surveyAnchor({ on: "wall", wall: "s1", face: "left", offset: 4, height: 1.2 }, frame)).toEqual({ on: "wall", wall: "s1", face: "right", offset: 4, height: 1.2 });
+    // A name of the object prototype is not a side with a factor.
+    expect(surveyAnchor({ on: "wall", wall: "constructor", face: "left", offset: 4, height: 0 }, frame)).toEqual({ on: "wall", wall: "constructor", face: "right", offset: 4, height: 0 });
+  });
+
+  it("puts a point of the floor and of the ceiling at its place in the plan", () => {
+    // The heading of 90 degrees turns the point (1, 2) to (-2, 1), and the start moves it by (10, 20).
+    expect(surveyAnchor({ on: "floor", at: [1, 2], floor: "floor" }, frame)).toEqual({ on: "floor", at: [8, 21], floor: "floor" });
+    const ceiling = surveyAnchor({ on: "ceiling", at: [3, 0] }, { ...frame, heading: 30 });
+    expect(ceiling.on).toBe("ceiling");
+    expectPoint(ceiling.on === "ceiling" ? ceiling.at : undefined, 10 + 3 * Math.cos(Math.PI / 6), 20 + 3 * Math.sin(Math.PI / 6));
+    expect("floor" in ceiling).toBe(false);
+    // A frame with no start and no heading keeps the point.
+    expect(surveyAnchor({ on: "floor", at: [1, 2] }, { face: "left", start: [0, 0], heading: 0, factors: {} })).toEqual({ on: "floor", at: [1, 2] });
+  });
+
+  it("gives the same anchor for an anchor on an object", () => {
+    const anchor: Anchor = { on: "object", object: "desk", at: [0, 0, 0.8] };
+    expect(surveyAnchor(anchor, frame)).toBe(anchor);
+  });
+});
+
+describe("expandSurvey, the layers of a survey", () => {
+  const room = sides([4, 3, 4, 3], LEFT4);
+
+  it("gives the frame of the walk", () => {
+    expect(expandSurvey(survey(room)).frame).toEqual({ face: "left", start: [0, 0], heading: 0, factors: {} });
+    expect(expandSurvey(survey(sides([4, 3, 4, 3], RIGHT4))).frame.face).toBe("right");
+    expect(expandSurvey(survey(room, { start: [2, -1], heading: 90 })).frame).toEqual({ face: "left", start: [2, -1], heading: 90, factors: {} });
+    expect(expandSurvey(survey(room, { heading: Number.NaN })).frame.heading).toBe(0);
+  });
+
+  it("gives the factor of each side of a walk that shares its gap", () => {
+    const factors = expandSurvey(survey(sides([4.02, 3, 4, 3], LEFT4))).frame.factors;
+    const width = 4.02 * (1 - 0.02 / 8.02);
+    expect(Object.keys(factors)).toEqual(["s0", "s1", "s2", "s3"]);
+    expect(factors["s0"]).toBeCloseTo(width / 4.02, 12);
+    expect(factors["s2"]).toBeCloseTo(width / 4, 12);
+    expect(factors["s1"]).toBe(1);
+    expect(factors["s3"]).toBe(1);
+    // An open walk shares no gap, so it has no factor.
+    expect(expandSurvey(survey(sides([4.5, 3, 4, 3], LEFT4))).frame.factors).toEqual({});
+  });
+
+  it("has no layers and no layer finding for a survey with no layers", () => {
+    const result = expandSurvey(survey(room), { addOns: [MARK] });
+    expect("layers" in result).toBe(false);
+    expect(result.layerFindings).toEqual([]);
+  });
+
+  it("moves each anchor of a layer to the room record", () => {
+    const layer = marks(
+      { on: "wall", wall: "s1", face: "right", offset: 1, height: 0.3 },
+      { on: "floor", at: [1, 2], floor: SURVEY_FLOOR },
+      { on: "ceiling", at: [3, 1] },
+      { on: "object", object: "desk" },
+    );
+    const record = survey(room, { start: [10, 20], heading: 90, objects: [box("desk", { wall: "s0" })], layers: { "mark/1": layer } });
+    const result = expandSurvey(record, { addOns: [MARK] });
+    expect(anchorsOf(result.layers)).toEqual([
+      { on: "wall", wall: "s1", face: "left", offset: 1, height: 0.3 },
+      { on: "floor", at: [8, 21], floor: "floor" },
+      { on: "ceiling", at: [9, 23] },
+      { on: "object", object: "desk" },
+    ]);
+    expect(result.layerFindings).toEqual([]);
+    // Each anchor is on the room record of the result: the wall, the floor and the object are there.
+    expect(checkLayers(resultScene(result), [MARK])).toEqual([]);
+    // The anchors of the survey are not on the room record: the point (1, 2) is not on its floor.
+    expect(checkLayers({ ...resultScene(result), layers: record.layers }, [MARK]).map((finding) => finding.at)).toContain("m1");
+  });
+
+  it("puts a mark on a side that shares the gap at the place of an outlet with the same numbers", () => {
+    const record = survey(sides([4.02, 3, 4, 3], LEFT4), {
+      outlets: [{ id: "o", wall: "s0", offset: 4.02, height: 0.3 }],
+      layers: { "mark/1": marks({ on: "wall", wall: "s0", face: "right", offset: 4.02, height: 0.3 }) },
+    });
+    const result = expandSurvey(record, { addOns: [MARK] });
+    const [anchor] = anchorsOf(result.layers);
+    expect(anchor).toEqual({ on: "wall", wall: "s0", face: "left", offset: result.room.outlets?.[0]?.offset, height: 0.3 });
+    expect(anchor?.on === "wall" ? anchor.offset : undefined).toBeCloseTo(4.02 * (1 - 0.02 / 8.02), 12);
+    expect(checkLayers(resultScene(result), [MARK])).toEqual([]);
+  });
+
+  it("does not carry a layer with no add-on of the options, and tells the layer", () => {
+    const record = survey(room, { layers: { "pipe/1": { taps: [] }, "mark/1": marks() } });
+    const text = JSON.stringify(record);
+    const result = expandSurvey(record, { addOns: [MARK] });
+    expect(result.layers).toEqual({ "mark/1": { marks: [] } });
+    expect(result.layerFindings).toEqual([
+      { level: "error", code: "layer-unknown", layer: "pipe/1", at: "", message: `No add-on of the list reads the layer "pipe/1". The result does not have the layer.` },
+    ]);
+    // The survey keeps each layer.
+    expect(JSON.stringify(record)).toBe(text);
+    // With no add-on, the result has no layer, and a finding tells each layer of the survey.
+    const bare = expandSurvey(record);
+    expect(bare.layers).toEqual({});
+    expect(bare.layerFindings.map((finding) => [finding.code, finding.layer])).toEqual([
+      ["layer-unknown", "mark/1"],
+      ["layer-unknown", "pipe/1"],
+    ]);
+  });
+});
+
+describe("resultScene", () => {
+  it("gives the scene of a result, with its name and its layers", () => {
+    const record = survey(sides([4, 3, 4, 3], LEFT4), { name: "Study", objects: [box("desk", { wall: "s0" })], layers: { "mark/1": marks({ on: "object", object: "desk" }) } });
+    const result = expandSurvey(record, { addOns: [MARK] });
+    expect(resultScene(result)).toEqual({ schema: "scene/1", name: "Study", room: result.room, objects: result.objects, layers: { "mark/1": marks({ on: "object", object: "desk" }) } });
+    expect(resultScene(result).room).toBe(result.room);
+  });
+
+  it("gives a scene with no name and no layers for a result with none", () => {
+    const result = expandSurvey(survey(sides([4, 3, 4, 3], LEFT4)));
+    const scene = resultScene(result);
+    expect(scene).toEqual({ schema: "scene/1", room: result.room, objects: [] });
+    expect("name" in scene).toBe(false);
+    expect("layers" in scene).toBe(false);
+  });
+});
+
+describe("convertSurvey, the layers of a survey", () => {
+  const record = survey(sides([4, 3, 4, 3], LEFT4), {
+    layers: {
+      "mark/1": marks({ on: "wall", wall: "s0", face: "left", offset: 1, height: 0.5 }, { on: "floor", at: [1, 2] }, { on: "object", object: "desk", at: [0, 0.25, 0.75], out: [0, 1, 0] }),
+      "pipe/1": { taps: [] },
+    },
+  });
+
+  it("changes the lengths of each anchor through the add-on of the layer", () => {
+    const next = convertSurvey(record, "mm", [MARK]);
+    expect(next.layers).toEqual({
+      "mark/1": marks({ on: "wall", wall: "s0", face: "left", offset: 1000, height: 500 }, { on: "floor", at: [1000, 2000] }, { on: "object", object: "desk", at: [0, 250, 750], out: [0, 1, 0] }),
+    });
+    expect(next.unit).toBe("mm");
+    expect(next.sides[0]?.length).toBe(4000);
+  });
+
+  it("does not carry a layer with no add-on of the list", () => {
+    expect(Object.keys(convertSurvey(record, "mm", [MARK]).layers ?? {})).toEqual(["mark/1"]);
+    expect(convertSurvey(record, "mm").layers).toEqual({});
+  });
+
+  it("gives the same record for the same unit, and no layers for a survey with no layers", () => {
+    expect(convertSurvey(record, "m", [MARK])).toBe(record);
+    expect(convertSurvey(record, "m")).toBe(record);
+    expect("layers" in convertSurvey(survey(sides([4, 3, 4, 3], LEFT4)), "mm", [MARK])).toBe(false);
+  });
+
+  it("gives the anchors of the first unit again after a change to a second unit and back", () => {
+    const back = convertSurvey(convertSurvey(record, "mm", [MARK]), "m", [MARK]);
+    expect(back.layers).toEqual({ "mark/1": (record.layers ?? {})["mark/1"] });
+  });
+});
+
+describe("the laws of the layers of a survey", () => {
+  it("puts a mark on a side at the place of an outlet with the same numbers, for each survey", () => {
+    const length = fc.double({ min: 0, max: 100, noNaN: true });
+    fc.assert(
+      fc.property(sidesArbitrary, fc.nat({ max: 12 }), length, length, fc.option(fc.double(), { nil: undefined }), (list, index, offset, height, heading) => {
+        const wall = `s${index}`;
+        const layer = marks({ on: "wall", wall, face: "left", offset, height });
+        const result = expandSurvey(survey(list, { heading, outlets: [{ id: "o", wall, offset, height }], layers: { "mark/1": layer } }), { addOns: [MARK] });
+        const outlet = result.room.outlets?.[0];
+        expect(outlet).toBeDefined();
+        expect(anchorsOf(result.layers)).toEqual([{ on: "wall", wall, face: outlet?.face, offset: outlet?.offset, height }]);
+        expect(result.layerFindings).toEqual([]);
+      }),
+    );
+  });
+
+  it("puts a point of the floor at its place in the plan, for each start and each heading", () => {
+    const turn = fc.oneof(fc.constantFrom<SurveyTurn>("left", "right"), fc.double({ min: -180, max: 180, noNaN: true }));
+    const list = fc
+      .array(fc.record({ length: fc.double({ min: 0.5, max: 50, noNaN: true }), turn }), { minLength: 1, maxLength: 8 })
+      .map((items) => items.map((item, index): SurveySide => ({ id: `s${index}`, ...item })));
+    const place = fc.double({ min: -100, max: 100, noNaN: true });
+    const heading = fc.oneof(fc.constantFrom(0, 90, 180, 270), fc.double({ min: -360, max: 360, noNaN: true }));
+    fc.assert(
+      fc.property(list, place, place, heading, (items, x, y, angle) => {
+        // The points of the walk with no place are points in the space of the survey.
+        const points = expandSurvey(survey(items)).walk;
+        const layer = marks(...points.map((at): Anchor => ({ on: "floor", at })));
+        const result = expandSurvey(survey(items, { start: [x, y], heading: angle, layers: { "mark/1": layer } }), { addOns: [MARK] });
+        const anchors = anchorsOf(result.layers);
+        expect(anchors).toHaveLength(points.length);
+        anchors.forEach((anchor, index) => {
+          const to = result.walk[index];
+          expectPoint(anchor.on === "floor" ? anchor.at : undefined, to?.[0] ?? Number.NaN, to?.[1] ?? Number.NaN, 6);
+        });
+      }),
+    );
   });
 });

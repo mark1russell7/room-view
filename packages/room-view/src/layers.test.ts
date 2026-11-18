@@ -1,37 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Anchor, SceneSpace } from "./anchors.ts";
 import { parseRecordName, recordName, solidRecord } from "./check.ts";
-import { checkLayers, readLayer, type AddOn, type AddOnFault, type LayerParse } from "./layers.ts";
+import { joinAddOn, joinMarks, markAddOn, type MarkLayer } from "./layers.fixture.ts";
+import { checkLayers, joinLayers, layerPart, moveLayers, readLayer, roomName, type AddOn, type LayerFinding } from "./layers.ts";
 import { isLayerName, type Scene } from "./room.ts";
 import { SAMPLE_SCENE } from "./sample.ts";
 import { sceneSolids } from "./solids.ts";
-
-/** A layer of the test add-on: marks, each on one anchor, each with a size. */
-interface MarkLayer {
-  readonly marks: readonly { readonly id: string; readonly anchor: Anchor; readonly size: number }[];
-}
-
-/** This function makes a test add-on of a schema name. It knows no topic: it shows only the contract. */
-function markAddOn(schema: string, seen: SceneSpace[] = []): AddOn<MarkLayer> {
-  return {
-    schema,
-    parse(value: unknown): LayerParse<MarkLayer> {
-      const marks = (value as { marks?: unknown } | null)?.marks;
-      return Array.isArray(marks) ? { ok: true, layer: { marks: marks as MarkLayer["marks"] } } : { ok: false, errors: [`The layer "${schema}" has no list "marks".`] };
-    },
-    anchors: (layer) => new Map(layer.marks.map((mark) => [mark.id, mark.anchor] as const)),
-    withAnchors: (layer, anchors) => ({ marks: layer.marks.map((mark) => ({ ...mark, anchor: anchors.get(mark.id) ?? mark.anchor })) }),
-    check(layer, space): readonly AddOnFault[] {
-      seen.push(space);
-      const faults: AddOnFault[] = [];
-      for (const mark of layer.marks) {
-        if (!(mark.size > 0)) faults.push({ level: "error", code: "mark-size", at: mark.id, message: `The mark "${mark.id}" has the size ${mark.size}.` });
-        if (mark.size > 10) faults.push({ level: "warning", code: "mark-large", at: mark.id, message: `The mark "${mark.id}" is large.` });
-      }
-      return faults;
-    },
-  };
-}
 
 /** One wall along the x axis, 4 long, and a desk. */
 function scene(layers?: Readonly<Record<string, unknown>>): Scene {
@@ -179,5 +153,236 @@ describe("the names of the records", () => {
   it("tells the form of a layer name", () => {
     for (const name of ["electrical/1", "light/12", "sound-level/2", "a1/0"]) expect(isLayerName(name)).toBe(true);
     for (const name of ["", "electrical", "Electrical/1", "electrical/v1", "electrical/1/2", "electrical:1/1", "/1", "1a/1", " light/1"]) expect(isLayerName(name)).toBe(false);
+  });
+});
+
+/** This function moves an anchor on a wall up by 1, and it keeps each other anchor. */
+function up(anchor: Anchor): Anchor {
+  return anchor.on === "wall" ? { ...anchor, height: anchor.height + 1 } : anchor;
+}
+
+const higher: Anchor = { ...onWall, height: 1.3 };
+
+describe("moveLayers", () => {
+  it("gives no layer and no finding for no layers", () => {
+    expect(moveLayers(undefined, [markAddOn("mark/1")], up)).toEqual({ layers: {}, findings: [] });
+    expect(moveLayers({}, [], up)).toEqual({ layers: {}, findings: [] });
+  });
+
+  it("changes each anchor of each layer, keeps each other fact, and gives the layers in the order of their names", () => {
+    const layers = {
+      "b/1": { marks: [{ id: "m", anchor: onWall, size: 1 }] },
+      "a/1": { marks: [{ id: "m", anchor: onDesk, size: 2 }, { id: "n", anchor: onWall, size: 3 }] },
+    };
+    const before = structuredClone(layers);
+    const moved = moveLayers(layers, [markAddOn("b/1"), markAddOn("a/1")], up);
+    expect(moved.findings).toEqual([]);
+    expect(Object.keys(moved.layers)).toEqual(["a/1", "b/1"]);
+    expect(moved.layers).toEqual({
+      "a/1": { marks: [{ id: "m", anchor: onDesk, size: 2 }, { id: "n", anchor: higher, size: 3 }] },
+      "b/1": { marks: [{ id: "m", anchor: higher, size: 1 }] },
+    });
+    expect(layers).toEqual(before);
+  });
+
+  it("gives the same layers for a change that keeps each anchor", () => {
+    const layers = { "a/1": { marks: [{ id: "m", anchor: onDesk, size: 2 }] }, "b/1": { marks: [{ id: "m", anchor: onWall, size: 1 }] } };
+    expect(moveLayers(layers, [markAddOn("a/1"), markAddOn("b/1")], (anchor) => anchor)).toEqual({ layers, findings: [] });
+  });
+
+  it("does not carry a layer that it cannot read, and tells each such layer", () => {
+    const layers = { Mark: { marks: [] }, "pipe/1": { taps: [] }, "mark/1": { lines: [] }, "good/1": { marks: [] } };
+    const moved = moveLayers(layers, [markAddOn("Mark"), markAddOn("mark/1"), markAddOn("good/1")], up);
+    expect(moved.layers).toEqual({ "good/1": { marks: [] } });
+    const findings: LayerFinding[] = [
+      {
+        level: "error",
+        code: "layer-name",
+        layer: "Mark",
+        at: "",
+        message: `The layer "Mark" has a name that is not a word, a slash and a version, for example "electrical/1". The result does not have the layer.`,
+      },
+      { level: "error", code: "layer-form", layer: "mark/1", at: "", message: `The layer "mark/1" has no list "marks".` },
+      { level: "error", code: "layer-unknown", layer: "pipe/1", at: "", message: `No add-on of the list reads the layer "pipe/1". The result does not have the layer.` },
+    ];
+    expect(moved.findings).toEqual(findings);
+  });
+
+  it("gives one finding for each fault of the form of a layer", () => {
+    const strict: AddOn<MarkLayer> = { ...markAddOn("mark/1"), parse: () => ({ ok: false, errors: ["The first fault.", "The second fault."] }) };
+    const moved = moveLayers({ "mark/1": { marks: [] } }, [strict], up, "hall");
+    expect(moved.layers).toEqual({});
+    expect(moved.findings.map((finding) => [finding.code, finding.message, finding.room])).toEqual([
+      ["layer-form", "The first fault.", "hall"],
+      ["layer-form", "The second fault.", "hall"],
+    ]);
+  });
+
+  it("gives each finding the room of the layers", () => {
+    const moved = moveLayers({ "pipe/1": {}, Mark: {}, "mark/1": {} }, [markAddOn("mark/1")], up, "kitchen");
+    expect(moved.layers).toEqual({});
+    expect(moved.findings.map((finding) => [finding.code, finding.room])).toEqual([
+      ["layer-name", "kitchen"],
+      ["layer-form", "kitchen"],
+      ["layer-unknown", "kitchen"],
+    ]);
+    expect(moved.findings[0]?.message).toBe(
+      `The layer "Mark" of the room "kitchen" has a name that is not a word, a slash and a version, for example "electrical/1". The result does not have the layer.`,
+    );
+    expect(moved.findings[2]?.message).toBe(`No add-on of the list reads the layer "pipe/1" of the room "kitchen". The result does not have the layer.`);
+    // A finding with no room has no field `room`.
+    expect("room" in (moveLayers({ "pipe/1": {} }, [], up).findings[0] ?? {})).toBe(false);
+  });
+
+  it("uses the first add-on of a name", () => {
+    const second: AddOn<MarkLayer> = { ...markAddOn("mark/1"), withAnchors: () => ({ marks: [] }) };
+    const layers = { "mark/1": { marks: [{ id: "m", anchor: onWall, size: 1 }] } };
+    expect(moveLayers(layers, [markAddOn("mark/1"), second], up).layers).toEqual({ "mark/1": { marks: [{ id: "m", anchor: higher, size: 1 }] } });
+  });
+});
+
+describe("joinLayers", () => {
+  const kitchen = { room: "kitchen", layers: { "mark/1": { marks: [{ id: "m", anchor: onWall, size: 1 }] } } };
+  const hall = { room: "hall", layers: { "mark/1": { marks: [{ id: "m", anchor: onDesk, size: 2 }] } } };
+
+  it("gives the name of a record of a room in a level", () => {
+    expect(roomName("kitchen", "o1")).toBe("kitchen/o1");
+  });
+
+  it("makes a part with the name of each record: the rule of `roomName` for a room, and the same `id` for the level record", () => {
+    const layer = { marks: [] };
+    const ofRoom = layerPart(layer, "kitchen");
+    expect([ofRoom.room, ofRoom.layer, ofRoom.name("o1")]).toEqual(["kitchen", layer, "kitchen/o1"]);
+    const ofLevel = layerPart(layer);
+    expect("room" in ofLevel).toBe(false);
+    expect([ofLevel.layer, ofLevel.name("o1")]).toEqual([layer, "o1"]);
+  });
+
+  it("gives no layer for no layers", () => {
+    expect(joinLayers(undefined, [], [joinAddOn("mark/1")])).toEqual({ layers: {}, findings: [] });
+    expect(joinLayers(undefined, [{ room: "kitchen", layers: undefined }], [])).toEqual({ layers: {}, findings: [] });
+    expect(joinLayers({}, [{ room: "kitchen", layers: {} }], [])).toEqual({ layers: {}, findings: [] });
+  });
+
+  it("joins the layer of the level record, then the layer of each room, with the function of the add-on", () => {
+    const own = { "mark/1": { marks: [{ id: "top", anchor: onWall, size: 3 }] } };
+    expect(joinLayers(own, [kitchen, hall], [joinAddOn("mark/1")])).toEqual({
+      layers: {
+        "mark/1": {
+          marks: [
+            { id: "top", anchor: onWall, size: 3 },
+            { id: "kitchen/m", anchor: onWall, size: 1 },
+            { id: "hall/m", anchor: onDesk, size: 2 },
+          ],
+        },
+      },
+      findings: [],
+    });
+    expect(joinLayers(undefined, [hall], [joinAddOn("mark/1")]).layers).toEqual({ "mark/1": { marks: [{ id: "hall/m", anchor: onDesk, size: 2 }] } });
+  });
+
+  it("gives the layers in the order of their names", () => {
+    const rooms = [{ room: "r", layers: { "c/1": { marks: [] }, "a/1": { marks: [] } } }];
+    const result = joinLayers({ "b/1": { marks: [] } }, rooms, [joinAddOn("a/1"), joinAddOn("b/1"), joinAddOn("c/1")]);
+    expect(Object.keys(result.layers)).toEqual(["a/1", "b/1", "c/1"]);
+    expect(result.findings).toEqual([]);
+  });
+
+  it("keeps a layer that only the level record has, with each name and each form", () => {
+    const own = { "pipe/1": { taps: [] }, Mark: 5, "mark/1": { lines: [] } };
+    const result = joinLayers(own, [{ room: "kitchen", layers: {} }], [joinAddOn("mark/1")]);
+    expect(result).toEqual({ layers: own, findings: [] });
+    expect(result.layers["pipe/1"]).toBe(own["pipe/1"]);
+    expect(Object.keys(result.layers)).toEqual(["Mark", "mark/1", "pipe/1"]);
+  });
+
+  it("does not carry the layer of a room with no add-on, and keeps the layer of the level record", () => {
+    const own = { "mark/1": { marks: [] } };
+    const result = joinLayers(own, [kitchen], []);
+    expect(result.layers).toEqual(own);
+    expect(result.layers["mark/1"]).toBe(own["mark/1"]);
+    const findings: LayerFinding[] = [
+      {
+        level: "error",
+        code: "layer-unknown",
+        layer: "mark/1",
+        at: "",
+        message: `No add-on of the list reads the layer "mark/1" of the room "kitchen". The result does not have the layer.`,
+        room: "kitchen",
+      },
+    ];
+    expect(result.findings).toEqual(findings);
+    expect(joinLayers(undefined, [kitchen], [])).toEqual({ layers: {}, findings });
+  });
+
+  it("does not carry the layer of a room when the add-on has no function `join`", () => {
+    const own = { "mark/1": { marks: [{ id: "top", anchor: onWall, size: 3 }] } };
+    const result = joinLayers(own, [kitchen, hall], [markAddOn("mark/1")]);
+    expect(result.layers).toEqual(own);
+    const finding = (room: string): LayerFinding => ({
+      level: "error",
+      code: "layer-unknown",
+      layer: "mark/1",
+      at: "",
+      message: `The add-on of the layer "mark/1" has no function "join", so the result does not have the layer of the room "${room}".`,
+      room,
+    });
+    expect(result.findings).toEqual([finding("kitchen"), finding("hall")]);
+    expect(joinLayers(undefined, [kitchen], [markAddOn("mark/1")])).toEqual({ layers: {}, findings: [finding("kitchen")] });
+  });
+
+  it("tells the layer of a room with a name that is not a layer name", () => {
+    const result = joinLayers({ Mark: 5 }, [{ room: "kitchen", layers: { Mark: { marks: [] } } }], [joinAddOn("Mark")]);
+    expect(result.layers).toEqual({ Mark: 5 });
+    const findings: LayerFinding[] = [
+      {
+        level: "error",
+        code: "layer-name",
+        layer: "Mark",
+        at: "",
+        message: `The layer "Mark" of the room "kitchen" has a name that is not a word, a slash and a version, for example "electrical/1". The result does not have the layer.`,
+        room: "kitchen",
+      },
+    ];
+    expect(result.findings).toEqual(findings);
+  });
+
+  it("does not join a part with a fault in its form, and joins each other part", () => {
+    const result = joinLayers({ "mark/1": { lines: [] } }, [kitchen, { room: "hall", layers: { "mark/1": 7 } }], [joinAddOn("mark/1")]);
+    expect(result.layers).toEqual({ "mark/1": { marks: [{ id: "kitchen/m", anchor: onWall, size: 1 }] } });
+    const findings: LayerFinding[] = [
+      { level: "error", code: "layer-form", layer: "mark/1", at: "", message: `The layer "mark/1" has no list "marks".` },
+      { level: "error", code: "layer-form", layer: "mark/1", at: "", message: `The layer "mark/1" has no list "marks".`, room: "hall" },
+    ];
+    expect(result.findings).toEqual(findings);
+    // When each part has a fault, the result has no layer of the name.
+    expect(joinLayers({ "mark/1": 1 }, [{ room: "hall", layers: { "mark/1": 7 } }], [joinAddOn("mark/1")]).layers).toEqual({});
+    // When only the part of the level record is good, the function `join` gets that one part.
+    const top = { marks: [{ id: "top", anchor: onWall, size: 3 }] };
+    expect(joinLayers({ "mark/1": top }, [{ room: "hall", layers: { "mark/1": 7 } }], [joinAddOn("mark/1")]).layers).toEqual({ "mark/1": top });
+  });
+
+  it("does not use a name of the object prototype as a layer of the level record or of a room", () => {
+    const rooms = [{ room: "kitchen", layers: { "mark/1": { marks: [] } } }];
+    expect(joinLayers({}, rooms, [joinAddOn("mark/1")]).layers).toEqual({ "mark/1": { marks: [] } });
+    expect(joinLayers({}, [{ room: "kitchen", layers: {} }], [joinAddOn("constructor")]).layers).toEqual({});
+    // A room has a layer with such a name, and the level record has none. The result has no layer of the name.
+    const named = joinLayers({}, [{ room: "kitchen", layers: { constructor: { marks: [] } } }], [joinAddOn("constructor")]);
+    expect(Object.keys(named.layers)).toEqual([]);
+    expect(named.findings.map((finding) => [finding.code, finding.layer, finding.room])).toEqual([["layer-name", "constructor", "kitchen"]]);
+    // The level record has a layer with such a name, and no room has one. The layer stays, and no finding names a room.
+    const kept = joinLayers({ constructor: 5 }, [{ room: "kitchen", layers: {} }], []);
+    expect(Object.keys(kept.layers)).toEqual(["constructor"]);
+    expect(kept.findings).toEqual([]);
+  });
+
+  it("uses the function `join` as a method of its add-on", () => {
+    const addOn: AddOn<MarkLayer> = {
+      ...markAddOn("mark/1"),
+      join(parts) {
+        return { marks: joinMarks(parts).marks.map((mark) => ({ ...mark, id: `${this.schema}:${mark.id}` })) };
+      },
+    };
+    expect(joinLayers(undefined, [kitchen], [addOn]).layers).toEqual({ "mark/1": { marks: [{ id: "mark/1:kitchen/m", anchor: onWall, size: 1 }] } });
   });
 });

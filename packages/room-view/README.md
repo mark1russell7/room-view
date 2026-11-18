@@ -238,7 +238,7 @@ An add-on puts the records of one topic on the core, for example the outlets of 
 - `sceneSpace` gives the space of a scene. Its function `frame` gives the point of an anchor and the direction out of its surface, in meters.
 - `checkAnchor` gives the faults of an anchor. An error tells that the anchor has no position. A warning tells a fault that the model can show.
 
-An add-on is an `AddOn` value: the name of the format of its layer, and the functions `parse`, `anchors`, `withAnchors` and `check`. `checkLayers` examines the layers of a scene with a list of add-ons:
+An add-on is an `AddOn` value: the name of the format of its layer, and the functions `parse`, `anchors`, `withAnchors` and `check`. The function `join` is optional. `checkLayers` examines the layers of a scene with a list of add-ons:
 
 ```ts
 import { checkLayers } from "@mark1russell7/room-view";
@@ -283,6 +283,23 @@ const read = formRecords(form, layer);
 - `formRecords` gives `more: true` when the layer has data that the form does not keep. Thus a page can tell that an edit loses data.
 - `readFormRecord` gives the first field that stops a record, so a page can show the fault at its input.
 - `checkForm` gives the faults of a form. An add-on examines its form with this function in a test.
+
+A survey and a level have the field `layers` too. The anchors of a layer of a survey name the sides and the objects of the survey:
+
+```ts
+import { checkLayers, expandSurvey, resultScene } from "@mark1russell7/room-view";
+
+const result = expandSurvey(survey, { addOns });
+const findings = [...result.layerFindings, ...checkLayers(resultScene(result), addOns)];
+```
+
+- `expandSurvey` and `expandLevel` move each anchor to the room record through the add-on of its layer. `surveyAnchor` tells the rule for one anchor.
+- A layer with no add-on in the option `addOns` is not in the result, and `layerFindings` tells the layer.
+- `resultScene` gives the scene of a result, with its layers.
+- In a level, the survey of a room has the layers of the room, and the level record has the layers of the level.
+- A record of a room gets the name `roomName(room, id)` in the level. The function `join` of an add-on makes one layer from the layers of the rooms.
+- `convertSurvey(survey, unit, addOns)` changes the lengths of each anchor with the unit of the survey.
+- `moveLayers` changes each anchor of some layers, for a host that moves the records of a room. `scaleAnchor` changes the unit of one anchor.
 
 `ANCHOR_CODES`, `LAYER_CODES` and `FORM_CODES` have the codes of the core. The design of the add-ons is in `docs/ADD-ONS.md` of the repository.
 

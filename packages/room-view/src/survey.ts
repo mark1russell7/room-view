@@ -1,5 +1,19 @@
+import { scaleAnchor, type Anchor } from "./anchors.ts";
 import { directionOf, FULL, headingOf, SQUARE, TURN_NOISE } from "./direction.ts";
-import { ROOM_SCHEMA, type Circuit, type Opening, type Outlet, type PlacedObject, type PlanPoint, type Room, type Wall } from "./room.ts";
+import { moveLayers, type AddOn, type LayerFinding } from "./layers.ts";
+import {
+  ROOM_SCHEMA,
+  SCENE_SCHEMA,
+  type Circuit,
+  type Opening,
+  type Outlet,
+  type PlacedObject,
+  type PlanPoint,
+  type Room,
+  type Scene,
+  type Wall,
+  type WallFace,
+} from "./room.ts";
 import { LARGEST_LENGTH, metersPer, unitsPer, type LengthUnit } from "./units.ts";
 
 /** The name of the format of a survey record. */
@@ -115,6 +129,30 @@ export interface Survey {
   readonly outlets?: readonly SurveyOutlet[] | undefined;
   readonly circuits?: readonly Circuit[] | undefined;
   readonly objects?: readonly SurveyObject[] | undefined;
+  /**
+   * The records of each add-on, by the name of its layer, for example `electrical/1`. A layer has the format of a layer of a scene.
+   * Its anchors are in the space of the survey: they name the sides and the objects of the survey. `surveyAnchor` tells that space.
+   * `expandSurvey` moves the anchors to the room record. The core keeps each layer, and it does not read one.
+   */
+  readonly layers?: Readonly<Record<string, unknown>> | undefined;
+}
+
+/**
+ * The place of the walk of a survey in its room record. `surveyAnchor` moves an anchor of the survey with it.
+ * The record is plain data, so it goes through JSON with no change.
+ */
+export interface SurveyFrame {
+  /** The face of each wall that is in the room: `left` for a walk to the left, and `right` for a walk to the right. */
+  readonly face: WallFace;
+  /** The place of the first corner in the plan. */
+  readonly start: PlanPoint;
+  /** The direction of the first side, in degrees counter-clockwise from the x axis. */
+  readonly heading: number;
+  /**
+   * The factor of the length of each side that shares the gap, by the `id` of the side. A factor is the length of the wall as a part of the measured length.
+   * A side with no factor keeps its length.
+   */
+  readonly factors: Readonly<Record<string, number>>;
 }
 
 /** The closure of a survey: the difference between the end of the walk and its start. */
@@ -157,7 +195,19 @@ export interface SurveyResult {
    * A scene record with the room record and these objects gives the model of the room with its objects.
    */
   readonly objects: readonly PlacedObject[];
+  /** The place of the walk in the room record. */
+  readonly frame: SurveyFrame;
+  /**
+   * The layers of the survey with their anchors on the room record. A survey with no layers gives none.
+   * A layer is here only when an add-on of the options read it. The anchors of a different layer are in the space of the survey.
+   */
+  readonly layers?: Readonly<Record<string, unknown>> | undefined;
+  /** One finding or more for each layer of the survey that is not in `layers`. `moveLayers` tells the codes. */
+  readonly layerFindings: readonly LayerFinding[];
 }
+
+/** The `id` of the floor of the room record of a closed survey. */
+export const SURVEY_FLOOR = "floor";
 
 /** The default limit of the gap of a closed walk, as a part of the length of the walk. */
 export const CLOSURE_LIMIT = 0.01;
@@ -166,6 +216,42 @@ export const CLOSURE_LIMIT = 0.01;
 export interface SurveyOptions {
   /** The largest gap of a closed walk, as a part of the length of the walk. The default is `CLOSURE_LIMIT`. */
   readonly limit?: number | undefined;
+  /** The add-ons that read the layers of the survey. The default is no add-on, and then the result has no layer. */
+  readonly addOns?: readonly AddOn<unknown>[] | undefined;
+}
+
+/**
+ * This function gives an anchor of a survey on the room record of the survey. `frame` comes from the result of `expandSurvey`.
+ *
+ * - An anchor on a wall names a side. Its `offset` starts at the first corner of the side and goes along the inner face.
+ *   The result is on the face in the room, and its `offset` changes in the proportion of the side, as an opening does. Its `face` in the survey has no effect.
+ * - A point of an anchor on the floor or on the ceiling is in the frame of the walk. The first corner is the origin, and the first side goes along the x axis.
+ *   The result is at its place in the plan. The correction of the gap does not move the point.
+ * - An anchor on an object stays, because a placed object keeps the `id` and the frame of its object in the survey.
+ */
+export function surveyAnchor(anchor: Anchor, frame: SurveyFrame): Anchor {
+  if (anchor.on === "object") return anchor;
+  if (anchor.on === "wall") {
+    const factor = Object.hasOwn(frame.factors, anchor.wall) ? (frame.factors[anchor.wall] ?? 1) : 1;
+    return { ...anchor, face: frame.face, offset: anchor.offset * factor };
+  }
+  const [cos, sin] = directionOf(frame.heading);
+  const [x, y] = anchor.at;
+  return { ...anchor, at: [frame.start[0] + (x * cos - y * sin), frame.start[1] + (x * sin + y * cos)] };
+}
+
+/**
+ * This function gives the scene record of the result of `expandSurvey` or of `expandLevel`: the room record, the placed objects and the layers.
+ * The scene has the name of the room record. `checkScene` and `checkLayers` examine it.
+ */
+export function resultScene(result: { readonly room: Room; readonly objects: readonly PlacedObject[]; readonly layers?: Readonly<Record<string, unknown>> | undefined }): Scene {
+  return {
+    schema: SCENE_SCHEMA,
+    ...(result.room.name === undefined ? {} : { name: result.room.name }),
+    room: result.room,
+    objects: result.objects,
+    ...(result.layers === undefined ? {} : { layers: result.layers }),
+  };
 }
 
 /** This function tells if a turn is a measured angle: an angle from -360 degrees to 360 degrees. */
@@ -183,15 +269,21 @@ function degreesOf(turn: SurveyTurn): number {
 /**
  * This function gives a survey in a different unit. Each length of the record changes, and each angle stays.
  * A survey that has the unit already is the result.
+ *
+ * The anchors of a layer change through the add-on of the layer in `addOns`. An add-on keeps each different length of its layer in a fixed unit.
+ * The result has only the layers that an add-on of the list reads, because the anchors of a different layer stay in the old unit.
+ * `moveLayers` with `scaleAnchor` gives a finding for each layer that the result does not have.
  */
-export function convertSurvey(survey: Survey, unit: LengthUnit): Survey {
+export function convertSurvey(survey: Survey, unit: LengthUnit, addOns: readonly AddOn<unknown>[] = []): Survey {
   if (survey.unit === unit) return survey;
   const factor = unitsPer(survey.unit, unit);
   const to = (value: number): number => value * factor;
   const start: PlanPoint | undefined = survey.start === undefined ? undefined : [to(survey.start[0]), to(survey.start[1])];
+  const layers = survey.layers === undefined ? undefined : moveLayers(survey.layers, addOns, (anchor) => scaleAnchor(anchor, factor)).layers;
   return {
     ...survey,
     unit,
+    ...(layers === undefined ? {} : { layers }),
     height: to(survey.height),
     wallThickness: to(survey.wallThickness),
     sides: survey.sides.map((side) => ({
@@ -314,7 +406,8 @@ export function expandSurvey(survey: Survey, options: SurveyOptions = {}): Surve
 
   // The frame of the walk goes to its place in the plan.
   const start: PlanPoint = survey.start !== undefined && inRange(survey.start[0]) && inRange(survey.start[1]) ? survey.start : [0, 0];
-  const [cos, sin] = directionOf(survey.heading !== undefined && Number.isFinite(survey.heading) ? survey.heading : 0);
+  const heading = survey.heading !== undefined && Number.isFinite(survey.heading) ? survey.heading : 0;
+  const [cos, sin] = directionOf(heading);
   const place = ([x, y]: PlanPoint): PlanPoint => [start[0] + (x * cos - y * sin), start[1] + (x * sin + y * cos)];
   const walk = points.map(place);
   const corners = adjusted.map(place);
@@ -366,7 +459,7 @@ export function expandSurvey(survey: Survey, options: SurveyOptions = {}): Surve
     // A walk with no shared gap keeps the list of the survey.
     ...(survey.openings === undefined || openings === undefined ? {} : { openings: shared ? openings : survey.openings }),
     // A floor has a counter-clockwise outline.
-    ...(closed ? { floors: [{ id: "floor", ...(survey.name === undefined ? {} : { name: survey.name }), ring: toLeft ? corners : [...corners].reverse() }] } : {}),
+    ...(closed ? { floors: [{ id: SURVEY_FLOOR, ...(survey.name === undefined ? {} : { name: survey.name }), ring: toLeft ? corners : [...corners].reverse() }] } : {}),
     ...(survey.outlets === undefined ? {} : { outlets: survey.outlets.map((outlet): Outlet => ({ ...outlet, offset: outlet.offset * (factorOf.get(outlet.wall) ?? 1), face })) }),
     ...(survey.circuits === undefined ? {} : { circuits: survey.circuits }),
   };
@@ -435,5 +528,18 @@ export function expandSurvey(survey: Survey, options: SurveyOptions = {}): Surve
     const made = placeOf(object);
     return made === undefined ? [] : [made];
   });
-  return { room, corners, walk, closure: { gap, ratio, turn: error, closed }, checks, objects };
+  // The layers go to the room record with the frame of the walk. A layer that no add-on reads stays in the survey.
+  const frame: SurveyFrame = { face, start, heading, factors: Object.fromEntries(factorOf) };
+  const moved = survey.layers === undefined ? undefined : moveLayers(survey.layers, options.addOns ?? [], (anchor) => surveyAnchor(anchor, frame));
+  return {
+    room,
+    corners,
+    walk,
+    closure: { gap, ratio, turn: error, closed },
+    checks,
+    objects,
+    frame,
+    ...(moved === undefined ? {} : { layers: moved.layers }),
+    layerFindings: moved?.findings ?? [],
+  };
 }

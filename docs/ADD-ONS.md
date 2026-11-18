@@ -82,6 +82,8 @@ interface AddOn<Layer> {
   withAnchors(layer: Layer, anchors: ReadonlyMap<string, Anchor>): Layer;
   /** This function gives the faults of the meaning of the layer. The anchor checks are in the core. */
   check(layer: Layer, space: SceneSpace): readonly AddOnFault[];
+  /** This optional function gives one layer from the parts of a level. The section about a survey and a level tells its rules. */
+  join?(parts: readonly LayerPart<Layer>[]): Layer;
 }
 
 /** The marks of one add-on. This value is in the entry `/marks` of the add-on, so the root entry has no visual part. */
@@ -109,6 +111,61 @@ function layerMarks(scene: Scene, addOns: readonly AddOn<unknown>[], marks: read
 - The function `marks` is a method, as the functions of `AddOn` are. Thus one list holds the marks values of different layers.
 
 `recordName(kind, id)` gives one name for each record, for example `object:desk` or `electrical/1:o1`. The kind of a record of a layer is the name of the layer. A finding, a mark and the selection use this name, so a click on a finding selects its mark.
+
+### The layers of a survey and of a level
+
+A survey and a level are the files that a person writes. Each has the optional field `layers`, in the format of the layers of a scene.
+`expandSurvey` and `expandLevel` carry the layers to the room record.
+
+```ts
+interface Survey {
+  // The sides, the openings and the objects are above this field.
+  /** The records of each add-on. Their anchors name the sides and the objects of the survey. */
+  readonly layers?: Readonly<Record<string, unknown>>;
+}
+
+interface Level {
+  // The rooms and the connections are above this field.
+  /** The records of each add-on for the level. Their anchors are on the room record of the level. */
+  readonly layers?: Readonly<Record<string, unknown>>;
+}
+
+/** One part of the layers of a level, for the function `join` of an add-on. */
+interface LayerPart<Layer> {
+  /** The `id` of the room of the layer. The layer of the level record has no room. */
+  readonly room?: string;
+  readonly layer: Layer;
+  /** This function gives the name in the level of a record of the part, from its `id` in the part. */
+  readonly name: (id: string) => string;
+}
+```
+
+An anchor of a survey is in the space of the survey:
+
+- An anchor on a wall names a side. Its `offset` starts at the first corner of the side, and it goes along the inner face.
+- A point on the floor or on the ceiling is in the frame of the walk. The first corner is the origin, and the first side goes along the x axis.
+- An anchor on an object names an object of the survey.
+
+`expandSurvey(survey, { addOns })` gives the layers on the room record in `layers`, and the place of the walk in `frame`:
+
+- `surveyAnchor(anchor, frame)` moves one anchor to the room record. A wall anchor gets the face in the room.
+- The `offset` of a wall anchor changes in the proportion of its side, as an opening does. Thus a record stays at its place when the walk has a gap.
+- The core reads no layer. `moveLayers` changes each anchor through the functions `anchors` and `withAnchors` of the add-on of the layer.
+- A layer with no add-on in the list is not in the result, because its anchors are in the space of the survey.
+  `layerFindings` of the result tells each such layer, with the codes `layer-name`, `layer-unknown` and `layer-form`.
+- `convertSurvey(survey, unit, addOns)` changes the lengths of each anchor with `scaleAnchor`. An add-on keeps each different length of its layer in a fixed unit.
+- `resultScene(result)` gives the scene of a result. `checkScene` and `checkLayers` examine it, and `layerMarks` gives its marks.
+
+A level has the layers of each room in the survey of the room. The level record has the layers of the level, for example the circuits of an apartment.
+
+- `expandLevel(level, { addOns })` moves each anchor of a room in one change: the unit, the place of the room, then the names of the level.
+- A wall and an object of a room get the name `roomName(room, id)`, for example `kitchen/s0`. The floor of a room has the `id` of the room.
+- The function `join` of an add-on then gives one layer from the parts: the layer of the level record, then the layer of each room.
+- `layerPart(layer, room)` makes a part. Its function `name` has the rule of `roomName`, so an add-on does not write that rule again.
+- A record of a room gets the name that its part gives. Each `id` of the layer that names such a record or a placed object gets it too.
+- A record that the rooms share keeps its `id`, for example a circuit of an apartment. The first record of an `id` stays.
+- An add-on with no function `join` gives a finding for the layer of each room, and the layer of the level record stays as it is.
+- A layer that only the level record has stays as it is, because its anchors are on the room record of the level already.
 
 ### Two add-ons on one object
 
@@ -189,6 +246,8 @@ The add-on also has these parts:
 - The marks: a point for each outlet, a link for each feed, and a meter for each circuit. The meter of a circuit with no limit has no `limit`.
   A link goes from its outlet to the center of its placed object. A record with no place gives no mark.
 - The form: `ELECTRICAL_FORM` of the entry `/form` has the circuits, the outlets of the walls and the power of each object. The site gets them from the add-on, not from the core.
+- The layer of a level: `joinElectrical` is the function `join` of the add-on. An outlet and a feed get the name of their room, for example `kitchen/o1`.
+  A circuit keeps its `id`, because one circuit gives power to outlets in more than one room.
 - `fromSceneV1` moves the electrical records of a `scene/1` to a layer: the outlets, the circuits, the loads and the outlet of each object. The loads of a circuit become its `otherLoad`.
 
 ## The form of the site
@@ -309,7 +368,9 @@ Step 2 adds to the public API, so it is a PATCH: before 1.0.0, a feature raises 
 The type of a mark is in the public API of the core and of the electrical add-on, so the two packages are 0.2.0 on that version.
 The meter with no limit changes the marks that `electricalMarks` gives, so `@mark1russell7/electrical` goes to 0.3.0.
 The form of a layer is a feature of the core and of the add-on. Thus `@mark1russell7/room-view` goes to 0.2.2, and `@mark1russell7/electrical` goes to 0.3.2.
-Step 6 removes records from the public API, so `@mark1russell7/room-view` then goes to 0.3.0.
+The layers of a survey and of a level are a feature of the core and of the add-on, and they remove nothing.
+Thus `@mark1russell7/room-view` goes to 0.2.3, and `@mark1russell7/electrical` goes to 0.3.3.
+The last part of step 6 removes records from the public API, so `@mark1russell7/room-view` then goes to 0.3.0.
 
 - `room/1` and `scene/1` stay readable. `fromSceneV1` of the electrical add-on gives the electrical layer of a `scene/1`. Step 6 adds the move of the scene to `scene/2`.
 - `@mark1russell7/electrical` starts at 0.1.0. It depends on the core of this workspace, so a new version of the core gives a new version of the add-on.
@@ -329,7 +390,11 @@ The first steps add, and the last step removes. Thus each step keeps the page an
    With no list of marks, the viewer makes the marks of the outlets of a `scene/1`, until step 6 removes them.
    The core has the form of a layer, and the electrical add-on gives its form in its entry `/form` (`@mark1russell7/room-view` 0.2.2, `@mark1russell7/electrical` 0.3.2).
    Then the store of the page keeps the records of each add-on, and the page makes its inputs from the forms.
-6. The core removes `outlets`, `circuits`, `loads` and `PlacedObject.outlet`, and it gives `room/2` and `scene/2`. This step is the break of the version.
+6. The layers go into the files of a person, in three parts. First, a survey and a level get the field `layers`, and the core carries the layers to the room record.
+   This part is a feature (`@mark1russell7/room-view` 0.2.3, `@mark1russell7/electrical` 0.3.3).
+   Then the page writes the records of each add-on as layers, and the viewer of the page draws the marks of the layers.
+   Last, the core removes `outlets`, `circuits`, `loads` and `PlacedObject.outlet`, also from a survey and from a level.
+   It gives `room/2`, `scene/2`, `survey/2` and `level/2`. This part is the break of the version.
 7. The procedures packages.
 
 ## The answers of the review

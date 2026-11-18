@@ -1,5 +1,5 @@
 import type { AddOn } from "@mark1russell7/room-view";
-import { outletAnchors, withOutletAnchors } from "./anchors.ts";
+import { joinElectrical, outletAnchors, withOutletAnchors } from "./anchors.ts";
 import { checkElectrical } from "./check.ts";
 import { ELECTRICAL_SCHEMA, type ElectricalLayer } from "./layer.ts";
 import { parseElectrical } from "./schema.ts";
@@ -19,6 +19,7 @@ export function electricalAddOn(options: LoadOptions = {}): AddOn<ElectricalLaye
     anchors: outletAnchors,
     withAnchors: withOutletAnchors,
     check: (layer, space) => checkElectrical(layer, space, options),
+    join: joinElectrical,
   };
 }
 
