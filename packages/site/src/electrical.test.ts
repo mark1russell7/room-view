@@ -1,8 +1,10 @@
 import { ELECTRICAL_FORM } from "@mark1russell7/electrical/form";
 import { checkForm, LEVEL_SCHEMA, SURVEY_SCHEMA, type Circuit, type FormRecord, type FormRecords, type FormSystem, type Level, type Survey, type SurveyObject } from "@mark1russell7/room-view";
 import { describe, expect, it } from "vitest";
-import { circuitLists, emptyDraft, storeOf, type DraftCircuit, type DraftList, type LengthMode, type Store } from "./draft.ts";
-import { circuitLimit, ELECTRICAL, ELECTRICAL_ADD_ON, electricalLevel, electricalRecords, electricalSurvey } from "./electrical.ts";
+import { emptyDraft, storeOf, type DraftList, type LengthMode, type Store } from "./draft.ts";
+import { circuitLists, type DraftCircuit } from "./electrical.fixture.ts";
+import { circuitLimit, ELECTRICAL, ELECTRICAL_ADD_ON, electricalLevel, electricalRecords, electricalSurvey, wattText } from "./electrical.ts";
+import { addFeatureText, addText, featuresLabel, filePartsText, hiddenOf, listSections, moreText, ownedSections, pointSteps, wallPartsText } from "./inputs.ts";
 import { readSurvey, surveyParts } from "./layers.ts";
 import { levelOf } from "./level.ts";
 
@@ -51,8 +53,9 @@ const RECORDS: FormRecords = {
 };
 
 describe("the names of the electrical layer", () => {
+  const fields = (name: string): readonly string[] | undefined => ELECTRICAL_FORM.collections.find((collection) => collection.name === name)?.fields.map((field) => field.name);
+
   it("are the names of the form of the add-on", () => {
-    const fields = (name: string): readonly string[] | undefined => ELECTRICAL_FORM.collections.find((collection) => collection.name === name)?.fields.map((field) => field.name);
     expect(checkForm(ELECTRICAL_FORM)).toEqual([]);
     expect(ELECTRICAL.layer).toBe(ELECTRICAL_FORM.schema);
     expect(ELECTRICAL_FORM.collections.map((collection) => collection.name)).toEqual([ELECTRICAL.circuits, ELECTRICAL.outlets, ELECTRICAL.feeds]);
@@ -64,6 +67,87 @@ describe("the names of the electrical layer", () => {
   it("is the add-on of the page, with its bridge", () => {
     expect(ELECTRICAL_ADD_ON.form).toBe(ELECTRICAL_FORM);
     expect(ELECTRICAL_ADD_ON.bridge).toEqual({ read: electricalRecords, survey: electricalSurvey, level: electricalLevel });
+  });
+
+  it("hides only the power of an object, and the power is a field of the form", () => {
+    expect(ELECTRICAL_ADD_ON.hidden).toEqual({ feeds: ["watts"] });
+    expect(fields(ELECTRICAL.feeds)).toEqual([ELECTRICAL.object, ELECTRICAL.outlet, ELECTRICAL.watts]);
+    expect(hiddenOf(ELECTRICAL_ADD_ON, ELECTRICAL.feeds)).toEqual([ELECTRICAL.watts]);
+    expect(hiddenOf(ELECTRICAL_ADD_ON, ELECTRICAL.outlets)).toEqual([]);
+    expect(hiddenOf(ELECTRICAL_ADD_ON, ELECTRICAL.circuits)).toEqual([]);
+  });
+});
+
+describe("the texts of the electrical add-on in the page", () => {
+  const FORMS = [ELECTRICAL_FORM];
+  const ADD_ONS = [ELECTRICAL_ADD_ON];
+
+  it("has texts for the list of the circuits only", () => {
+    const sections = listSections(ADD_ONS);
+    expect(Object.keys(ELECTRICAL_ADD_ON.lists ?? {})).toEqual([ELECTRICAL.circuits]);
+    expect(sections.map((section) => section.collection.name)).toEqual([ELECTRICAL.circuits]);
+    expect(sections.map(addText)).toEqual(["Add a breaker"]);
+    expect(sections[0]?.texts.aid).toBe("Each breaker of the electrical panel gives power to the outlets of one circuit. Add each breaker here. Then, at each outlet, select its circuit.");
+    expect(ownedSections(ADD_ONS).map((section) => section.collection.name)).toEqual([ELECTRICAL.feeds]);
+  });
+
+  it("has two steps of help, and the second names the title of the list and its button", () => {
+    const [section] = listSections(ADD_ONS);
+    expect(section).toBeDefined();
+    if (section === undefined) return;
+    expect(ELECTRICAL_ADD_ON.steps).toEqual([
+      "For the circuits, switch off one breaker of the electrical panel. Find each outlet with no power.",
+      `Under ${section.collection.title}, select ${addText(section)}. Type the amperes on the handle of the breaker. Then, at each outlet with no power, select the circuit.`,
+    ]);
+  });
+
+  it("tells the limit of a circuit for a continuous load", () => {
+    const note = ELECTRICAL_ADD_ON.note;
+    expect(note?.(ELECTRICAL.circuits, { breaker: 15, voltage: 120 })).toBe(`The limit for a continuous load is ${wattText(1440)} W.`);
+    expect(note?.(ELECTRICAL.circuits, { name: "Kitchen", breaker: 20, voltage: 120 })).toBe(`The limit for a continuous load is ${wattText(1920)} W.`);
+    expect(note?.(ELECTRICAL.circuits, { breaker: 3, voltage: 0.1 })).toBe(`The limit for a continuous load is ${wattText(0.24)} W.`);
+  });
+
+  it("tells no limit for a circuit with no limit, and for a record that is not a circuit", () => {
+    const note = ELECTRICAL_ADD_ON.note;
+    expect(note).toBeDefined();
+    expect(note?.(ELECTRICAL.circuits, { breaker: 15 })).toBeUndefined();
+    expect(note?.(ELECTRICAL.circuits, { voltage: 120 })).toBeUndefined();
+    expect(note?.(ELECTRICAL.circuits, { breaker: 0, voltage: 120 })).toBeUndefined();
+    expect(note?.(ELECTRICAL.circuits, { breaker: "15", voltage: 120 })).toBeUndefined();
+    expect(note?.(ELECTRICAL.outlets, { breaker: 15, voltage: 120 })).toBeUndefined();
+    expect(note?.(ELECTRICAL.feeds, { breaker: 15, voltage: 120 })).toBeUndefined();
+  });
+
+  it("gives the page its sentences for the electrical layer", () => {
+    expect(wallPartsText(FORMS)).toBe("the doors, the windows, the outlets and the furniture");
+    expect(addFeatureText(FORMS)).toBe("Add doors, windows or outlets");
+    expect(featuresLabel(FORMS, "2")).toBe("Doors, windows and outlets of wall 2");
+    expect(moreText(ADD_ONS)).toBe("Name, power and more distances");
+    expect(filePartsText(ADD_ONS)).toBe("The page shows the walls, the doors, the windows, the outlets, the circuits and the furniture of the file. It does not keep the other data of the file yet.");
+    expect(pointSteps(FORMS)).toEqual(["For each outlet of this wall, measure from a corner of the wall to its center. Then measure its height above the floor."]);
+  });
+});
+
+describe("wattText", () => {
+  it("gives a number of 100 or more with no decimal place", () => {
+    expect(wattText(1440, "en-US")).toBe("1,440");
+    expect(wattText(100, "en-US")).toBe("100");
+    expect(wattText(1440.6, "en-US")).toBe("1,441");
+    expect(wattText(100.4, "en-US")).toBe("100");
+  });
+
+  it("gives a number below 100 with one decimal place at most", () => {
+    expect(wattText(57.6, "en-US")).toBe("57.6");
+    expect(wattText(99.94, "en-US")).toBe("99.9");
+    expect(wattText(0.24, "en-US")).toBe("0.2");
+    expect(wattText(12, "en-US")).toBe("12");
+  });
+
+  it("uses the number format of a locale", () => {
+    expect(wattText(2944, "de-DE")).toBe("2.944");
+    expect(wattText(57.6, "de-DE")).toBe("57,6");
+    expect(wattText(1440)).toBe(new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(1440));
   });
 });
 

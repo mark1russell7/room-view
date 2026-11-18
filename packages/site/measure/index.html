@@ -26,7 +26,7 @@
 
 <main>
   <h1>Measure a room</h1>
-  <p class="lead">Walk around the room with a tape measure, and keep the wall on your right. Type the length of each wall and the turn at each corner. Then add the doors, the windows, the outlets and the furniture of each wall. The page draws the room while you type.</p>
+  <p class="lead">Walk around the room with a tape measure, and keep the wall on your right. Type the length of each wall and the turn at each corner. Then add <span id="lead-parts">the doors, the windows and the furniture</span> of each wall. The page draws the room while you type.</p>
 
   <div class="rooms" role="group" aria-label="The rooms of the page">
     <ul id="room-list" class="room-list"></ul>
@@ -91,12 +91,7 @@
         <p class="entry-aid">A door between two rooms is in each of the two rooms. Open one of the rooms. At its door, select where the door goes.</p>
       </section>
 
-      <section id="circuits" class="entry circuits" aria-labelledby="circuits-title">
-        <h2 id="circuits-title" class="entry-title">Circuits</h2>
-        <p class="entry-aid">Each breaker of the electrical panel gives power to the outlets of one circuit. Add each breaker here. Then, at each outlet, select its circuit.</p>
-        <ol id="circuit-list" class="features circuit-list" aria-label="The circuits of the home"></ol>
-        <button id="add-circuit" class="tool add" type="button">Add a breaker</button>
-      </section>
+      <div id="lists" class="lists"></div>
     </div>
   </div>
 
@@ -127,8 +122,7 @@
         <li>Stand in a corner of the room, with a wall on your right.</li>
         <li>Measure this wall along the floor, from corner to corner. Type its length.</li>
         <li>For each door and each window of this wall, measure from a corner of the wall to its near edge. Then measure its width.</li>
-        <li>For each outlet of this wall, measure from a corner of the wall to its center. Then measure its height above the floor.</li>
-        <li>For each piece of furniture at this wall, measure from a corner of the wall to its near edge. Then measure its width along the wall, its depth into the room and its height.</li>
+        <li id="step-furniture">For each piece of furniture at this wall, measure from a corner of the wall to its near edge. Then measure its width along the wall, its depth into the room and its height.</li>
         <li>For a thing on furniture, such as a monitor on a desk, select Put something on. For a thing in a cabinet or a rack, select Put something in.</li>
         <li>Go to the next corner and turn to the next wall. In most corners you turn left. Around a corner that points into the room, you turn right.</li>
         <li>For a corner that is not square, select Angle. Type the angle inside the room, between the two walls.</li>
@@ -136,8 +130,6 @@
         <li>For the next room, select Add a room. The page keeps each room, and the list above the drawing shows them.</li>
         <li>Measure a door between two rooms in each of the two rooms. At one of the two doors, select the other door in the field Goes to.</li>
         <li>Select All rooms to see the rooms together. The page tells if the rooms fit at each door.</li>
-        <li>For the circuits, switch off one breaker of the electrical panel. Find each outlet with no power.</li>
-        <li>Under Circuits, select Add a breaker. Type the amperes on the handle of the breaker. Then, at each outlet with no power, select the circuit.</li>
       </ol>
       <p class="note">The measurements are a <code>survey/1</code> record, and <a href="https://github.com/mark1russell7/room-view/tree/main/packages/room-view#a-survey-the-room-from-a-tape-measure">the package</a> makes the room from it. The rooms together are a <code>level/1</code> record.</p>
     </section>

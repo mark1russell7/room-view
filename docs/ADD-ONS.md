@@ -252,6 +252,40 @@ A survey and a level do not have layers before step 6. Until then, an add-on of 
 The bridge changes the records of the form to the fields of a survey and of a level, and back. The electrical add-on has the only bridge, in one file.
 The bridge goes away in step 6, when a survey and a level get layers.
 
+### The inputs of the page
+
+The page makes each input of an add-on from its form. The functions are in `inputs.ts` of the site. They are pure, so their tests need no browser.
+
+- A text field and a number field have an input each. A number has its unit and the usual value of the system of units.
+- A field that names a record of a list is a choice of the records of that list.
+- A field that names a point is a choice of the points of the room.
+- A collection on the walls gives a kind of feature of a wall. Its records get the fields of the form below their distances.
+- A collection with an owner gives fields in the box "More" of a piece of furniture.
+- Each other collection is a list. A list has a section below the walls, with the title of its collection and a button that adds a record.
+- The sentences of the page that name a collection come from the forms, for example the button "Add doors, windows or outlets".
+- A record with a number that its form does not accept shows the sentence of the form for that field.
+- A record of a list tells the records of the rooms that name it, for example "3 outlets in 2 rooms use this circuit."
+
+A form has no sentences of help. Thus an add-on of the page can give them, as data:
+
+- the sentences below the title of a list, and the text of the button that adds a record
+- steps at the end of the help of the page
+- a sentence about a good record of a list, for example the limit of a circuit
+
+The code of the page names no topic. The electrical topic is in four files of the site:
+
+- `electrical.ts` has the add-on of the page: the form, the sentences of help and the bridge.
+- `store-v1.ts` reads the store of version 1 of the browser.
+- `draft.ts` has the example room, with an outlet and the power of a rack.
+- `electrical.fixture.ts` has functions for the tests.
+
+The inputs have three limits:
+
+- A piece of furniture has one record of a collection, also when the form permits more. No add-on needs more at this time.
+- The plural of the word of a collection is the word with an `s`. A word with a different plural needs a new field in the form.
+- An add-on of the page can hide a field. The electrical add-on hides the power of a piece of furniture, because a survey has no field for it.
+  The hidden fields go away with the bridge, in step 6.
+
 ## The procedures package
 
 Two procedures packages wrap this API, in the monorepo of the universal client: `@procedures/room-view` and `@procedures/electrical`. Their procedures are JSON in and JSON out:

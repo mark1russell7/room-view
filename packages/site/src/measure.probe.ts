@@ -243,7 +243,7 @@ check("the box More of a new object is closed", more?.open === false, more?.open
 if (more !== null) more.open = true;
 enter(document.querySelector<HTMLInputElement>(`${desk} > details.more input[data-part="name"]`), "Work desk");
 check("the name of an object shows next to its kind", text(`${desk} > .feature-head .object-given`) === "Work desk", text(`${desk} > .feature-head`));
-const power = document.querySelector<HTMLSelectElement>(`${desk} > details.more select[data-part="outlet"]`);
+const power = document.querySelector<HTMLSelectElement>(`${desk} > details.more select[data-field="outlet"]`);
 check("an object can use an outlet of the room", power?.options.length === 2 && power.options[1]?.textContent === "Outlet 1, wall 2", power === null ? "no field" : Array.from(power.options, (option) => option.textContent));
 if (power !== null && power.options.length === 2) {
   power.selectedIndex = 1;

@@ -1,15 +1,12 @@
 import { rectInRegion, regionArea, regionHitsRect, type Region } from "@mark1russell7/layout-contract";
-import { expandLevel, expandSurvey, SCENE_SCHEMA, type LevelResult, type Room, type Scene, type SurveyResult } from "@mark1russell7/room-view";
+import { expandLevel, expandSurvey, SCENE_SCHEMA, type FormCollection, type LevelResult, type Room, type Scene, type SurveyResult } from "@mark1russell7/room-view";
 import type { RoomViewer, ViewerTheme } from "@mark1russell7/room-view/three";
 import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome";
-import { collectionOf } from "./add-ons.ts";
-import { circuitName, readCircuit, usualCircuit, type CircuitField } from "./circuits.ts";
+import { ADD_ONS, addOnOf, collectionOf, FORMS } from "./add-ons.ts";
+import type { PageAddOn } from "./bridge.ts";
 import { isDark, onThemeChange } from "./dark.ts";
 import {
   areaText,
-  circuitOf,
-  circuitsOf,
-  circuitUse,
   defaultMode,
   dimensionText,
   emptyDraft,
@@ -24,13 +21,11 @@ import {
   fieldsOf,
   fileName,
   isExample,
-  isOutlet,
   LENGTH_MODES,
   lengthText,
   listedObjects,
   listRecords,
   MODE_NAMES,
-  MOST_CIRCUITS,
   MOST_LEVELS,
   MOST_OBJECTS,
   MOST_RECORDS,
@@ -43,7 +38,8 @@ import {
   objectMarks,
   objectOf,
   objectWords,
-  outletOf,
+  ownedBy,
+  ownedOf,
   parseStore,
   placedFeatures,
   pointKinds,
@@ -60,31 +56,30 @@ import {
   usualFor,
   usualSize,
   withActive,
-  withCircuit,
   withConnection,
   withExample,
   withFeature,
   withMode,
-  withNewCircuit,
   withNewFeature,
   withNewObject,
   withNewPoint,
+  withNewRecord,
   withNewRoom,
   withNewRooms,
   withNewSide,
   withObject,
-  withObjectOutlet,
-  withoutCircuit,
   withoutFeature,
-  withOutletCircuit,
   withoutObject,
+  withoutRecord,
   withoutRoom,
   withoutSide,
+  withOwned,
+  withPoint,
+  withRecord,
   withRoom,
   withSide,
   type Corner,
   type Draft,
-  type DraftCircuit,
   type DraftEnd,
   type DraftFeature,
   type DraftSide,
@@ -92,7 +87,6 @@ import {
   type FeatureFault,
   type FeatureField,
   type FeatureKind,
-  type LengthMode,
   type ListedObject,
   type ObjectFault,
   type ObjectField,
@@ -106,16 +100,44 @@ import {
   type TypedLength,
 } from "./draft.ts";
 import { drawLevel, type PlanInput } from "./floorplan.ts";
-import { roomSurvey, storeLists } from "./layers.ts";
+import {
+  addFeatureText,
+  addText,
+  changeOf,
+  featuresLabel,
+  filePartsText,
+  hiddenOf,
+  INPUT_GROUPS,
+  layerChoices,
+  listCounts,
+  listItems,
+  listSections,
+  lowerFirst,
+  moreText,
+  ownedSections,
+  pointSteps,
+  recordInputs,
+  recordProblem,
+  wallPartsText,
+  wordsOf,
+  type ListItem,
+  type ListSection,
+  type OwnedSection,
+  type RecordInput,
+  type RecordNote,
+  type TextInput,
+} from "./inputs.ts";
+import { roomSurvey, storeLists, storeSystem, type TypedFields } from "./layers.ts";
 import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, shownLevel, shownLevelObjects, surveyDrafts, type Joint, type JointState, type LevelDrafts } from "./level.ts";
 import { svg } from "./plan.ts";
 import { drawWalk, pathOf, type PictureSize, type Pixel, type WalkFeature, type WalkObject } from "./walk.ts";
 
 // The page "Measure a room". A person types the length of each wall and the turn at each corner.
 // The page keeps the text of each field in a draft, makes the survey record from it, and draws the result.
-// Each wall has its doors, its windows, its outlets and its furniture. A piece of furniture can hold a different object, for example a display on a desk.
+// Each wall has its doors, its windows and its furniture. A piece of furniture can hold a different object, for example a display on a desk.
 // With two rooms or more, a door of one room goes to a door of a different room, and the page draws the rooms together.
-// The circuits are the breakers of the electrical panel. An outlet of any room can be on a circuit.
+// An add-on of the page gives more records: points on a wall, records of a piece of furniture, and lists for all the rooms.
+// The page knows no topic. It makes the inputs of those records from the form of each add-on, with the functions of `inputs.ts`.
 
 /** The key of the rooms in the storage of the browser. */
 const STORE_KEY = "room-view:measure";
@@ -141,7 +163,7 @@ let draft: Draft = store.rooms[store.active] ?? exampleDraft("m");
  */
 let typed: Draft = draft;
 let result: SurveyResult = expandSurvey(roomSurvey(draft));
-/** The faults of the doors, the windows, the openings and the outlets. */
+/** The faults of the doors, the windows, the openings and the points. */
 let faults: readonly FeatureFault[] = featureFaults(draft, result);
 /** The faults of the furniture and the equipment. */
 let objectList: readonly ObjectFault[] = objectFaults(draft, result);
@@ -203,8 +225,17 @@ const modeField = byId<HTMLSelectElement>("mode");
 const keepNote = byId("keep-note");
 const roomList = byId("room-list");
 const addRoom = byId<HTMLButtonElement>("add-room");
-const circuitList = byId("circuit-list");
-const addCircuit = byId<HTMLButtonElement>("add-circuit");
+const listsBox = byId("lists");
+
+/** The lists of the page: each collection of an add-on with records for all the rooms. */
+const LIST_SECTIONS: readonly ListSection[] = listSections(ADD_ONS);
+
+/** The collections of the add-ons with records that a piece of furniture owns. */
+const OWNED_SECTIONS: readonly OwnedSection[] = ownedSections(ADD_ONS);
+
+/** The section of each list, in the box of the lists. */
+const LIST_BOXES: readonly ListBox[] = LIST_SECTIONS.map(listBox);
+listsBox.replaceChildren(...LIST_BOXES.map((item) => item.box));
 
 const SIGNS: Readonly<Record<StatusLevel, string>> = { typing: "…", open: "!", closed: "✓" };
 
@@ -212,7 +243,7 @@ const SIGNS: Readonly<Record<StatusLevel, string>> = { typing: "…", open: "!",
 const ROOM_STATES: Readonly<Record<RoomState, readonly [sign: string, words: string]>> = {
   typing: ["…", "needs a number"],
   open: ["!", "the walk does not close"],
-  fault: ["!", "a door, a window, an outlet or a piece of furniture is not ready"],
+  fault: ["!", "something on a wall, or a piece of furniture, is not ready"],
   closed: ["✓", "the walk closes"],
 };
 
@@ -349,7 +380,7 @@ function featureItem(item: PlacedFeature): HTMLLIElement {
     rows,
     note,
     joinRows(item, title),
-    circuitRows(item, title),
+    pointFields(item, title),
   );
 }
 
@@ -359,7 +390,7 @@ const NO_ROOM = "Outside, or a room that is not here";
 /**
  * This function gives the field that tells where a door or an opening goes.
  * It goes to a door of a different room, or to no room of the page.
- * A page with one room has no such field, and a window and an outlet have none.
+ * A page with one room has no such field, and a window and a point have none.
  */
 function joinRows(item: PlacedFeature, title: string): readonly (HTMLElement | null)[] {
   const { kind, key } = item.feature;
@@ -380,25 +411,98 @@ function joinRows(item: PlacedFeature, title: string): readonly (HTMLElement | n
   return [h("div", { class: "field" }, h("span", { class: "field-name" }, "Goes to"), select), aid, note];
 }
 
-/** The text of the choice of an outlet with a circuit that the visitor does not know yet. */
-const NO_CIRCUIT = "Not known yet";
+/**
+ * This function gives the row of one input of a record of an add-on: the label of its field, and the field.
+ *
+ * - `title` names the record in the label of the field for a screen reader, for example `Outlet 1`.
+ * - A choice with no record to select shows the aid of its form in place of the field. The aid has the class `aid`.
+ * - With `must`, a field that the form needs tells it to a screen reader.
+ * - The field has the name of its field in the form, and the group of the fields of the store that keeps its text.
+ */
+function inputRow(input: RecordInput, title: string, aid: string, must: boolean): HTMLElement {
+  const needed = must && input.needed ? "true" : null;
+  if (input.kind === "choice") {
+    if (input.aid !== undefined) return h("p", { class: aid }, input.aid);
+    const options = input.choices.map((choice) => {
+      const option = h("option", { value: choice.key }, choice.text);
+      option.selected = choice.key === input.key;
+      return option;
+    });
+    const select = h(
+      "select",
+      { class: "text-field", "data-field": input.name, "data-group": input.group, "aria-label": `${title}, ${input.label.toLowerCase()}`, "aria-required": needed },
+      h("option", { value: "" }, input.none),
+      options,
+    );
+    return h("div", { class: "field" }, h("span", { class: "field-name" }, input.label), select);
+  }
+  if (input.kind === "text") {
+    const field = h("input", {
+      class: "text-field",
+      type: "text",
+      maxlength: String(MOST_TEXT),
+      "data-field": input.name,
+      "data-group": input.group,
+      "aria-label": `${title}, ${input.label.toLowerCase()}`,
+      "aria-required": needed,
+      autocomplete: "off",
+    });
+    field.value = input.text;
+    return h("div", { class: "field" }, h("span", { class: "field-name" }, input.label), field);
+  }
+  const unit = input.unit === undefined ? "" : `, in ${input.unit}`;
+  const field = h("input", {
+    class: "number-field",
+    type: "text",
+    inputmode: "decimal",
+    enterkeyhint: "next",
+    maxlength: String(MOST_TEXT),
+    "data-field": input.name,
+    "data-group": input.group,
+    "aria-label": `${title}, ${input.label.toLowerCase()}${unit}`,
+    "aria-required": needed,
+    autocomplete: "off",
+  });
+  field.value = input.text;
+  // An empty field shows the usual value, which the page uses when a person types no number.
+  if (input.usual !== undefined) field.placeholder = input.usual;
+  const sign = input.unit === undefined ? null : h("span", { class: "unit", "aria-hidden": "true" }, input.unit);
+  return h("div", { class: "field" }, h("span", { class: "field-name" }, input.label), h("label", { class: "number" }, field, sign));
+}
+
+/** This function gives the inputs of a record of an add-on in the room of the page. The record is a point, or an object owns it. */
+function roomInputs(addOn: PageAddOn, collection: FormCollection, fields: TypedFields): readonly RecordInput[] {
+  return recordInputs(addOn.form, collection, fields, storeSystem(store), layerChoices(addOn.form, store, draft, FORMS), hiddenOf(addOn, collection.name));
+}
 
 /**
- * This function gives the field that tells the circuit of an outlet: the breaker of the panel that gives it power.
- * A store with no circuit shows an aid in place of the field. A door, a window and an opening have no circuit.
+ * This function gives the fields of a record of an add-on in the room of the page, in one box.
+ * The box tells the layer and the collection of the record, and `showRecords` gives the text of its note.
+ * A record with no input has no box.
  */
-function circuitRows(item: PlacedFeature, title: string): readonly HTMLElement[] {
-  if (!isOutlet(item.feature)) return [];
-  const circuits = circuitsOf(store);
-  if (circuits.length === 0) return [h("p", { class: "join-aid" }, "To tell the breaker of this outlet, add the breaker in Circuits, below the walls.")];
-  const current = circuitOf(item.feature);
-  const options = circuits.map((circuit, index) => {
-    const option = h("option", { value: circuit.key }, circuitName(circuit, index));
-    option.selected = circuit.key === current;
-    return option;
-  });
-  const select = h("select", { class: "text-field", "data-part": "circuit", "aria-label": `Circuit of ${title.toLowerCase()}` }, h("option", { value: "" }, NO_CIRCUIT), options);
-  return [h("div", { class: "field" }, h("span", { class: "field-name" }, "Circuit"), select)];
+function recordFields(addOn: PageAddOn, collection: FormCollection, fields: TypedFields, title: string, aid: string, must: boolean): HTMLElement | null {
+  const inputs = roomInputs(addOn, collection, fields);
+  if (inputs.length === 0) return null;
+  const note = h("p", { class: "record-note" });
+  note.hidden = true;
+  return h(
+    "div",
+    { class: "record-fields", "data-layer": addOn.form.schema, "data-collection": collection.name },
+    inputs.map((input) => inputRow(input, title, aid, must)),
+    note,
+  );
+}
+
+/**
+ * This function gives the fields of the record of a point, from the form of its add-on. For example, an outlet names its circuit.
+ * A door, a window and an opening have no record. A point of a collection that the page does not know has no field.
+ */
+function pointFields(item: PlacedFeature, title: string): HTMLElement | null {
+  const point = item.feature.point;
+  if (point === undefined) return null;
+  const addOn = addOnOf(point.layer);
+  const collection = collectionOf(point.layer, point.collection);
+  return addOn === undefined || collection === undefined ? null : recordFields(addOn, collection, point, title, "join-aid", true);
 }
 
 /**
@@ -407,7 +511,7 @@ function circuitRows(item: PlacedFeature, title: string): readonly HTMLElement[]
  */
 function addControl(side: DraftSide, number: string): HTMLElement {
   const id = `kinds-${side.key}`;
-  const open = h("button", { class: "feature-open", type: "button", "data-action": "features", "aria-expanded": "false", "aria-controls": id }, "Add a door, a window or an outlet");
+  const open = h("button", { class: "feature-open", type: "button", "data-action": "features", "aria-expanded": "false", "aria-controls": id }, addFeatureText(FORMS));
   const kinds = h(
     "div",
     { id, class: "feature-kinds", role: "group", "aria-label": `Add to wall ${number}` },
@@ -477,10 +581,13 @@ function objectRow(item: ListedObject, field: ObjectField, extra: HTMLElement | 
   return h("div", { class: "field" }, h("span", { class: "field-name" }, words, extra), length);
 }
 
-/** This function tells if a person typed a value in a field of the box "More" of an object. Such a box is open when the form shows the object. */
+/**
+ * This function tells if a person gave a value to a field of the box "More" of an object. Such a box is open when the form shows the object.
+ * A record of an add-on that the object owns has one field with a value or more.
+ */
 function hasMoreText(item: ListedObject): boolean {
-  const { name, gap, lift } = item.object;
-  return name !== "" || outletOf(item.object) !== "" || [gap, lift].some((length) => length.value !== "" || length.inches !== "");
+  const { name, gap, lift, owns } = item.object;
+  return name !== "" || owns.length > 0 || [gap, lift].some((length) => length.value !== "" || length.inches !== "");
 }
 
 /**
@@ -507,9 +614,10 @@ function objectAdd(place: ObjectPlace, text: string, label: string, count: numbe
 
 /**
  * This function gives the fields of an object, with the objects that it holds.
- * The size of the object comes first. The box "More" has its name, its other distances and its outlet.
+ * The size of the object comes first. The box "More" has its name, its other distances and the fields of its records of the add-ons.
+ * The page shows one record of each collection for an object. For example, the power of an object names an outlet.
  */
-function objectItem(item: ListedObject, listed: readonly ListedObject[], outlets: readonly PlacedFeature[]): HTMLLIElement {
+function objectItem(item: ListedObject, listed: readonly ListedObject[]): HTMLLIElement {
   const { object, level, holder } = item;
   const held = holder !== undefined;
   const title = objectTitle(item);
@@ -524,27 +632,20 @@ function objectItem(item: ListedObject, listed: readonly ListedObject[], outlets
   const nameInput = h("input", { class: "text-field", type: "text", "data-part": "name", "aria-label": `Name of ${words}`, placeholder: kindName(object.kind), autocomplete: "off" });
   nameInput.value = object.name;
   const lift = h("p", { class: "object-aid" }, holder === undefined ? "With no number, it is on the floor." : `With no number, it is on top of ${objectTitle(holder).toLowerCase()}.`);
-  let power: HTMLElement;
-  if (outlets.length === 0) power = h("p", { class: "object-aid" }, "To give it power, add an outlet to a wall.");
-  else {
-    const current = outletOf(object);
-    const options = outlets.map((outlet) => {
-      const option = h("option", { value: outlet.feature.key }, `Outlet ${String(outlet.number)}, wall ${String(outlet.side + 1)}`);
-      option.selected = outlet.feature.key === current;
-      return option;
-    });
-    const select = h("select", { class: "text-field", "data-part": "outlet", "aria-label": `Outlet of ${words}` }, h("option", { value: "" }, "No outlet"), options);
-    power = h("div", { class: "field" }, h("span", { class: "field-name" }, "Power from"), select);
-  }
+  // An object with no record of a collection shows the fields of an empty record. The first value makes the record.
+  const owned = OWNED_SECTIONS.map(({ addOn, collection }) => {
+    const layer = addOn.form.schema;
+    return recordFields(addOn, collection, ownedBy(object, layer, collection.name) ?? ownedOf(layer, collection.name), title, "object-aid", false);
+  });
   const more = h(
     "details",
     { class: "more" },
-    h("summary", {}, "Name, outlet and more distances"),
+    h("summary", {}, moreText(ADD_ONS)),
     h("div", { class: "field" }, h("span", { class: "field-name" }, "Name"), nameInput),
     objectRow(item, "gap"),
     objectRow(item, "lift"),
     lift,
-    power,
+    owned,
   );
   more.open = moreBoxes.get(object.key) ?? hasMoreText(item);
   const note = h("p", { class: "object-note" });
@@ -561,7 +662,7 @@ function objectItem(item: ListedObject, listed: readonly ListedObject[], outlets
     objectRow(item, "height"),
     more,
     note,
-    holds.length === 0 ? null : h("ul", { class: "objects", "aria-label": `${inside ? "In" : "On"} ${words}` }, holds.map((other) => objectItem(other, listed, outlets))),
+    holds.length === 0 ? null : h("ul", { class: "objects", "aria-label": `${inside ? "In" : "On"} ${words}` }, holds.map((other) => objectItem(other, listed))),
     // An object at the last level holds no object.
     level >= MOST_LEVELS ? null : objectAdd({ holder: object.key }, `Put something ${inside ? "in" : "on"} ${words}`, `Add ${inside ? "in" : "on"} ${words}`, listed.length),
   );
@@ -571,7 +672,6 @@ function sideItem(side: DraftSide, index: number, placed: readonly PlacedFeature
   const number = String(index + 1);
   const features = placed.filter((item) => item.side === index);
   const objects = listed.filter((item) => item.side === index && item.holder === undefined);
-  const outlets = placed.filter((item) => isOutlet(item.feature));
   const length = h("span", { class: "length", "data-of": "side" });
   lengthFields(length, side.length, `Length of wall ${number}`);
   const remove = h("button", { class: "remove", type: "button", "data-action": "remove", "aria-label": `Remove wall ${number}`, title: `Remove wall ${number}` }, "×");
@@ -606,10 +706,10 @@ function sideItem(side: DraftSide, index: number, placed: readonly PlacedFeature
       angleBox,
     ),
     // The features are below the corner, so the length and the turn of each wall stay together.
-    features.length === 0 ? null : h("ul", { class: "features", "aria-label": `Doors, windows and outlets of wall ${number}` }, features.map(featureItem)),
+    features.length === 0 ? null : h("ul", { class: "features", "aria-label": featuresLabel(FORMS, number) }, features.map(featureItem)),
     addControl(side, number),
     // The furniture comes after the doors and the windows: a person measures the walls first.
-    objects.length === 0 ? null : h("ul", { class: "objects", "aria-label": `Furniture and equipment of wall ${number}` }, objects.map((item) => objectItem(item, listed, outlets))),
+    objects.length === 0 ? null : h("ul", { class: "objects", "aria-label": `Furniture and equipment of wall ${number}` }, objects.map((item) => objectItem(item, listed))),
     objectAdd({ side: side.key }, "Add furniture or equipment", `Add to wall ${number}`, listed.length),
   );
 }
@@ -620,6 +720,75 @@ function renderSides(): void {
   sidesList.replaceChildren(...draft.sides.map((side, index) => sideItem(side, index, placed, listed)));
   showFaults();
   showJoins();
+  showRecords();
+}
+
+/**
+ * This function gives the record of an add-on that a box of fields in the walls shows.
+ * The record is a point, or an object owns it.
+ * An object with no record of the collection gives `undefined`, because the record is not there yet.
+ */
+function shownRecord(box: HTMLElement, layer: string, collection: string): TypedFields | undefined {
+  const object = box.closest<HTMLElement>("li.object")?.dataset["key"];
+  if (object !== undefined) {
+    const owner = objectOf(draft, object);
+    return owner === undefined ? undefined : ownedBy(owner, layer, collection);
+  }
+  const feature = box.closest<HTMLElement>("li.feature")?.dataset["key"];
+  return feature === undefined ? undefined : featureOf(draft, feature)?.point;
+}
+
+/**
+ * This function shows a note at the fields of a record of an add-on. It marks the number that the form does not accept.
+ * `box` is the element with the note of the record as a child. An empty text hides the note.
+ */
+function showNote(box: HTMLElement, note: RecordNote | undefined): void {
+  const error = note?.level === "error";
+  if (error) box.dataset["fault"] = "error";
+  else box.removeAttribute("data-fault");
+  const text = box.querySelector<HTMLElement>(":scope > .record-note");
+  if (text !== null) {
+    text.textContent = note?.text ?? "";
+    text.hidden = text.textContent === "";
+  }
+  for (const field of box.querySelectorAll<HTMLInputElement>("input.number-field[data-field]")) {
+    if (error && field.dataset["field"] === note.field) field.setAttribute("aria-invalid", "true");
+    else field.removeAttribute("aria-invalid");
+  }
+}
+
+/**
+ * This function shows the problem of each record of an add-on in the walls.
+ * A problem is a number that the form does not accept, or a field with no value.
+ * The fields do not change, so a field keeps the focus while a person types.
+ */
+function showRecords(): void {
+  for (const box of sidesList.querySelectorAll<HTMLElement>(".record-fields")) {
+    const layer = box.dataset["layer"];
+    const name = box.dataset["collection"];
+    const addOn = layer === undefined ? undefined : addOnOf(layer);
+    const collection = layer === undefined || name === undefined ? undefined : collectionOf(layer, name);
+    const record = layer === undefined || name === undefined ? undefined : shownRecord(box, layer, name);
+    showNote(box, addOn === undefined || collection === undefined || record === undefined ? undefined : recordProblem(collection, roomInputs(addOn, collection, record)));
+  }
+}
+
+/** This function keeps the text of a field of a record of an add-on in the room. The record is a point, or an object owns it. */
+function typeField(target: HTMLInputElement | HTMLSelectElement): void {
+  const box = target.closest<HTMLElement>(".record-fields");
+  const layer = box?.dataset["layer"];
+  const collection = box?.dataset["collection"];
+  const name = target.dataset["field"];
+  const group = INPUT_GROUPS.find((item) => item === target.dataset["group"]);
+  if (box === null || layer === undefined || collection === undefined || name === undefined || group === undefined) return;
+  const next = changeOf(group, name, target.value);
+  const object = box.closest<HTMLElement>("li.object")?.dataset["key"];
+  if (object !== undefined) {
+    change(withOwned(draft, object, layer, collection, next));
+    return;
+  }
+  const feature = box.closest<HTMLElement>("li.feature")?.dataset["key"];
+  if (feature !== undefined) change(withPoint(draft, feature, next));
 }
 
 /** This function shows, at each door that goes to a different room, if the two rooms fit at the door. */
@@ -662,7 +831,7 @@ function renderForm(): void {
   lengthFields(byId("thickness"), draft.thickness, "Thickness of a wall");
   byId("fractions").hidden = draft.mode !== "ft-in" && draft.mode !== "in";
   renderSides();
-  renderCircuits();
+  renderLists();
 }
 
 /** This function gives the first field of the length of a wall. */
@@ -721,8 +890,8 @@ function roomFacts(): readonly Fact[] {
   const kinds = pointKinds();
   for (const kind of kinds) count(kind.collection.title, (feature) => isOfKind(feature, kind));
   count(COUNT_POINTS, (feature) => feature.kind === "point" && !kinds.some((kind) => isOfKind(feature, kind)));
-  const circuits = new Set(features.flatMap((feature) => circuitOf(feature) ?? []));
-  if (circuits.size > 0) rows.push(["Circuits", String(circuits.size)]);
+  // A list has the number of its records that the records of this room name, for example the circuits of the outlets of the room.
+  for (const [title, number] of listCounts(store, LIST_SECTIONS, draft)) rows.push([title, String(number)]);
   const objects = listedObjects(draft).length;
   if (objects > 0) rows.push(["Furniture and equipment", String(objects)]);
   return rows;
@@ -738,8 +907,7 @@ function levelFacts(level: Whole): readonly Fact[] {
     rows.push(["Floor area", areaText(area, store.rooms[0]?.mode ?? "m")]);
   }
   rows.push(["Doors between rooms", String(level.joints.length)]);
-  const circuits = circuitsOf(store).length;
-  if (circuits > 0) rows.push(["Circuits", String(circuits)]);
+  for (const [title, number] of listCounts(store, LIST_SECTIONS)) rows.push([title, String(number)]);
   const objects = store.rooms.reduce((sum, room) => sum + listedObjects(room).length, 0);
   if (objects > 0) rows.push(["Furniture and equipment", String(objects)]);
   return rows;
@@ -1169,7 +1337,8 @@ function refresh(): void {
   showFacts();
   showFaults();
   showJoins();
-  showCircuits();
+  showRecords();
+  showLists();
   showView();
   if (view === "room") viewer?.setScene(sceneOf());
   showDrawing();
@@ -1260,6 +1429,11 @@ form.addEventListener("input", (event) => {
   if (!(target instanceof HTMLInputElement) || target.type !== "text") return;
   if (target === nameField) {
     change({ ...draft, name: target.value });
+    return;
+  }
+  // A field of a record of an add-on has the name of its field in the form.
+  if (target.dataset["field"] !== undefined) {
+    typeField(target);
     return;
   }
   const part = target.dataset["part"];
@@ -1353,14 +1527,9 @@ form.addEventListener("change", (event) => {
     sidesList.querySelector<HTMLElement>(`li.feature[data-key="${CSS.escape(feature)}"] select`)?.focus();
     return;
   }
-  if (target instanceof HTMLSelectElement && target.dataset["part"] === "outlet") {
-    const object = target.closest<HTMLElement>("li.object")?.dataset["key"];
-    if (object !== undefined) change(withObjectOutlet(draft, object, target.value));
-    return;
-  }
-  if (target instanceof HTMLSelectElement && target.dataset["part"] === "circuit") {
-    const feature = target.closest<HTMLElement>("li.feature")?.dataset["key"];
-    if (feature !== undefined) change(withOutletCircuit(draft, feature, target.value));
+  // A choice of a record of an add-on, for example the circuit of an outlet.
+  if (target instanceof HTMLSelectElement && target.dataset["field"] !== undefined) {
+    typeField(target);
     return;
   }
   if (!(target instanceof HTMLInputElement) || target.type !== "radio") return;
@@ -1553,98 +1722,123 @@ levelPanel.addEventListener("click", (event) => {
   if (target !== null) openRoom(Number(target.dataset["open"]), target.dataset["feature"]);
 });
 
-/**
- * This function gives the units of the circuits: the units of the first room. The units tell the usual breaker and voltage of the home.
- * The level record uses the same units.
- */
-function circuitMode(): LengthMode {
-  return store.rooms[0]?.mode ?? draft.mode;
+// The lists of the add-ons.
+//
+// A list has records for all the rooms, for example the circuits of a home. Each list has one section below the walls.
+// The page makes each section from the form of its add-on: the title, the fields of each record and the button that adds a record.
+
+/** A list of the page, with its elements. */
+interface ListBox {
+  readonly section: ListSection;
+  /** The section of the list. */
+  readonly box: HTMLElement;
+  /** The element with the records of the list. */
+  readonly list: HTMLOListElement;
+  /** The button that adds a record. */
+  readonly add: HTMLButtonElement;
 }
 
-/** This function gives the sign of a circuit: a breaker of the panel, with its handle. */
-function breakerSign(): SVGSVGElement {
+/** This function makes the section of one list: its title, its aid, its records and the button that adds a record. */
+function listBox(section: ListSection, index: number): ListBox {
+  const { addOn, collection, texts } = section;
+  const id = `list-title-${String(index + 1)}`;
+  const list = h("ol", { class: "features list-records", "aria-label": `The ${lowerFirst(collection.title)} of the home` });
+  const add = h("button", { class: "tool add", type: "button", "data-action": "add-record" }, addText(section));
+  const box = h(
+    "section",
+    { class: "entry list", "data-layer": addOn.form.schema, "data-collection": collection.name, "aria-labelledby": id },
+    h("h2", { id, class: "entry-title" }, collection.title),
+    texts.aid === undefined ? null : h("p", { class: "entry-aid" }, texts.aid),
+    list,
+    add,
+  );
+  return { section, box, list, add };
+}
+
+/** This function gives the sign of a record of a list: a small plate with a mark. */
+function recordSign(): SVGSVGElement {
   const sign = svg("svg", { class: "sign", viewBox: "0 0 30 16", width: "30", height: "16", "aria-hidden": "true" });
   sign.append(svg("rect", { class: "sign-outlet", x: "9", y: "1", width: "12", height: "14", rx: "1.5" }), svg("line", { class: "sign-wall", x1: "15", y1: "4", x2: "15", y2: "9" }));
   return sign;
 }
 
-/** This function gives the input of the breaker or the voltage of a circuit, with its unit. An empty field shows the usual value. */
-function circuitNumber(circuit: DraftCircuit, field: CircuitField, words: string, unit: string, label: string): HTMLElement {
-  const input = h("input", { class: "number-field", type: "text", inputmode: "decimal", enterkeyhint: "next", "data-part": field, "aria-label": `${words} of ${label}`, autocomplete: "off" });
-  input.value = circuit[field];
-  input.placeholder = String(usualCircuit(field, circuitMode()));
-  return h("div", { class: "field" }, h("span", { class: "field-name" }, words), h("label", { class: "number" }, input, h("span", { class: "unit", "aria-hidden": "true" }, unit)));
+/** This function gives the records of a list, each with its inputs and its note. */
+function itemsOf(section: ListSection): readonly ListItem[] {
+  const lists = storeLists(store).get(section.addOn.form.schema);
+  return lists === undefined ? [] : listItems(section.addOn, section.collection, store, lists, FORMS);
 }
 
 /**
- * This function gives the fields of a circuit: its name, the rating of its breaker and its voltage.
- * The labels of the fields name the circuit by its position, so they do not change while a person types its name.
+ * This function gives the fields of one record of a list. The field that gives the record its name is in the head of the item.
+ * The labels of the fields name the record by its position, so they do not change while a person types its name.
  */
-function circuitItem(circuit: DraftCircuit, index: number): HTMLLIElement {
-  const label = `circuit ${String(index + 1)}`;
-  const remove = h("button", { class: "remove", type: "button", "data-action": "remove-circuit", "aria-label": `Remove ${label}`, title: `Remove ${label}` }, "×");
-  const name = h("input", { class: "text-field", type: "text", maxlength: String(MOST_TEXT), "data-part": "name", "aria-label": `Name of ${label}`, placeholder: `Circuit ${String(index + 1)}`, autocomplete: "off" });
-  name.value = circuit.name;
+function listItem(section: ListSection, item: ListItem, index: number): HTMLLIElement {
+  const { collection } = section;
+  const words = `${wordsOf(collection)} ${String(index + 1)}`;
+  const remove = h("button", { class: "remove", type: "button", "data-action": "remove-record", "aria-label": `Remove ${words}`, title: `Remove ${words}` }, "×");
+  const head = item.inputs.find((input): input is TextInput => input.kind === "text" && input.name === collection.idFrom);
+  let name: HTMLElement;
+  if (head === undefined) name = h("span", { class: "feature-name" }, item.title);
+  else {
+    const field = h("input", {
+      class: "text-field",
+      type: "text",
+      maxlength: String(MOST_TEXT),
+      "data-field": head.name,
+      "data-group": head.group,
+      "aria-label": `${head.label} of ${words}`,
+      placeholder: item.title,
+      autocomplete: "off",
+    });
+    field.value = head.text;
+    name = field;
+  }
   return h(
     "li",
-    { class: "feature circuit", "data-key": circuit.key },
-    h("div", { class: "feature-head" }, breakerSign(), name, remove),
-    circuitNumber(circuit, "breaker", "Breaker", "A", label),
-    circuitNumber(circuit, "voltage", "Voltage", "V", label),
-    h("p", { class: "circuit-note" }),
+    { class: "feature list-record", "data-key": item.key },
+    h("div", { class: "feature-head" }, recordSign(), name, remove),
+    item.inputs.filter((input) => input !== head).map((input) => inputRow(input, item.title, "join-aid", true)),
+    h("p", { class: "record-note" }),
   );
 }
 
-/** This function shows the fields of each circuit of the store. */
-function renderCircuits(): void {
-  circuitList.replaceChildren(...circuitsOf(store).map(circuitItem));
-  showCircuits();
-}
-
-/** This function gives a power in watts as text, with no part of a watt above 100 W. */
-function wattText(watts: number): string {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: watts < 100 ? 1 : 0 }).format(watts);
-}
-
-/** This function gives the text under a circuit: its limit and its outlets, or the field that needs a number. */
-function circuitNote(circuit: DraftCircuit): readonly [text: string, bad: CircuitField | undefined] {
-  const reading = readCircuit(circuit, circuitMode());
-  if (reading.state === "bad") return [reading.field === "breaker" ? "Type the rating of the breaker in amperes, as a number above 0." : "Type the voltage as a number above 0.", reading.field];
-  const use = circuitUse(store, circuit.key);
-  const outlets =
-    use.outlets === 0
-      ? "No outlet is on this circuit yet."
-      : `${String(use.outlets)} ${use.outlets === 1 ? "outlet" : "outlets"} in ${String(use.rooms)} ${use.rooms === 1 ? "room" : "rooms"} ${use.outlets === 1 ? "is" : "are"} on this circuit.`;
-  return [`The limit for a continuous load is ${wattText(reading.limit)} W. ${outlets}`, undefined];
-}
-
-/** This function shows, under each circuit, its limit and its outlets, or the field that needs a number. The fields do not change, so a field keeps the focus. */
-function showCircuits(): void {
-  for (const circuit of circuitsOf(store)) {
-    const item = circuitList.querySelector<HTMLElement>(`li.circuit[data-key="${CSS.escape(circuit.key)}"]`);
-    const note = item?.querySelector<HTMLElement>(".circuit-note");
-    if (item === null || item === undefined || note === null || note === undefined) continue;
-    const [text, bad] = circuitNote(circuit);
-    note.textContent = text;
-    if (bad === undefined) delete item.dataset["fault"];
-    else item.dataset["fault"] = "error";
-    for (const input of item.querySelectorAll<HTMLInputElement>(".number-field")) input.setAttribute("aria-invalid", String(input.dataset["part"] === bad));
-  }
-  addCircuit.disabled = circuitsOf(store).length >= MOST_CIRCUITS;
-}
-
-/** This function gives the new names of the circuits to the fields of the outlets. */
-function showCircuitNames(): void {
-  circuitsOf(store).forEach((circuit, index) => {
-    for (const option of sidesList.querySelectorAll<HTMLOptionElement>(`select[data-part="circuit"] option[value="${CSS.escape(circuit.key)}"]`)) option.textContent = circuitName(circuit, index);
-  });
+/** This function shows the fields of each record of each list of the store. */
+function renderLists(): void {
+  for (const box of LIST_BOXES) box.list.replaceChildren(...itemsOf(box.section).map((item, index) => listItem(box.section, item, index)));
+  showLists();
 }
 
 /**
- * This function makes a change of the circuits. The page keeps it in the browser and shows it.
- * The removal of a circuit changes the outlets of the rooms, so the draft follows the store.
+ * This function shows the note under each record of each list: its problem, or the text of its add-on and its use in the rooms.
+ * The fields do not change, so a field keeps the focus.
  */
-function changeCircuits(next: Store): void {
+function showLists(): void {
+  for (const box of LIST_BOXES) {
+    const items = itemsOf(box.section);
+    for (const item of items) {
+      const element = box.list.querySelector<HTMLElement>(`li.list-record[data-key="${CSS.escape(item.key)}"]`);
+      if (element !== null) showNote(element, item.note);
+    }
+    box.add.disabled = items.length >= MOST_RECORDS;
+  }
+}
+
+/** This function gives the new names of the records of the lists to the choices of the fields that name them. */
+function showListNames(): void {
+  for (const form of FORMS) {
+    for (const choice of [...layerChoices(form, store, undefined, FORMS).values()].flat()) {
+      for (const box of [sidesList, listsBox]) {
+        for (const option of box.querySelectorAll<HTMLOptionElement>(`select[data-group="records"] option[value="${CSS.escape(choice.key)}"]`)) option.textContent = choice.text;
+      }
+    }
+  }
+}
+
+/**
+ * This function makes a change of the lists. The page keeps it in the browser and shows it.
+ * The removal of a record changes the records of the rooms that name it, so the draft follows the store.
+ */
+function changeLists(next: Store): void {
   const room = next.rooms[next.active];
   if (room !== undefined && room !== draft) {
     draft = room;
@@ -1655,47 +1849,58 @@ function changeCircuits(next: Store): void {
   refresh();
 }
 
-circuitList.addEventListener("input", (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLInputElement)) return;
-  const key = target.closest<HTMLElement>("li.circuit")?.dataset["key"];
-  const part = target.dataset["part"];
-  if (key === undefined) return;
-  if (part === "name") {
-    changeCircuits(withCircuit(store, key, { name: target.value }));
-    showCircuitNames();
-  } else if (part === "breaker") changeCircuits(withCircuit(store, key, { breaker: target.value }));
-  else if (part === "voltage") changeCircuits(withCircuit(store, key, { voltage: target.value }));
+/** This function keeps the text of a field of a record of a list. A new name of the record goes to each field that names the record. */
+function typeRecord(target: HTMLInputElement | HTMLSelectElement): void {
+  const key = target.closest<HTMLElement>("li.list-record")?.dataset["key"];
+  const name = target.dataset["field"];
+  const group = INPUT_GROUPS.find((item) => item === target.dataset["group"]);
+  if (key === undefined || name === undefined || group === undefined) return;
+  changeLists(withRecord(store, key, changeOf(group, name, target.value)));
+  showListNames();
+}
+
+listsBox.addEventListener("input", (event) => {
+  if (event.target instanceof HTMLInputElement) typeRecord(event.target);
 });
 
-circuitList.addEventListener("click", (event) => {
-  const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('button[data-action="remove-circuit"]') : null;
-  const key = target?.closest<HTMLElement>("li.circuit")?.dataset["key"];
-  if (key === undefined) return;
-  const index = circuitsOf(store).findIndex((circuit) => circuit.key === key);
-  changeCircuits(withoutCircuit(store, key));
-  renderCircuits();
-  // The outlets of the circuit have no circuit now.
-  renderSides();
-  // The focus goes to the circuit that takes the place of the removed circuit, or to the button that adds a circuit.
-  const names = [...circuitList.querySelectorAll<HTMLInputElement>('input[data-part="name"]')];
-  (names[Math.min(index, names.length - 1)] ?? addCircuit).focus();
+listsBox.addEventListener("change", (event) => {
+  if (event.target instanceof HTMLSelectElement) typeRecord(event.target);
 });
 
-addCircuit.addEventListener("click", () => {
-  const next = withNewCircuit(store);
-  if (next === store) return;
-  changeCircuits(next);
-  renderCircuits();
-  // Each outlet can select the new circuit.
+listsBox.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-action]") : null;
+  const box = target === null ? undefined : LIST_BOXES.find((item) => item.box.contains(target));
+  if (target === null || box === undefined) return;
+  const { addOn, collection } = box.section;
+  if (target.dataset["action"] === "add-record") {
+    const next = withNewRecord(store, addOn.form.schema, collection.name);
+    if (next === store) return;
+    changeLists(next);
+    renderLists();
+    // Each field that names a record of this list can select the new record.
+    renderSides();
+    box.list.querySelector<HTMLElement>("li.list-record:last-child :is(input, select)")?.focus();
+    return;
+  }
+  const key = target.closest<HTMLElement>("li.list-record")?.dataset["key"];
+  if (target.dataset["action"] !== "remove-record" || key === undefined) return;
+  const index = listRecords(store, addOn.form.schema, collection.name).findIndex((record) => record.key === key);
+  changeLists(withoutRecord(store, key));
+  renderLists();
+  // A record of a room that named the removed record names no record now.
   renderSides();
-  circuitList.querySelector<HTMLInputElement>('li.circuit:last-child input[data-part="name"]')?.focus();
+  // The focus goes to the record that takes the place of the removed record, or to the button that adds a record.
+  const items = [...box.list.querySelectorAll<HTMLElement>("li.list-record")];
+  (items[Math.min(index, items.length - 1)]?.querySelector<HTMLElement>(":is(input, select)") ?? box.add).focus();
 });
 
 /** The name of the files of the rooms together. */
 const LEVEL_FILE = "rooms";
 
-/** This function gives the measurements as text: the survey record of the room with the circuits, or the level record of the rooms together. */
+/**
+ * This function gives the measurements as text.
+ * The text is the survey record of the room with the records of the lists, or the level record of the rooms together.
+ */
 const surveyText = (): string => JSON.stringify(shownWhole() === undefined ? roomSurvey(draft, storeLists(store), true) : levelOf(store), null, 2);
 
 /** This function gives a text to the visitor as a file. */
@@ -1786,7 +1991,7 @@ byId("open-survey").addEventListener("click", () => {
 /**
  * This function adds rooms to the rooms of the page, with the doors between them. No room of the visitor goes away.
  * The page then shows the new room, or the rooms together when there are two new rooms or more.
- * The records of the lists of the new rooms, for example their circuits, go at the end of the lists of the page.
+ * The records of the lists of the new rooms go at the end of the lists of the page.
  * When the page cannot keep each new room and each new record, the function tells it with the instruction `again`, and it gives `false`.
  */
 function addRooms(drafts: LevelDrafts, again: string): boolean {
@@ -1827,9 +2032,7 @@ async function openFile(file: File): Promise<void> {
   if (survey.success) {
     const drafts = surveyDrafts(survey.data);
     if (!addRooms(drafts, FULL_FOR_FILE)) return;
-    keepNote.textContent = drafts.more
-      ? "The page shows the walls, the doors, the windows, the outlets, the circuits and the furniture of the file. It does not keep the other data of the file yet."
-      : "The page shows the room of the file.";
+    keepNote.textContent = drafts.more ? filePartsText(ADD_ONS) : "The page shows the room of the file.";
     return;
   }
   // A file from the rooms together has each room and the doors between them.
@@ -1879,6 +2082,14 @@ new ResizeObserver(showDrawing).observe(planBox);
 new ResizeObserver(() => {
   document.documentElement.style.setProperty("--board", `${String(board.offsetHeight)}px`);
 }).observe(board);
+
+// The texts of the page that name the records of the add-ons: the parts of a wall, and the steps of a measurement.
+byId("lead-parts").textContent = wallPartsText(FORMS);
+const furnitureStep = byId("step-furniture");
+// A person measures the points of a wall after its doors and its windows, and before its furniture.
+furnitureStep.before(...pointSteps(FORMS).map((text) => h("li", {}, text)));
+// The steps of an add-on come last, because they need the rooms.
+furnitureStep.parentElement?.append(...ADD_ONS.flatMap((addOn) => addOn.steps ?? []).map((text) => h("li", {}, text)));
 
 renderForm();
 refresh();

@@ -11,6 +11,11 @@ export const ADD_ONS: readonly PageAddOn[] = [ELECTRICAL_ADD_ON];
 /** The forms of the add-ons of the page. */
 export const FORMS: readonly LayerForm[] = ADD_ONS.map((addOn) => addOn.form);
 
+/** This function gives the add-on of a layer. A layer that the list does not have gives `undefined`. */
+export function addOnOf(layer: string, addOns: readonly PageAddOn[] = ADD_ONS): PageAddOn | undefined {
+  return addOns.find((addOn) => addOn.form.schema === layer);
+}
+
 /** This function gives the form of a layer. A layer that the list does not have gives `undefined`. */
 export function formOf(layer: string, forms: readonly LayerForm[] = FORMS): LayerForm | undefined {
   return forms.find((form) => form.schema === layer);
