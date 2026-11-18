@@ -1,6 +1,6 @@
-import type { FormRecords, FormSystem, LayerForm, Level, Survey } from "@mark1russell7/room-view";
+import type { FormRecords, FormSystem, FormValue, LayerForm, Level, Survey } from "@mark1russell7/room-view";
 
-// The bridge of an add-on of the page "Measure a room".
+// An add-on of the page "Measure a room", and its bridge.
 //
 // The bridge is a shortcut. A survey record and a level record have no layers yet.
 // Some add-ons have fields of their own in these records, for example the outlets of a survey.
@@ -27,8 +27,32 @@ export interface AddOnBridge {
   level(level: Level, records: FormRecords): Level;
 }
 
-/** An add-on of the page: the form of its layer, and its bridge when a survey record has fields of the add-on. */
+/** The texts of the page for one list of an add-on. The page has a usual text for each text that the add-on does not give. */
+export interface ListTexts {
+  /** The sentences below the title of the list. They tell a person what a record of the list is. */
+  readonly aid?: string | undefined;
+  /** The text of the button that adds a record to the list. */
+  readonly add?: string | undefined;
+}
+
+/**
+ * An add-on of the page: the form of its layer, its texts for the page and its bridge.
+ * The form gives the fields of each record. The texts are the part of the add-on in this page, because a form has no sentences of help.
+ */
 export interface PageAddOn {
   readonly form: LayerForm;
+  /** The bridge of the add-on, when a survey record has fields of the add-on. */
   readonly bridge?: AddOnBridge | undefined;
+  /**
+   * The fields that the page does not show, by the name of their collection.
+   * This list is a shortcut. A field is here when a survey record has no field for it, so a file does not keep its value.
+   * The shortcut goes away with the bridge.
+   */
+  readonly hidden?: Readonly<Record<string, readonly string[]>> | undefined;
+  /** The texts of the lists of the add-on, by the name of their collection. */
+  readonly lists?: Readonly<Record<string, ListTexts>> | undefined;
+  /** The steps of the add-on at the end of the help of the page. */
+  readonly steps?: readonly string[] | undefined;
+  /** This function gives a sentence about a record of a list, from the values that its form reads. No sentence gives `undefined`. */
+  readonly note?: ((collection: string, values: Readonly<Record<string, FormValue>>) => string | undefined) | undefined;
 }

@@ -775,8 +775,13 @@ a.tool {
   min-width: 0;
 }
 
-/* The fields of the room, the doors between the rooms and the circuits are one column. On a small screen, each one is below the drawing. */
+/* The fields of the room, the doors between the rooms and the lists of the add-ons are one column. On a small screen, each one is below the drawing. */
 .entry-column {
+  display: contents;
+}
+
+/* The box of the lists has no box of its own, so each list is a part of the column. */
+.lists {
   display: contents;
 }
 
@@ -1016,28 +1021,34 @@ a.tool {
   margin: 12px 0 0;
 }
 
-/* The circuits of the home: one item for each breaker of the electrical panel, with its limit under it. */
-.circuit-list {
+/* A list of an add-on, for example the circuits of a home: one item for each record, with its note under it. */
+.list-records {
   margin-top: 14px;
 }
 
-.circuit-list:empty {
+.list-records:empty {
   display: none;
 }
 
-.circuit .feature-head .text-field {
+.list-record .feature-head .text-field {
   flex: 1;
   min-width: 0;
 }
 
-.circuit-note {
+/* The fields of a record of an add-on at a point of a wall or at a piece of furniture, with its note under them. */
+.record-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.record-note {
   margin: 0;
   color: var(--quiet);
   font-size: 0.9375rem;
   line-height: 1.35;
 }
 
-.circuit[data-fault="error"] .circuit-note {
+[data-fault="error"] > .record-note {
   color: inherit;
 }
 
@@ -1233,7 +1244,7 @@ a.tool {
   outline-offset: 2px;
 }
 
-/* The doors, the windows and the outlets of a wall. A rule at the left joins the fields of one feature, as a dimension line joins two marks. */
+/* The doors, the windows and the points of a wall. A rule at the left joins the fields of one feature, as a dimension line joins two marks. */
 .features {
   display: grid;
   gap: 12px;
@@ -1350,7 +1361,7 @@ a.tool {
 .feature-note,
 .object-note,
 .join-note,
-.circuit[data-fault="error"] .circuit-note {
+[data-fault="error"] > .record-note {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -1361,7 +1372,7 @@ a.tool {
 .feature-note::before,
 .object-note::before,
 .join-note::before,
-.circuit[data-fault="error"] .circuit-note::before {
+[data-fault="error"] > .record-note::before {
   content: "!";
   display: grid;
   flex: none;
@@ -1503,7 +1514,7 @@ a.tool {
   opacity: 0.5;
 }
 
-/* The box "More" has the fields that most objects do not need: the name, the space behind, the bottom and the outlet. */
+/* The box "More" has the fields that most objects do not need: the name, the space behind, the bottom and the records of the add-ons. */
 .more > summary {
   display: flex;
   align-items: center;

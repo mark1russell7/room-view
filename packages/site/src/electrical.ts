@@ -21,8 +21,11 @@ import type { BridgeRecords, PageAddOn } from "./bridge.ts";
 // They have the outlets, the circuits and the outlet of an object as fields of their own.
 // Thus this file changes the records of the electrical form to those fields, and back. It is the bridge of the add-on.
 // The shortcut goes away when a survey record and a level record have layers. Then the page writes the layer of the form.
+//
+// The texts of the add-on for the page are here too: the help of the list of the circuits, and the limit of a circuit.
+// These texts are not a shortcut. They stay with the add-on when the bridge goes away.
 
-/** The names of the electrical layer that the bridge uses: the layer, three collections and six fields. */
+/** The names of the electrical layer that the page uses: the layer, three collections and seven fields. */
 export interface ElectricalNames {
   readonly layer: string;
   readonly circuits: string;
@@ -37,6 +40,8 @@ export interface ElectricalNames {
   readonly name: string;
   readonly breaker: string;
   readonly voltage: string;
+  /** The field of a feed with the power of its object. */
+  readonly watts: string;
 }
 
 /**
@@ -54,6 +59,7 @@ export const ELECTRICAL: ElectricalNames = {
   name: "name",
   breaker: "breaker",
   voltage: "voltage",
+  watts: "watts",
 };
 
 /**
@@ -205,8 +211,38 @@ export function electricalRecords(surveys: readonly Survey[], level: Level | und
   return { lists: { [ELECTRICAL.circuits]: circuits }, rooms, more };
 }
 
-/** The electrical add-on of the page: its form, and its bridge to the fields of a survey record and of a level record. */
+/**
+ * This function gives a power in watts as text. A power below 100 has one decimal place at most, and each other power has none.
+ * With no `locale`, the text has the number format of the browser.
+ */
+export function wattText(watts: number, locale?: string): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: watts < 100 ? 1 : 0 }).format(watts);
+}
+
+/** The text of the button that adds a circuit. A step of the help names the button. */
+const ADD_BREAKER = "Add a breaker";
+
+/**
+ * The electrical add-on of the page: its form, its texts and its bridge to the fields of a survey record and of a level record.
+ *
+ * The page does not show the power of an object. A survey record has no field for it, so a file does not keep the number.
+ */
 export const ELECTRICAL_ADD_ON: PageAddOn = {
   form: ELECTRICAL_FORM,
   bridge: { read: electricalRecords, survey: electricalSurvey, level: electricalLevel },
+  hidden: { [ELECTRICAL.feeds]: [ELECTRICAL.watts] },
+  lists: {
+    [ELECTRICAL.circuits]: {
+      aid: "Each breaker of the electrical panel gives power to the outlets of one circuit. Add each breaker here. Then, at each outlet, select its circuit.",
+      add: ADD_BREAKER,
+    },
+  },
+  steps: [
+    "For the circuits, switch off one breaker of the electrical panel. Find each outlet with no power.",
+    `Under Circuits, select ${ADD_BREAKER}. Type the amperes on the handle of the breaker. Then, at each outlet with no power, select the circuit.`,
+  ],
+  note: (collection, values) => {
+    const limit = collection === ELECTRICAL.circuits ? limitOf(values) : undefined;
+    return limit === undefined ? undefined : `The limit for a continuous load is ${wattText(limit)} W.`;
+  },
 };

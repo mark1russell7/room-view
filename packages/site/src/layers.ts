@@ -118,7 +118,7 @@ interface Names {
 }
 
 /** The fields of a record of a store. A record of a list names no point. */
-interface TypedFields {
+export interface TypedFields {
   readonly values: DraftTexts;
   readonly records: DraftTexts;
   readonly points?: DraftTexts | undefined;
@@ -219,16 +219,21 @@ export interface LayerLists {
 /** The records of the lists of a store, by the name of each layer. */
 export type StoreLists = ReadonlyMap<string, LayerLists>;
 
+/** This function gives the system of units of a store: the system of its first room. Thus each room of a level has the same usual numbers. */
+export function storeSystem(store: Store): FormSystem {
+  return systemOf(store.rooms[0]?.mode ?? "m");
+}
+
 /**
  * This function gives the records of the lists of a store, as records of the forms of the add-ons.
- * The system of units is the system of the first room, so each room of a level has the same usual numbers.
+ * The system of units is the system of the store.
  *
  * The `id` of a record has the words of the field `idFrom` of its collection, or the word of the collection and a number.
  * The ids of one layer are unique. Thus a record with the `id` of a point or of a record of an object gets the word of its collection before its `id`.
  */
 export function storeLists(store: Store, addOns: readonly PageAddOn[] = ADD_ONS): StoreLists {
   const forms = addOns.map((addOn) => addOn.form);
-  const system = systemOf(store.rooms[0]?.mode ?? "m");
+  const system = storeSystem(store);
   const lists = new Map<string, LayerLists>();
   for (const form of forms) {
     if (lists.has(form.schema)) continue;

@@ -1101,6 +1101,19 @@ function draftWith(mode: LengthMode, lengths: (meters: number) => TypedLength): 
   };
 }
 
+// The example room has an outlet, and its desk has power from that outlet.
+// These records are content of the example, as its door and its desk are. Thus the example names two collections of the electrical add-on.
+
+/** This function gives the record of the point of the outlet of the example room. */
+function exampleOutlet(): DraftOwned {
+  return ownedOf(ELECTRICAL.layer, ELECTRICAL.outlets);
+}
+
+/** This function gives the records that an object of the example room owns for its power from the outlet with a key. No key gives no record. */
+function exampleFeed(outlet: string | undefined): readonly DraftOwned[] {
+  return outlet === undefined ? [] : [ownedOf(ELECTRICAL.layer, ELECTRICAL.feeds, { points: { [ELECTRICAL.outlet]: outlet } })];
+}
+
 /** This function gives the example room with its furniture, or the example room of the page from before the furniture. */
 function exampleWith(mode: LengthMode, furniture: boolean): Draft {
   const typed = (meters: number | undefined): TypedLength => (meters === undefined ? NO_TEXT : typedOf(meters / metersPer(unitOf(mode)), mode));
@@ -1118,7 +1131,7 @@ function exampleWith(mode: LengthMode, furniture: boolean): Draft {
     height: typed(lengths.height),
     gap: typed(lengths.gap),
     lift: typed(lengths.lift),
-    owns: feedOwns(outlet ?? ""),
+    owns: exampleFeed(outlet),
     holds: (holds ?? []).map(objectOf),
   });
   return {
@@ -1129,7 +1142,7 @@ function exampleWith(mode: LengthMode, furniture: boolean): Draft {
         if (at !== index) return [];
         const base = { from: "start" as const, offset: typed(lengths.offset), width: typed(lengths.width), height: typed(lengths.height), sill: typed(lengths.sill) };
         const key = `f${String(position + 1)}`;
-        return [kind === "outlet" ? { key, kind: "point", ...base, point: outletPoint(undefined) } : { key, kind, ...base }];
+        return [kind === "outlet" ? { key, kind: "point", ...base, point: exampleOutlet() } : { key, kind, ...base }];
       }),
       objects: objects.flatMap(([at, object]): DraftObject[] => (at === index ? [objectOf(object)] : [])),
     })),
@@ -2171,9 +2184,6 @@ export const MOST_RECORDS: number = LIMITS.records;
 /** The largest number of records that one object owns. */
 export const MOST_OWNED: number = LIMITS.owned;
 
-/** The largest number of circuits of a store. */
-export const MOST_CIRCUITS: number = LIMITS.records;
-
 /** The largest number of characters of a text of a store, for example of a name. */
 export const MOST_TEXT: number = LIMITS.text;
 
@@ -2325,16 +2335,16 @@ function ownedRecords(draft: Draft): readonly DraftOwned[] {
 
 /** The use of one record of a list in the rooms of a store. */
 export interface RecordUse {
-  /** The number of the records of the rooms that name the record. */
-  readonly records: number;
+  /** The records of the rooms that name the record, in the sequence of the rooms. */
+  readonly users: readonly DraftOwned[];
   /** The number of the rooms with one or more such records. */
   readonly rooms: number;
 }
 
-/** This function counts the records of the rooms that name the record with a key, and the rooms that have them. */
+/** This function gives the records of the rooms that name the record with a key, and it counts the rooms that have them. */
 export function recordUse(store: Store, key: string): RecordUse {
-  const counts = store.rooms.map((room) => ownedRecords(room).filter((owned) => Object.values(owned.records).includes(key)).length);
-  return { records: counts.reduce((sum, count) => sum + count, 0), rooms: counts.filter((count) => count > 0).length };
+  const users = store.rooms.map((room) => ownedRecords(room).filter((owned) => Object.values(owned.records).includes(key)));
+  return { users: users.flat(), rooms: users.filter((list) => list.length > 0).length };
 }
 
 /** The lists of a store after new records come in. */
@@ -2377,124 +2387,4 @@ function joinedLists(present: readonly DraftList[], added: readonly DraftList[])
   }
   if (lists.length > LIMITS.lists || lists.some((list) => list.records.length > LIMITS.records)) return undefined;
   return { lists, keyOf };
-}
-
-// The electrical records of the page.
-//
-// This section is a shortcut. A survey record and a level record have no layers yet, and the page still has inputs of its own for the outlets and the circuits.
-// Thus the page reads and writes the electrical records of the store by the names of `ELECTRICAL`, through the functions of this section.
-// The section goes away when the page makes its inputs from the forms of the add-ons, and a record gets its electrical data from the layer of the form.
-
-/** This function tells if a feature is an outlet: a point of the collection of the outlets of the electrical layer. */
-export function isOutlet(feature: DraftFeature): boolean {
-  return feature.point?.layer === ELECTRICAL.layer && feature.point.collection === ELECTRICAL.outlets;
-}
-
-/** This function gives the key of the circuit of an outlet. An outlet with no known circuit gives `undefined`, and a feature that is not an outlet gives `undefined` too. */
-export function circuitOf(feature: DraftFeature): string | undefined {
-  return isOutlet(feature) && feature.point !== undefined ? textOf(feature.point.records, ELECTRICAL.circuit) : undefined;
-}
-
-/** This function gives the key of the outlet that gives power to an object. An object with no outlet gives an empty text. */
-export function outletOf(object: DraftObject): string {
-  const feed = ownedBy(object, ELECTRICAL.layer, ELECTRICAL.feeds);
-  return (feed === undefined ? undefined : textOf(feed.points, ELECTRICAL.outlet)) ?? "";
-}
-
-/** This function gives the record of the point of an outlet, with the key of its circuit or with no circuit. */
-function outletPoint(circuit: string | undefined): DraftOwned {
-  return ownedOf(ELECTRICAL.layer, ELECTRICAL.outlets, circuit === undefined ? {} : { records: { [ELECTRICAL.circuit]: circuit } });
-}
-
-/** This function gives the records that an object owns for its power from the outlet with a key. An empty key gives no record. */
-function feedOwns(outlet: string): readonly DraftOwned[] {
-  return outlet === "" ? [] : [ownedOf(ELECTRICAL.layer, ELECTRICAL.feeds, { points: { [ELECTRICAL.outlet]: outlet } })];
-}
-
-/** This function gives the outlet with a key the circuit with the key `circuit`. The empty key is a circuit that is not known. A feature that is not an outlet does not change. */
-export function withOutletCircuit(draft: Draft, key: string, circuit: string): Draft {
-  const feature = featureOf(draft, key);
-  return feature !== undefined && isOutlet(feature) ? withPoint(draft, key, { records: { [ELECTRICAL.circuit]: circuit } }) : draft;
-}
-
-/** This function gives the object with a key its power from the outlet with the key `outlet`. The empty key is no outlet. */
-export function withObjectOutlet(draft: Draft, key: string, outlet: string): Draft {
-  return withOwned(draft, key, ELECTRICAL.layer, ELECTRICAL.feeds, { points: { [ELECTRICAL.outlet]: outlet } });
-}
-
-/**
- * A circuit of the store: one breaker of the electrical panel. It gives power to outlets.
- * `breaker` is the rating of the breaker in amperes, and `voltage` is its voltage in volts, as a person typed them.
- */
-export interface DraftCircuit {
-  /** The key of the circuit in the page. Each record of a store has its own key. */
-  readonly key: string;
-  readonly name: string;
-  readonly breaker: string;
-  readonly voltage: string;
-}
-
-/** The fields of a circuit of the page, in the sequence of the form. */
-const CIRCUIT_FIELDS: readonly ["name", "breaker", "voltage"] = ["name", "breaker", "voltage"];
-
-/** This function gives the values of a record of the list of the circuits for fields of a circuit of the page. */
-function circuitValues(fields: Partial<Omit<DraftCircuit, "key">>): DraftTexts {
-  return Object.fromEntries(
-    CIRCUIT_FIELDS.flatMap((field): [string, string][] => {
-      const text = fields[field];
-      return text === undefined ? [] : [[ELECTRICAL[field], text]];
-    }),
-  );
-}
-
-/** This function gives the circuits of a store: the records of the list of the circuits. A field with no text gives an empty text. */
-export function circuitsOf(store: Store): readonly DraftCircuit[] {
-  return listRecords(store, ELECTRICAL.layer, ELECTRICAL.circuits).map(
-    (record): DraftCircuit => ({
-      key: record.key,
-      name: textOf(record.values, ELECTRICAL.name) ?? "",
-      breaker: textOf(record.values, ELECTRICAL.breaker) ?? "",
-      voltage: textOf(record.values, ELECTRICAL.voltage) ?? "",
-    }),
-  );
-}
-
-/** This function gives the lists of a store for circuits of the page. No circuit gives no list. */
-export function circuitLists(circuits: readonly DraftCircuit[]): readonly DraftList[] {
-  if (circuits.length === 0) return [];
-  return [{ layer: ELECTRICAL.layer, collection: ELECTRICAL.circuits, records: circuits.map((circuit) => recordOf(circuit.key, { values: circuitValues(circuit) })) }];
-}
-
-/** This function tells if a store has a circuit with a key. */
-function hasCircuit(store: Store, key: string): boolean {
-  return listRecords(store, ELECTRICAL.layer, ELECTRICAL.circuits).some((record) => record.key === key);
-}
-
-/** This function adds a circuit with no name and no numbers at the end of the circuits of a store. A store with the largest number of circuits does not change. */
-export function withNewCircuit(store: Store): Store {
-  return withNewRecord(store, ELECTRICAL.layer, ELECTRICAL.circuits);
-}
-
-/** This function changes the fields of the circuit with a key. A store with no such circuit does not change. */
-export function withCircuit(store: Store, key: string, change: Partial<Omit<DraftCircuit, "key">>): Store {
-  return hasCircuit(store, key) ? withRecord(store, key, { values: circuitValues(change) }) : store;
-}
-
-/** This function removes the circuit with a key. No outlet of a room keeps it. */
-export function withoutCircuit(store: Store, key: string): Store {
-  return hasCircuit(store, key) ? withoutRecord(store, key) : store;
-}
-
-/** The outlets of one circuit in the rooms of a store. */
-export interface CircuitUse {
-  /** The number of the outlets of the circuit. */
-  readonly outlets: number;
-  /** The number of the rooms with one or more outlets of the circuit. */
-  readonly rooms: number;
-}
-
-/** This function counts the outlets of the circuit with a key, and the rooms that have them. */
-export function circuitUse(store: Store, key: string): CircuitUse {
-  const use = recordUse(store, key);
-  return { outlets: use.records, rooms: use.rooms };
 }

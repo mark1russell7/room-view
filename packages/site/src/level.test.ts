@@ -2,22 +2,16 @@ import { checkRoom, expandLevel, expandSurvey, LEVEL_SCHEMA, type Level, type Le
 import { SAMPLE_LEVEL, SAMPLE_SURVEY } from "@mark1russell7/room-view/sample";
 import { describe, expect, it } from "vitest";
 import {
-  circuitOf,
-  circuitsOf as storeCircuits,
   emptyDraft,
   exampleDraft,
   listedObjects,
   ownedOf,
   statusOf,
   storeOf,
-  withCircuit,
   withConnection,
-  withNewCircuit,
   withNewRooms,
-  withOutletCircuit,
   type Draft,
   type DraftEnd,
-  type DraftCircuit,
   type DraftFeature,
   type DraftList,
   type DraftObject,
@@ -27,6 +21,7 @@ import {
   type Store,
   type TypedLength,
 } from "./draft.ts";
+import { circuitOf, circuitsOf as storeCircuits, withCircuit, withNewCircuit, withOutletCircuit, type DraftCircuit } from "./electrical.fixture.ts";
 import { ELECTRICAL } from "./electrical.ts";
 import { roomSurvey, storeLists } from "./layers.ts";
 import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, roomIds, shownLevel, shownLevelObjects, surveyDrafts, type Joint } from "./level.ts";

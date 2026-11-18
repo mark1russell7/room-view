@@ -6,10 +6,6 @@ import { collectionOf } from "./add-ons.ts";
 import {
   angleOf,
   areaText,
-  circuitLists,
-  circuitOf,
-  circuitsOf,
-  circuitUse,
   convertTyped,
   defaultMode,
   dimensionText,
@@ -29,14 +25,12 @@ import {
   hasFault,
   hasMore,
   isExample,
-  isOutlet,
   joinedTo,
   LENGTH_MODES,
   lengthText,
   listedObjects,
   listRecords,
   idsOf,
-  MOST_CIRCUITS,
   MOST_LEVELS,
   MOST_RECORDS,
   MOST_ROOMS,
@@ -46,7 +40,6 @@ import {
   objectMarks,
   objectOf,
   objectWords,
-  outletOf,
   ownedBy,
   ownedOf,
   parseStore,
@@ -74,12 +67,10 @@ import {
   usualSize,
   walksRight,
   withActive,
-  withCircuit,
   withConnection,
   withExample,
   withFeature,
   withMode,
-  withNewCircuit,
   withNewFeature,
   withNewObject,
   withNewPoint,
@@ -88,10 +79,7 @@ import {
   withNewRooms,
   withNewSide,
   withObject,
-  withObjectOutlet,
-  withoutCircuit,
   withoutFeature,
-  withOutletCircuit,
   withoutObject,
   withoutRecord,
   withoutRoom,
@@ -103,7 +91,6 @@ import {
   withSide,
   type Corner,
   type Draft,
-  type DraftCircuit,
   type DraftConnection,
   type DraftEnd,
   type DraftFeature,
@@ -121,6 +108,20 @@ import {
   type Store,
   type TypedLength,
 } from "./draft.ts";
+import {
+  circuitLists,
+  circuitOf,
+  circuitsOf,
+  circuitUse,
+  isOutlet,
+  outletOf,
+  withCircuit,
+  withNewCircuit,
+  withObjectOutlet,
+  withoutCircuit,
+  withOutletCircuit,
+  type DraftCircuit,
+} from "./electrical.fixture.ts";
 import { ELECTRICAL } from "./electrical.ts";
 import { readSurvey, roomSurvey, storeLists } from "./layers.ts";
 
@@ -1932,7 +1933,7 @@ describe("the circuits of a store", () => {
   const A = withOutletCircuit(withOutletCircuit(onWall(BOX, 0, [outlet("f1", "1"), outlet("f2", "2")]), "f1", "c1"), "f2", "c1");
   const B = withOutletCircuit(onWall(BOX, 1, [outlet("f1", "1"), feature("f2", "door", { offset: "2", width: "0.9" })]), "f1", "c1");
   const store: Store = { ...storeOf([A, B]), lists: circuitLists([circuit("c1", "Kitchen"), circuit("c2")]) };
-  const full: Store = { ...storeOf([BOX]), lists: circuitLists(Array.from({ length: MOST_CIRCUITS }, (_, index) => circuit(`c${String(index + 1)}`))) };
+  const full: Store = { ...storeOf([BOX]), lists: circuitLists(Array.from({ length: MOST_RECORDS }, (_, index) => circuit(`c${String(index + 1)}`))) };
 
   it("adds a circuit with a key that no record of the store has", () => {
     const one = withNewCircuit(storeOf([BOX]));
@@ -2344,8 +2345,9 @@ describe("the lists of a store", () => {
     ];
     const store: Store = { ...storeOf([draft, BOX]), lists };
     expect(parseStore(storeText(store))).toEqual(store);
-    expect(recordUse(store, "r1")).toEqual({ records: 3, rooms: 1 });
-    expect(recordUse(store, "r2")).toEqual({ records: 0, rooms: 0 });
+    // The point of the tap comes first, then the records of the sink in their sequence.
+    expect(recordUse(store, "r1")).toEqual({ users: [tap.point, drain, ownedOf("plumbing/1", "vents", { records: { stack: "r1" } })], rooms: 1 });
+    expect(recordUse(store, "r2")).toEqual({ users: [], rooms: 0 });
 
     const named = withRecord(store, "r2", { values: { name: "South", note: "" }, records: { next: "r1" } });
     expect(listRecords(named, "plumbing/1", "stacks")[1]).toEqual(recordOf("r2", { values: { name: "South" }, records: { next: "r1" } }));
@@ -2358,7 +2360,7 @@ describe("the lists of a store", () => {
       { layer: "plumbing/1", collection: "stacks", records: [recordOf("r2")] },
       { layer: "plumbing/1", collection: "valves", records: [recordOf("r3")] },
     ]);
-    expect(recordUse(without, "r1")).toEqual({ records: 0, rooms: 0 });
+    expect(recordUse(without, "r1")).toEqual({ users: [], rooms: 0 });
     // The tap stays with no stack. The drain keeps its size, and the vent goes away with its last field.
     expect(featureOf(without.rooms[0] ?? BOX, "f1")?.point).toEqual(ownedOf("plumbing/1", "taps"));
     expect(objectOf(without.rooms[0] ?? BOX, "o1")?.owns).toEqual([ownedOf("plumbing/1", "drains", { values: { size: "40 mm" } })]);
