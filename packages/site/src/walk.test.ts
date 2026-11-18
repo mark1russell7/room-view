@@ -243,8 +243,9 @@ describe("drawWalk, an open walk", () => {
 });
 
 describe("drawWalk, the features of the walls", () => {
-  function span(side: number, key: string, kind: FeatureKind, from: number, to: number, corner: FeatureEnd = "start", fault?: "error" | "warning"): FeatureSpan {
-    return { side, key, kind, from, to, corner, fault };
+  /** This function gives the place of a feature. The tag `outlet` gives a point: an outlet is a point of an add-on. */
+  function span(side: number, key: string, tag: Exclude<FeatureKind, "point"> | "outlet", from: number, to: number, corner: FeatureEnd = "start", fault?: "error" | "warning"): FeatureSpan {
+    return { side, key, kind: tag === "outlet" ? "point" : tag, tag, from, to, corner, fault };
   }
 
   function featuresOf(result: SurveyResult, spans: readonly FeatureSpan[]): readonly WalkFeature[] {
@@ -257,7 +258,7 @@ describe("drawWalk, the features of the walls", () => {
 
   it("puts a door on its wall, and measures from the start of the wall", () => {
     const [door] = featuresOf(ROOM, [span(0, "f1", "door", 0.25, 0.5)]);
-    expect(door).toMatchObject({ side: 0, key: "f1", kind: "door" });
+    expect(door).toMatchObject({ side: 0, key: "f1", kind: "door", tag: "door" });
     expect(door?.fault).toBeUndefined();
     near(door?.from, [LEFT + 150, BOTTOM]);
     near(door?.to, [LEFT + 300, BOTTOM]);
@@ -278,6 +279,8 @@ describe("drawWalk, the features of the walls", () => {
 
   it("puts an outlet at one position, and keeps the level of its fault", () => {
     const [outlet] = featuresOf(ROOM, [span(2, "f3", "outlet", 0.5, 0.5, "start", "warning")]);
+    // The drawing keeps the kind and the tag of the place.
+    expect(outlet).toMatchObject({ kind: "point", tag: "outlet" });
     near(outlet?.from, [SIZE.width / 2, TOP]);
     near(outlet?.to, [SIZE.width / 2, TOP]);
     near(outlet?.inner, [0, 1]);
