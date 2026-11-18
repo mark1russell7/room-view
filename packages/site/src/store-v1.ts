@@ -1,4 +1,4 @@
-import { ELECTRICAL } from "./add-ons.ts";
+import { ELECTRICAL } from "./electrical.ts";
 
 // The move of a store of version 1 of the page "Measure a room" to version 2.
 // A store of version 1 has the electrical records in fields of its own: the circuits of the store, the circuit of an outlet and the outlet of an object.

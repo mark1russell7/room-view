@@ -11,9 +11,7 @@ import {
   type Room,
   type Survey,
 } from "@mark1russell7/room-view";
-import { circuitDrafts, circuitRecords } from "./circuits.ts";
 import {
-  circuitsOf,
   draftKeys,
   FEATURE_NAMES,
   featureFaults,
@@ -26,18 +24,19 @@ import {
   placedFeatures,
   roomName,
   shownObjects,
-  surveyOf,
+  systemOf,
   unitOf,
   validConnections,
   type Draft,
-  type DraftCircuit,
   type DraftConnection,
   type DraftEnd,
+  type DraftList,
   type LengthMode,
   type PlacedFeature,
   type Status,
   type Store,
 } from "./draft.ts";
+import { readSurvey, roomSurvey, storeLists, surveyParts, withLists } from "./layers.ts";
 
 // The rooms of the page "Measure a room" as one level: the level record of a store, and the rooms of a level record.
 // The file also has the messages about the doors between the rooms. Each function of this file is pure, so the tests need no browser.
@@ -55,29 +54,30 @@ export function roomIds(rooms: readonly Draft[]): readonly string[] {
 }
 
 /**
- * This function makes the level record of a store. It is total, as `surveyOf` is.
+ * This function makes the level record of a store. It is total, as `roomSurvey` is.
  * Each length of its room record is in the unit of the first room. The record has one connection for each connection of the store, at the same position.
  * A feature that needs a number is not in its survey, so `expandLevel` gives its connection the fault `opening`.
  *
- * The level record lists the circuits of the store. An outlet of a room names the `id` of its circuit, and the survey of the room lists no circuit.
+ * The level record lists the records of the lists of the store, for example the circuits.
+ * A record of a room names the `id` of a record of a list, and the survey of the room lists none.
  */
 export function levelOf(store: Store): Level {
   const ids = roomIds(store.rooms);
   const mode = store.rooms[0]?.mode ?? "m";
-  const circuits = circuitRecords(circuitsOf(store), mode);
+  const lists = storeLists(store);
   const openings = store.rooms.map((room) => new Map(placedFeatures(room).map((item): [string, string] => [item.feature.key, item.id])));
   const end = (item: DraftEnd): ConnectionEnd => ({ room: ids[item.room] ?? "", opening: openings[item.room]?.get(item.feature) ?? "" });
   const connections = store.connections.map((connection): LevelConnection => {
     const from = end(connection.from);
     return { id: `${from.room}/${from.opening}`, from, to: end(connection.to) };
   });
-  return {
+  const level: Level = {
     schema: LEVEL_SCHEMA,
     unit: unitOf(mode),
-    rooms: store.rooms.map((room, index) => ({ id: ids[index] ?? "", survey: surveyOf(room, { ids: circuits.ids, records: [] }) })),
+    rooms: store.rooms.map((room, index) => ({ id: ids[index] ?? "", survey: roomSurvey(room, lists) })),
     ...(connections.length === 0 ? {} : { connections }),
-    ...(circuits.records.length === 0 ? {} : { circuits: circuits.records }),
   };
+  return withLists(level, lists);
 }
 
 /** The rooms and the connections of a level record, for a store. */
@@ -85,28 +85,31 @@ export interface LevelDrafts {
   readonly rooms: readonly Draft[];
   /** The position of a room in an end of a connection is its position in `rooms`. */
   readonly connections: readonly DraftConnection[];
-  /** The circuits of the rooms. The outlets of `rooms` have the keys of these circuits. */
-  readonly circuits: readonly DraftCircuit[];
+  /** The lists that the records of `rooms` name, for example the circuits. `withNewRooms` gives their records new keys. */
+  readonly lists: readonly DraftList[];
   /** This value is true when the level record has data that the page does not keep. */
   readonly more: boolean;
 }
 
-/** This function makes the room of a store from a survey record, with the circuits of the survey. */
+/** This function makes the room of a store from a survey record, with the lists that its records name. */
 export function surveyDrafts(survey: Survey): LevelDrafts {
-  const read = circuitDrafts(survey.circuits ?? [], modeOf(survey.unit));
-  return { rooms: [draftKeys(survey, read.keys).draft], connections: [], circuits: read.circuits, more: read.more || hasMore(survey, new Set(read.keys.keys())) };
+  const read = readSurvey(survey);
+  return { rooms: [read.draft], connections: [], lists: read.lists, more: read.more };
 }
 
 /**
  * This function makes the rooms of a store from a level record, with the connections between them.
- * A draft does not keep the name of a level, the thickness of a connection, or the data that `hasMore` and `circuitDrafts` tell.
- * The circuits come from the level and from each survey. Two circuits with one `id` are one circuit, and the first one stays, as in `expandLevel`.
+ * A draft does not keep the name of a level, the thickness of a connection, or the data that `hasMore` and `surveyParts` tell.
+ * The records of the lists come from the level and from each survey. Two records with one `id` are one record, and the first one stays, as in `expandLevel`.
  * A connection that the rooms cannot have goes away. Its opening is not in the survey, or its opening has a second connection.
  */
 export function draftsOf(level: Level): LevelDrafts {
-  const circuits = circuitDrafts([...(level.circuits ?? []), ...level.rooms.flatMap((room) => room.survey.circuits ?? [])], modeOf(level.unit));
-  const known: ReadonlySet<string> = new Set(circuits.keys.keys());
-  const read = level.rooms.map((room) => draftKeys(room.survey, circuits.keys));
+  const parts = surveyParts(
+    level.rooms.map((room) => room.survey),
+    level,
+    systemOf(modeOf(level.unit)),
+  );
+  const read = level.rooms.map((room, index) => draftKeys(room.survey, parts.rooms[index]));
   const rooms = read.map((item) => item.draft);
   // Two rooms with one `id` are an error of the record. A connection goes to the first of them, as in `expandLevel`.
   const positions = new Map<string, number>();
@@ -127,11 +130,11 @@ export function draftsOf(level: Level): LevelDrafts {
   const connections = validConnections(rooms, found);
   const more =
     level.name !== undefined ||
-    circuits.more ||
+    parts.more ||
     given.some((item) => item.thickness !== undefined) ||
     connections.length < given.length ||
-    level.rooms.some((room) => hasMore(room.survey, known));
-  return { rooms, connections, circuits: circuits.circuits, more };
+    level.rooms.some((room) => hasMore(room.survey));
+  return { rooms, connections, lists: parts.lists, more };
 }
 
 /** A feature of a different room that a door can go to. */

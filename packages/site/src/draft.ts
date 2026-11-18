@@ -4,7 +4,6 @@ import {
   metersPer,
   SCENE_SCHEMA,
   SURVEY_SCHEMA,
-  type Circuit,
   type Finding,
   type FormCollection,
   type FormUsual,
@@ -15,11 +14,11 @@ import {
   type Room,
   type Survey,
   type SurveyObject,
-  type SurveyOutlet,
   type SurveyResult,
   type SurveyTurn,
 } from "@mark1russell7/room-view";
-import { collectionOf, ELECTRICAL, FORMS } from "./add-ons.ts";
+import { collectionOf, FORMS } from "./add-ons.ts";
+import { ELECTRICAL } from "./electrical.ts";
 import { storeFromV1 } from "./store-v1.ts";
 
 // The draft of the page "Measure a room": the text of each field, as a person typed it.
@@ -729,52 +728,51 @@ export function listedObjects(draft: Draft): readonly ListedObject[] {
   return list;
 }
 
-/** The circuits of a survey record or of a level record, from the circuits of a store. */
-export interface CircuitRecords {
-  /** The `id` of the record of each circuit, by the key of the circuit in the store. */
-  readonly ids: ReadonlyMap<string, string>;
-  /** The records of the circuits that the record lists. */
-  readonly records: readonly Circuit[];
+/** A point of an add-on on a wall of a survey record, for the draft of the record. */
+export interface SurveyPoint {
+  /** The `id` of the wall of the point. */
+  readonly wall: string;
+  /** The distance along the wall from its start to the point, in the unit of the survey. */
+  readonly offset: number;
+  /** The height of the point above the floor, in the unit of the survey. */
+  readonly height: number;
+  /** The record of the point. A field that names a point has the position of that point in the points of the survey, as text. */
+  readonly point: DraftOwned;
 }
 
-/** No circuits: an outlet names no circuit, and the record lists no circuit. */
-const NO_CIRCUITS: CircuitRecords = { ids: new Map(), records: [] };
+/** The records of the add-ons of one survey record, for the draft of the record. `levelParts` makes them. */
+export interface SurveyParts {
+  /** The points of the walls. A record names a point by its position in this list, from 0, as text. */
+  readonly points: readonly SurveyPoint[];
+  /** The records that each object owns, by the `id` of the object. */
+  readonly owned: ReadonlyMap<string, readonly DraftOwned[]>;
+}
+
+/** No records of an add-on. */
+const NO_PARTS: SurveyParts = { points: [], owned: new Map() };
 
 /**
  * This function makes the survey record of a draft. It is total: a length with no valid number counts as 0.
  * A height or a thickness with no valid number gets a usual value.
- * The record has each feature that has its numbers, on a wall that has a length.
+ * The record has each opening that has its numbers, on a wall that has a length.
  * It has each object that has its numbers, against such a wall or on an object of the record.
- * With `circuits`, each outlet of a circuit in `circuits.ids` names the `id` of its circuit, and the record lists `circuits.records`.
  *
- * A survey record has no layers yet. Thus the record has the electrical records only: the outlets, their circuits and the outlet of an object.
- * A point of a different add-on stays in the draft, and the record does not have it.
+ * The record has no record of an add-on: a point of a wall and a record of an object stay in the draft. `roomSurvey` adds them.
  */
-export function surveyOf(draft: Draft, circuits: CircuitRecords = NO_CIRCUITS): Survey {
+export function surveyOf(draft: Draft, forms: readonly LayerForm[] = FORMS): Survey {
   const name = draft.name.trim();
   const toRight = walksRight(draft.sides);
   const openings: Opening[] = [];
-  const outlets: SurveyOutlet[] = [];
-  /** The `id` of the record of each outlet, by the key of its feature. */
-  const outletIds = new Map<string, string>();
-  for (const item of placedFeatures(draft)) {
-    if (item.reading.state !== "ok" || !(item.wall > 0)) continue;
+  for (const item of placedFeatures(draft, forms)) {
+    if (item.reading.state !== "ok" || !(item.wall > 0) || item.feature.kind === "point") continue;
     const { start, width, height, sill } = item.reading.numbers;
-    const wall = wallId(item.side);
-    if (item.feature.kind === "point") {
-      if (!isOutlet(item.feature)) continue;
-      const key = circuitOf(item.feature);
-      const circuit = key === undefined ? undefined : circuits.ids.get(key);
-      outlets.push({ id: item.id, wall, offset: start, height, ...(circuit === undefined ? {} : { circuit }) });
-      outletIds.set(item.feature.key, item.id);
-    } else openings.push({ id: item.id, wall, kind: item.feature.kind, offset: start, width, ...(sill > 0 ? { sill } : {}), height });
+    openings.push({ id: item.id, wall: wallId(item.side), kind: item.feature.kind, offset: start, width, ...(sill > 0 ? { sill } : {}), height });
   }
   const objects: SurveyObject[] = [];
   for (const item of listedObjects(draft)) {
     if (!item.ready || item.reading.state !== "ok") continue;
     const { start, width, depth, height, gap, lift } = item.reading.numbers;
     const label = item.object.name.trim();
-    const outlet = outletIds.get(outletOf(item.object));
     objects.push({
       id: item.id,
       kind: item.object.kind,
@@ -786,7 +784,6 @@ export function surveyOf(draft: Draft, circuits: CircuitRecords = NO_CIRCUITS): 
       height,
       ...(gap > 0 ? { gap } : {}),
       ...(lift === undefined ? {} : { lift }),
-      ...(outlet === undefined ? {} : { outlet }),
     });
   }
   return {
@@ -800,8 +797,6 @@ export function surveyOf(draft: Draft, circuits: CircuitRecords = NO_CIRCUITS): 
       return { id: wallId(index), length: reading.state === "ok" ? reading.value : 0, turn: turnOf(side, toRight) };
     }),
     ...(openings.length === 0 ? {} : { openings }),
-    ...(outlets.length === 0 ? {} : { outlets }),
-    ...(circuits.records.length === 0 ? {} : { circuits: circuits.records }),
     ...(objects.length === 0 ? {} : { objects }),
   };
 }
@@ -828,9 +823,9 @@ const NO_TEXT: TypedLength = { value: "", inches: "" };
 
 /**
  * This function makes the draft of a survey record.
- * It reads the name, the height, the thickness, the sides, the openings, the outlets and the objects.
+ * It reads the name, the height, the thickness, the sides, the openings and the objects.
  * The features and the objects of a wall are in the sequence of their distances from its start.
- * The outlets of the draft have no circuits, and the draft has no checks. `draftKeys` can give the outlets their circuits.
+ * The draft has no checks and no record of an add-on. `draftKeys` can give the draft the records of the add-ons.
  */
 export function draftOf(survey: Survey): Draft {
   return draftKeys(survey).draft;
@@ -880,6 +875,19 @@ function keptObjects(survey: Survey): KeptObjects {
   return { walls, count };
 }
 
+/** This function gives the `id` of each object of a survey record that a draft keeps. */
+export function keptIds(survey: Survey): ReadonlySet<string> {
+  const ids = new Set<string>();
+  const add = (list: readonly KeptObject[]): void => {
+    for (const item of list) {
+      ids.add(item.record.id);
+      add(item.holds);
+    }
+  };
+  for (const list of keptObjects(survey).walls.values()) add(list);
+  return ids;
+}
+
 /** The draft of a survey record, and the key of the feature of each opening of the record. */
 export interface DraftKeys {
   readonly draft: Draft;
@@ -887,11 +895,21 @@ export interface DraftKeys {
   readonly keys: ReadonlyMap<string, string>;
 }
 
+/** This function gives each name of a point the key of its feature. A name of a point with no feature goes away. */
+function pointNames(owned: DraftOwned, keyOf: ReadonlyMap<string, string>): DraftOwned {
+  const points = Object.entries(owned.points).flatMap(([name, position]): [string, string][] => {
+    const key = keyOf.get(position);
+    return key === undefined ? [] : [[name, key]];
+  });
+  return ownedOf(owned.layer, owned.collection, { values: owned.values, records: owned.records, points: Object.fromEntries(points) });
+}
+
 /**
  * This function makes the draft of a survey record, as `draftOf` does. It also tells which feature of the draft is each opening of the record.
- * `circuits` gives the key of the circuit of the store for the `id` of a circuit. An outlet of such a circuit gets its key.
+ * `parts` gives the records of the add-ons: the points of the walls, and the records that the objects own.
+ * A point becomes a feature of its wall, and each name of a point becomes the key of that feature.
  */
-export function draftKeys(survey: Survey, circuits: ReadonlyMap<string, string> = new Map()): DraftKeys {
+export function draftKeys(survey: Survey, parts: SurveyParts = NO_PARTS): DraftKeys {
   const keys = new Map<string, string>();
   const mode = modeOf(survey.unit);
   const factor = metersPer(survey.unit) / metersPer(unitOf(mode));
@@ -901,34 +919,33 @@ export function draftKeys(survey: Survey, circuits: ReadonlyMap<string, string> 
   // The turns of a walk to the right make a negative sum.
   const toRight = survey.sides.reduce((sum, side) => sum + degreesOf(side.turn), 0) < 0;
   const seen = new Set<string>();
-  /** The key of the feature of each outlet, by the `id` of the outlet. */
-  const outletKeys = new Map<string, string>();
+  /** The key of the feature of each point, by the position of the point in the points of `parts`, as text. */
+  const pointKeys = new Map<string, string>();
   let count = 0;
   const sides = survey.sides.map((side, index): DraftSide => {
     // A survey gives the features of an `id` to the first side with that `id`.
     const first = !seen.has(side.id);
     seen.add(side.id);
     const openings = first ? (survey.openings ?? []).filter((item) => item.wall === side.id) : [];
-    const outlets = first ? (survey.outlets ?? []).filter((item) => item.wall === side.id) : [];
-    const features: readonly { readonly at: number; readonly id: string; readonly kind: FeatureKind; readonly offset: TypedLength; readonly width: TypedLength; readonly height: TypedLength; readonly sill: TypedLength; readonly point?: DraftOwned | undefined }[] = [
+    const points = first ? parts.points.flatMap((item, position) => (item.wall === side.id ? [{ item, position: String(position) }] : [])) : [];
+    const features: readonly { readonly at: number; readonly id: string | undefined; readonly position: string | undefined; readonly feature: Omit<DraftFeature, "key" | "from"> }[] = [
       ...openings.map((item) => ({
         at: item.offset,
         id: item.id,
-        kind: item.kind,
-        offset: typedFrom0(item.offset),
-        width: typed(item.width),
-        height: typed(item.height),
-        sill: item.kind === "window" ? typedFrom0(item.sill ?? 0) : NO_TEXT,
+        position: undefined,
+        feature: {
+          kind: item.kind,
+          offset: typedFrom0(item.offset),
+          width: typed(item.width),
+          height: typed(item.height),
+          sill: item.kind === "window" ? typedFrom0(item.sill ?? 0) : NO_TEXT,
+        },
       })),
-      ...outlets.map((item) => ({
+      ...points.map(({ item, position }) => ({
         at: item.offset,
-        id: item.id,
-        kind: "point" as const,
-        offset: typedFrom0(item.offset),
-        width: NO_TEXT,
-        height: typedFrom0(item.height),
-        sill: NO_TEXT,
-        point: outletPoint(item.circuit === undefined ? undefined : circuits.get(item.circuit)),
+        id: undefined,
+        position,
+        feature: { kind: "point" as const, offset: typedFrom0(item.offset), width: NO_TEXT, height: typedFrom0(item.height), sill: NO_TEXT, point: item.point },
       })),
     ].sort((a, b) => a.at - b.at);
     return {
@@ -936,17 +953,21 @@ export function draftKeys(survey: Survey, circuits: ReadonlyMap<string, string> 
       length: typed(side.length),
       corner: typeof side.turn === "number" ? "angle" : side.turn,
       angle: typeof side.turn === "number" && Number.isFinite(side.turn) ? angleText(side.turn, toRight) : "",
-      features: features.map(({ id, kind, offset, width, height, sill, point }): DraftFeature => {
+      features: features.map(({ id, position, feature }): DraftFeature => {
         count += 1;
         const key = `f${String(count)}`;
-        const known = kind === "point" ? outletKeys : keys;
-        if (!known.has(id)) known.set(id, key);
+        if (id !== undefined && !keys.has(id)) keys.set(id, key);
+        if (position !== undefined) pointKeys.set(position, key);
+        const { kind, offset, width, height, sill, point } = feature;
+        // The fields have the sequence of each feature of a draft, so equal features give equal JSON.
         return { key, kind, from: "start", offset, width, height, sill, ...(point === undefined ? {} : { point }) };
       }),
       objects: [],
     };
   });
-  // The objects come after the features, because an object can name an outlet of a later wall.
+  // A record of a point can name a point of a later wall, so the names get their keys after the walk.
+  const named = sides.map((side): DraftSide => ({ ...side, features: side.features.map((feature) => (feature.point === undefined ? feature : { ...feature, point: pointNames(feature.point, pointKeys) })) }));
+  // The objects come after the features, because an object can name a point of a later wall.
   let objects = 0;
   const objectOf = ({ record, holds }: KeptObject): DraftObject => {
     objects += 1;
@@ -963,7 +984,7 @@ export function draftKeys(survey: Survey, circuits: ReadonlyMap<string, string> 
       height: typedFrom0(record.height),
       gap: typed(record.gap ?? 0),
       lift: record.lift === undefined ? NO_TEXT : typedFrom0(record.lift),
-      owns: feedOwns(record.outlet === undefined ? "" : (outletKeys.get(record.outlet) ?? "")),
+      owns: (parts.owned.get(record.id) ?? []).map((owned) => pointNames(owned, pointKeys)).filter(hasFields),
       holds: holds.map(objectOf),
     };
   };
@@ -974,7 +995,7 @@ export function draftKeys(survey: Survey, circuits: ReadonlyMap<string, string> 
     mode,
     height: typed(survey.height),
     thickness: typed(survey.wallThickness),
-    sides: sides.map((side, index): DraftSide => {
+    sides: named.map((side, index): DraftSide => {
       const id = survey.sides[index]?.id;
       // The first side of an `id` has the objects of that `id`, as it has the features.
       if (id === undefined || used.has(id)) return side;
@@ -987,23 +1008,21 @@ export function draftKeys(survey: Survey, circuits: ReadonlyMap<string, string> 
 
 /**
  * This function tells if a survey record has data that a draft does not keep.
- * This data is the checks, the circuit of an outlet that is not in `circuits`, and the height or the thickness of one side.
- * It is also the bottom of a door above the floor, and a feature on a wall that the survey does not have.
- * For the objects, it is an object that the draft does not keep. It is also an outlet that the draft does not have, or a distance below 0.
+ * This data is the checks, and the height or the thickness of one side.
+ * It is also the bottom of a door above the floor, and an opening on a wall that the survey does not have.
+ * For the objects, it is an object that the draft does not keep, or a distance below 0.
  *
- * `circuits` has the `id` of each circuit that the store keeps. By default, it has the circuits of the survey. `circuitDrafts` tells the data of the circuits that a store does not keep.
+ * The function does not examine the records of the add-ons. `levelParts` tells the data of those records that a draft does not keep.
  */
-export function hasMore(survey: Survey, circuits: ReadonlySet<string> = new Set((survey.circuits ?? []).map((item) => item.id))): boolean {
+export function hasMore(survey: Survey): boolean {
   const walls = new Set(survey.sides.map((side) => side.id));
-  const outlets = new Set((survey.outlets ?? []).filter((item) => walls.has(item.wall)).map((item) => item.id));
   const objects = survey.objects ?? [];
   return (
     (survey.checks ?? []).length > 0 ||
     survey.sides.some((side) => side.thickness !== undefined || side.height !== undefined) ||
     (survey.openings ?? []).some((item) => !walls.has(item.wall) || (item.kind !== "window" && (item.sill ?? 0) !== 0)) ||
-    (survey.outlets ?? []).some((item) => !walls.has(item.wall) || (item.circuit !== undefined && !circuits.has(item.circuit))) ||
     (objects.length > 0 && keptObjects(survey).count !== objects.length) ||
-    objects.some((item) => (item.outlet !== undefined && !outlets.has(item.outlet)) || (item.gap ?? 0) < 0 || (item.lift ?? 0) < 0)
+    objects.some((item) => (item.gap ?? 0) < 0 || (item.lift ?? 0) < 0)
   );
 }
 
@@ -2148,6 +2167,9 @@ export const MOST_OBJECTS: number = LIMITS.objects;
 
 /** The largest number of records of a list of a store, for example of circuits. */
 export const MOST_RECORDS: number = LIMITS.records;
+
+/** The largest number of records that one object owns. */
+export const MOST_OWNED: number = LIMITS.owned;
 
 /** The largest number of circuits of a store. */
 export const MOST_CIRCUITS: number = LIMITS.records;
