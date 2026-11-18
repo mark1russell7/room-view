@@ -6,7 +6,7 @@ import type { Room, Scene } from "./room.ts";
 /** One wall along the x axis, 4 long, 0.2 thick and 2.4 high, with a center line. A door from 1 to 2, and a floor from (0, 0) to (4, 3). */
 function room(more: Partial<Room> = {}): Room {
   return {
-    schema: "room/1",
+    schema: "room/2",
     unit: "m",
     height: 2.4,
     wallThickness: 0.2,
@@ -19,7 +19,7 @@ function room(more: Partial<Room> = {}): Room {
 
 /** A desk of 2 by 1 by 0.75 at (2, 1.5), turned by 90 degrees. */
 function scene(more: Partial<Scene> = {}, roomMore: Partial<Room> = {}): Scene {
-  return { schema: "scene/1", room: room(roomMore), objects: [{ id: "desk", kind: "desk", size: [2, 1, 0.75], at: [2, 1.5], turn: 90 }], ...more };
+  return { schema: "scene/2", room: room(roomMore), objects: [{ id: "desk", kind: "desk", size: [2, 1, 0.75], at: [2, 1.5], turn: 90 }], ...more };
 }
 
 /** A point or a direction of a frame. */

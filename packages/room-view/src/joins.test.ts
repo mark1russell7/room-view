@@ -7,7 +7,7 @@ import type { Room, Wall } from "./room.ts";
 import { SAMPLE_ROOM } from "./sample.ts";
 
 function roomOf(walls: readonly Wall[], wallThickness = 0.2): Room {
-  return { schema: "room/1", unit: "m", height: 2.4, wallThickness, walls };
+  return { schema: "room/2", unit: "m", height: 2.4, wallThickness, walls };
 }
 
 function footprintsOf(room: Room, options?: JoinOptions): readonly WallFootprint[] {

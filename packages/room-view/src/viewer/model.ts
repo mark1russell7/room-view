@@ -5,7 +5,6 @@ import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { solidRecord } from "../check.ts";
-import { outletLevels, type LoadLevel, type LoadOptions } from "../loads.ts";
 import type { Scene } from "../room.ts";
 import { boundsOfSolids, sceneSolids, solidCorners, TO_Y_UP, type Solid, type SolidKind, type SolidOptions } from "../solids.ts";
 import { metersPer } from "../units.ts";
@@ -19,14 +18,12 @@ export interface ModelPart {
   readonly solid: Solid;
   /** The name of the record of the solid, from `solidRecord`. Each part of one wall has the same name. */
   readonly record: string;
-  /** The `id` of the wall that the part fades with: the wall itself, the wall of a window or the wall of an outlet. */
+  /** The `id` of the wall that the part fades with: the wall itself or the wall of a window. */
   readonly wall: string | undefined;
   /** The name of the record of the object that this object is in or on. */
   readonly holder: string | undefined;
   /** This value is true for an object with other objects in it. Such an object shows as a clear box. */
   readonly holds: boolean;
-  /** The level of the circuit of an outlet. An outlet with no circuit has no level, and so has each other part. */
-  readonly level: LoadLevel | undefined;
   readonly mesh: Mesh<BufferGeometry, MeshLambertMaterial>;
   readonly lines: LineSegments2;
   /** The fade of the part, from 0 for a solid part to 1 for a part that hides the room. The viewer changes it. */
@@ -47,7 +44,7 @@ export interface RoomModel {
 }
 
 /** The width of the edges of each kind of solid, in CSS pixels. */
-const EDGE_WIDTH: Readonly<Record<SolidKind, number>> = { floor: 1.25, wall: 1.25, glass: 1, outlet: 1, object: 1.25 };
+const EDGE_WIDTH: Readonly<Record<SolidKind, number>> = { floor: 1.25, wall: 1.25, glass: 1, object: 1.25 };
 
 /** The part of a clear box of objects that is not clear. */
 const HOLDER_OPACITY = 0.14;
@@ -76,11 +73,9 @@ function holders(scene: Scene): ReadonlySet<string> {
  * This function makes the three.js objects of a scene: one mesh with its edges for each solid.
  * The parts have no colors until `paintPart` gives them. The caller disposes the model with `disposeModel`.
  */
-export function buildModel(scene: Scene, options: SolidOptions = {}, loads: LoadOptions = {}): RoomModel {
+export function buildModel(scene: Scene, options: SolidOptions = {}): RoomModel {
   const solids = sceneSolids(scene, options);
-  const levels = outletLevels(scene, loads);
   const wallOfOpening = new Map((scene.room.openings ?? []).map((opening) => [opening.id, opening.wall] as const));
-  const wallOfOutlet = new Map((scene.room.outlets ?? []).map((outlet) => [outlet.id, outlet.wall] as const));
   const parentOf = new Map((scene.objects ?? []).map((object) => [object.id, object.parent] as const));
   const holding = holders(scene);
   const group = new Group();
@@ -99,10 +94,9 @@ export function buildModel(scene: Scene, options: SolidOptions = {}, loads: Load
     return {
       solid,
       record: solidRecord(solid.kind, solid.source),
-      wall: solid.kind === "wall" ? solid.source : solid.kind === "glass" ? wallOfOpening.get(solid.source) : solid.kind === "outlet" ? wallOfOutlet.get(solid.source) : undefined,
+      wall: solid.kind === "wall" ? solid.source : solid.kind === "glass" ? wallOfOpening.get(solid.source) : undefined,
       holder: parent === undefined ? undefined : solidRecord("object", parent),
       holds: solid.kind === "object" && holding.has(solid.source),
-      level: solid.kind === "outlet" ? levels.get(solid.source) : undefined,
       mesh,
       lines,
       fade: 0,
@@ -135,7 +129,6 @@ function setOpacity(material: Material, opacity: number): void {
 /** This function gives the color of a part in a theme, before a mark. */
 function baseColor(part: ModelPart, scene: Scene, theme: ViewerTheme): string {
   const kind = part.solid.kind;
-  if (kind === "outlet") return part.level === undefined ? theme.outlet : theme.levels[part.level];
   if (kind !== "object") return theme[kind];
   const object = (scene.objects ?? []).find((candidate) => candidate.id === part.solid.source);
   return (object === undefined ? undefined : theme.objects[object.kind]) ?? theme.object;
@@ -144,7 +137,6 @@ function baseColor(part: ModelPart, scene: Scene, theme: ViewerTheme): string {
 /**
  * This function gives a part its colors: the colors of the theme, the fade of the part and its highlight.
  * A part with a highlight has some of the color `accent` of the theme, and a selected part has wide edges.
- * An outlet has the color of the level of its circuit.
  */
 export function paintPart(part: ModelPart, scene: Scene, theme: ViewerTheme, mark: Highlight): void {
   const kind = part.solid.kind;
@@ -161,7 +153,7 @@ export function paintPart(part: ModelPart, scene: Scene, theme: ViewerTheme, mar
   if (kind === "wall") {
     opacity *= 0.08 + 0.92 * still;
     edge = 0.3 + 0.7 * still;
-  } else if (kind === "glass" || kind === "outlet") {
+  } else if (kind === "glass") {
     opacity *= 0.35 + 0.65 * still;
     edge = 0.35 + 0.65 * still;
   }

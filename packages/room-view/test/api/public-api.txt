@@ -10,6 +10,7 @@ ANCHOR_CODES: build/layers.chunk.d.ts#ANCHOR_CODES
 ANCHOR_SURFACES: build/layers.chunk.d.ts#ANCHOR_SURFACES
 AddOn: build/layers.chunk.d.ts#AddOn
 AddOnFault: build/layers.chunk.d.ts#AddOnFault
+AddOnV1: build/layers.chunk.d.ts#AddOnV1
 Anchor: build/layers.chunk.d.ts#Anchor
 AnchorCode: build/layers.chunk.d.ts#AnchorCode
 AnchorFault: build/layers.chunk.d.ts#AnchorFault
@@ -21,18 +22,17 @@ CONNECTION_TURN_LIMIT: build/level.chunk.d.ts#CONNECTION_TURN_LIMIT
 CONNECTION_USES: build/level.chunk.d.ts#CONNECTION_USES
 CeilingAnchor: build/layers.chunk.d.ts#CeilingAnchor
 CheckOptions: build/layers.chunk.d.ts#CheckOptions
-Circuit: build/solids.chunk.d.ts#Circuit
-CircuitLoad: build/solids.chunk.d.ts#CircuitLoad
-CircuitState: build/loads.chunk.d.ts#CircuitState
 ConnectionEnd: build/level.chunk.d.ts#ConnectionEnd
 ConnectionFault: build/level.chunk.d.ts#ConnectionFault
 ConnectionUse: build/level.chunk.d.ts#ConnectionUse
+FILE_KINDS: build/layers.chunk.d.ts#FILE_KINDS
 FINDING_CODES: build/layers.chunk.d.ts#FINDING_CODES
 FINDING_LEVELS: build/layers.chunk.d.ts#FINDING_LEVELS
 FLOOR_DEPTH: build/solids.chunk.d.ts#FLOOR_DEPTH
 FORM_CODES: build/index.d.ts#FORM_CODES
 FORM_FIELD_KINDS: build/index.d.ts#FORM_FIELD_KINDS
 FORM_SYSTEMS: build/index.d.ts#FORM_SYSTEMS
+FileKind: build/layers.chunk.d.ts#FileKind
 Finding: build/layers.chunk.d.ts#Finding
 FindingCode: build/layers.chunk.d.ts#FindingCode
 FindingLevel: build/layers.chunk.d.ts#FindingLevel
@@ -66,8 +66,6 @@ LARGEST_LENGTH: build/solids.chunk.d.ts#LARGEST_LENGTH
 LAYER_CODES: build/layers.chunk.d.ts#LAYER_CODES
 LENGTH_UNITS: build/solids.chunk.d.ts#LENGTH_UNITS
 LEVEL_SCHEMA: build/level.chunk.d.ts#LEVEL_SCHEMA
-LEVEL_SHAPES: build/loads.chunk.d.ts#LEVEL_SHAPES
-LOAD_LEVELS: build/loads.chunk.d.ts#LOAD_LEVELS
 LayerFinding: build/layers.chunk.d.ts#LayerFinding
 LayerForm: build/index.d.ts#LayerForm
 LayerParse: build/layers.chunk.d.ts#LayerParse
@@ -81,17 +79,11 @@ LevelOptions: build/level.chunk.d.ts#LevelOptions
 LevelResult: build/level.chunk.d.ts#LevelResult
 LevelRoom: build/level.chunk.d.ts#LevelRoom
 LevelRoomResult: build/level.chunk.d.ts#LevelRoomResult
-LevelShape: build/loads.chunk.d.ts#LevelShape
-LoadLevel: build/loads.chunk.d.ts#LoadLevel
-LoadOptions: build/loads.chunk.d.ts#LoadOptions
 MITER_LIMIT: build/solids.chunk.d.ts#MITER_LIMIT
-NEAR_LIMIT: build/loads.chunk.d.ts#NEAR_LIMIT
 OPENING_KINDS: build/solids.chunk.d.ts#OPENING_KINDS
-OUTLET_PLATE: build/solids.chunk.d.ts#OUTLET_PLATE
 ObjectAnchor: build/layers.chunk.d.ts#ObjectAnchor
 Opening: build/solids.chunk.d.ts#Opening
 OpeningKind: build/solids.chunk.d.ts#OpeningKind
-Outlet: build/solids.chunk.d.ts#Outlet
 PlacedBox: build/solids.chunk.d.ts#PlacedBox
 PlacedObject: build/solids.chunk.d.ts#PlacedObject
 PlanOptions: build/index.d.ts#PlanOptions
@@ -106,14 +98,12 @@ Room: build/solids.chunk.d.ts#Room
 RoomLayers: build/layers.chunk.d.ts#RoomLayers
 RoomPlace: build/level.chunk.d.ts#RoomPlace
 SCENE_SCHEMA: build/solids.chunk.d.ts#SCENE_SCHEMA
-SHAPE_OUTLINES: build/loads.chunk.d.ts#SHAPE_OUTLINES
 SOLID_KINDS: build/solids.chunk.d.ts#SOLID_KINDS
 SQUARE_TURNS: build/level.chunk.d.ts#SQUARE_TURNS
 SURVEY_FLOOR: build/level.chunk.d.ts#SURVEY_FLOOR
 SURVEY_SCHEMA: build/level.chunk.d.ts#SURVEY_SCHEMA
 Scene: build/solids.chunk.d.ts#Scene
 SceneSpace: build/layers.chunk.d.ts#SceneSpace
-ShapeOutline: build/loads.chunk.d.ts#ShapeOutline
 Solid: build/solids.chunk.d.ts#Solid
 SolidKind: build/solids.chunk.d.ts#SolidKind
 SolidOptions: build/solids.chunk.d.ts#SolidOptions
@@ -125,7 +115,6 @@ SurveyClosure: build/level.chunk.d.ts#SurveyClosure
 SurveyFrame: build/level.chunk.d.ts#SurveyFrame
 SurveyObject: build/level.chunk.d.ts#SurveyObject
 SurveyOptions: build/level.chunk.d.ts#SurveyOptions
-SurveyOutlet: build/level.chunk.d.ts#SurveyOutlet
 SurveyResult: build/level.chunk.d.ts#SurveyResult
 SurveySide: build/level.chunk.d.ts#SurveySide
 SurveyTurn: build/level.chunk.d.ts#SurveyTurn
@@ -144,7 +133,6 @@ checkForm: build/index.d.ts#checkForm
 checkLayers: build/layers.chunk.d.ts#checkLayers
 checkRoom: build/layers.chunk.d.ts#checkRoom
 checkScene: build/layers.chunk.d.ts#checkScene
-circuitStates: build/loads.chunk.d.ts#circuitStates
 convertSurvey: build/level.chunk.d.ts#convertSurvey
 expandLevel: build/level.chunk.d.ts#expandLevel
 expandSurvey: build/level.chunk.d.ts#expandSurvey
@@ -154,11 +142,9 @@ isLayerName: build/solids.chunk.d.ts#isLayerName
 joinLayers: build/layers.chunk.d.ts#joinLayers
 layerPart: build/layers.chunk.d.ts#layerPart
 lengthsInRange: build/solids.chunk.d.ts#lengthsInRange
-levelShape: build/loads.chunk.d.ts#levelShape
 metersPer: build/solids.chunk.d.ts#metersPer
 moveLayers: build/layers.chunk.d.ts#moveLayers
 objectTransforms: build/solids.chunk.d.ts#objectTransforms
-outletLevels: build/loads.chunk.d.ts#outletLevels
 parseRecordName: build/layers.chunk.d.ts#parseRecordName
 planShape: build/index.d.ts#planShape
 planShapes: build/index.d.ts#planShapes
@@ -171,7 +157,6 @@ roomSolids: build/solids.chunk.d.ts#roomSolids
 scaleAnchor: build/layers.chunk.d.ts#scaleAnchor
 sceneSolids: build/solids.chunk.d.ts#sceneSolids
 sceneSpace: build/layers.chunk.d.ts#sceneSpace
-shapeRing: build/loads.chunk.d.ts#shapeRing
 solidCorners: build/solids.chunk.d.ts#solidCorners
 solidRecord: build/layers.chunk.d.ts#solidRecord
 solidVolume: build/solids.chunk.d.ts#solidVolume
@@ -185,8 +170,14 @@ wallTransform: build/solids.chunk.d.ts#wallTransform
 
 ## ./schema (build/schema.d.ts): names
 
+KindRecords: build/schema.d.ts#KindRecords
+READ_CODES: build/schema.d.ts#READ_CODES
+READ_CONTEXT: build/schema.d.ts#READ_CONTEXT
+ReadFinding: build/schema.d.ts#ReadFinding
+RecordRead: build/schema.d.ts#RecordRead
 anchorSchema: build/schema.d.ts#anchorSchema
 levelSchema: build/schema.d.ts#levelSchema
+readRecord: build/schema.d.ts#readRecord
 roomSchema: build/schema.d.ts#roomSchema
 sceneSchema: build/schema.d.ts#sceneSchema
 surveySchema: build/schema.d.ts#surveySchema
@@ -400,6 +391,7 @@ interface AddOn<Layer> {
   withAnchors(layer: Layer, anchors: ReadonlyMap<string, Anchor>): Layer;
   check(layer: Layer, space: SceneSpace): readonly AddOnFault[];
   join?(parts: readonly LayerPart<Layer>[]): Layer;
+  readonly v1?: AddOnV1<Layer> | undefined;
 }
 
 ### build/layers.chunk.d.ts#AddOnFault
@@ -409,6 +401,12 @@ interface AddOnFault {
   readonly at: string;
   readonly message: string;
   readonly other?: string | undefined;
+}
+
+### build/layers.chunk.d.ts#AddOnV1
+interface AddOnV1<Layer> {
+  readonly fields: { readonly [Kind in FileKind | "object"]?: readonly string[] | undefined; };
+  read(record: unknown, kind: FileKind): LayerParse<Layer> | undefined;
 }
 
 ### build/layers.chunk.d.ts#Anchor
@@ -446,11 +444,17 @@ interface CheckOptions {
   readonly joins?: JoinOptions | undefined;
 }
 
+### build/layers.chunk.d.ts#FILE_KINDS
+declare const FILE_KINDS: readonly ["room", "scene", "survey", "level"];
+
 ### build/layers.chunk.d.ts#FINDING_CODES
-declare const FINDING_CODES: readonly ["number-not-finite", "number-too-large", "id-duplicate", "size-not-positive", "wall-length", "wall-short", "wall-overlap", "opening-wall", "opening-range", "opening-height", "opening-overlap", "outlet-wall", "outlet-circuit", "outlet-range", "outlet-in-opening", "floor-ring", "circuit-limit", "object-parent", "object-cycle", "object-outlet", "object-outside", "object-overlap", "object-in-wall", "load-circuit", "load-watts"];
+declare const FINDING_CODES: readonly ["number-not-finite", "number-too-large", "id-duplicate", "size-not-positive", "wall-length", "wall-short", "wall-overlap", "opening-wall", "opening-range", "opening-height", "opening-overlap", "floor-ring", "object-parent", "object-cycle", "object-outside", "object-overlap", "object-in-wall"];
 
 ### build/layers.chunk.d.ts#FINDING_LEVELS
 declare const FINDING_LEVELS: readonly ["error", "warning"];
+
+### build/layers.chunk.d.ts#FileKind
+type FileKind = (typeof FILE_KINDS)[number];
 
 ### build/layers.chunk.d.ts#Finding
 interface Finding {
@@ -520,7 +524,7 @@ interface ObjectAnchor {
 }
 
 ### build/layers.chunk.d.ts#RECORD_KINDS
-declare const RECORD_KINDS: readonly ["room", "wall", "opening", "floor", "outlet", "circuit", "object", "load"];
+declare const RECORD_KINDS: readonly ["room", "wall", "opening", "floor", "object"];
 
 ### build/layers.chunk.d.ts#RecordKind
 type RecordKind = (typeof RECORD_KINDS)[number];
@@ -620,7 +624,7 @@ type ConnectionFault = (typeof CONNECTION_FAULTS)[number];
 type ConnectionUse = (typeof CONNECTION_USES)[number];
 
 ### build/level.chunk.d.ts#LEVEL_SCHEMA
-declare const LEVEL_SCHEMA = "level/1";
+declare const LEVEL_SCHEMA = "level/2";
 
 ### build/level.chunk.d.ts#Level
 interface Level {
@@ -629,7 +633,6 @@ interface Level {
   readonly unit: LengthUnit;
   readonly rooms: readonly LevelRoom[];
   readonly connections?: readonly LevelConnection[] | undefined;
-  readonly circuits?: readonly Circuit[] | undefined;
   readonly layers?: Readonly<Record<string, unknown>> | undefined;
 }
 
@@ -696,7 +699,7 @@ declare const SQUARE_TURNS: readonly ["left", "right"];
 declare const SURVEY_FLOOR = "floor";
 
 ### build/level.chunk.d.ts#SURVEY_SCHEMA
-declare const SURVEY_SCHEMA = "survey/1";
+declare const SURVEY_SCHEMA = "survey/2";
 
 ### build/level.chunk.d.ts#Survey
 interface Survey {
@@ -710,8 +713,6 @@ interface Survey {
   readonly heading?: number | undefined;
   readonly checks?: readonly SurveyCheck[] | undefined;
   readonly openings?: readonly Opening[] | undefined;
-  readonly outlets?: readonly SurveyOutlet[] | undefined;
-  readonly circuits?: readonly Circuit[] | undefined;
   readonly objects?: readonly SurveyObject[] | undefined;
   readonly layers?: Readonly<Record<string, unknown>> | undefined;
 }
@@ -761,7 +762,6 @@ interface SurveyObject {
   readonly height: number;
   readonly gap?: number | undefined;
   readonly lift?: number | undefined;
-  readonly outlet?: string | undefined;
 }
 
 ### build/level.chunk.d.ts#SurveyOptions
@@ -769,9 +769,6 @@ interface SurveyOptions {
   readonly limit?: number | undefined;
   readonly addOns?: readonly AddOn<unknown>[] | undefined;
 }
-
-### build/level.chunk.d.ts#SurveyOutlet
-type SurveyOutlet = Omit<Outlet, "face">;
 
 ### build/level.chunk.d.ts#SurveyResult
 interface SurveyResult {
@@ -817,60 +814,6 @@ declare function resultScene(result: {
 ### build/level.chunk.d.ts#surveyAnchor
 declare function surveyAnchor(anchor: Anchor, frame: SurveyFrame): Anchor;
 
-### build/loads.chunk.d.ts#CircuitState
-interface CircuitState {
-  readonly circuit: string;
-  readonly watts: number;
-  readonly limit: number;
-  readonly ratio: number;
-  readonly level: LoadLevel;
-  readonly outlets: readonly string[];
-  readonly objects: readonly string[];
-}
-
-### build/loads.chunk.d.ts#LEVEL_SHAPES
-declare const LEVEL_SHAPES: readonly ["ring", "disc", "triangle", "square"];
-
-### build/loads.chunk.d.ts#LOAD_LEVELS
-declare const LOAD_LEVELS: readonly ["unknown", "ok", "near", "over"];
-
-### build/loads.chunk.d.ts#LevelShape
-type LevelShape = (typeof LEVEL_SHAPES)[number];
-
-### build/loads.chunk.d.ts#LoadLevel
-type LoadLevel = (typeof LOAD_LEVELS)[number];
-
-### build/loads.chunk.d.ts#LoadOptions
-interface LoadOptions {
-  readonly near?: number | undefined;
-}
-
-### build/loads.chunk.d.ts#NEAR_LIMIT
-declare const NEAR_LIMIT = .8;
-
-### build/loads.chunk.d.ts#SHAPE_OUTLINES
-declare const SHAPE_OUTLINES: Readonly<Record<LevelShape, ShapeOutline>>;
-
-### build/loads.chunk.d.ts#ShapeOutline
-interface ShapeOutline {
-  readonly radius: number;
-  readonly sides: number;
-  readonly start: number;
-  readonly hole: number;
-}
-
-### build/loads.chunk.d.ts#circuitStates
-declare function circuitStates(scene: Scene, options?: LoadOptions): readonly CircuitState[];
-
-### build/loads.chunk.d.ts#levelShape
-declare function levelShape(level: LoadLevel | undefined): LevelShape;
-
-### build/loads.chunk.d.ts#outletLevels
-declare function outletLevels(scene: Scene, options?: LoadOptions): ReadonlyMap<string, LoadLevel>;
-
-### build/loads.chunk.d.ts#shapeRing
-declare function shapeRing(shape: LevelShape, radius?: number): Ring;
-
 ### build/marks.d.ts#AddOnMarks
 export interface AddOnMarks<Layer> {
   readonly schema: string;
@@ -892,35 +835,58 @@ export declare const SAMPLE_SCENE: Scene;
 ### build/sample.d.ts#SAMPLE_SURVEY
 export declare const SAMPLE_SURVEY: Survey;
 
+### build/schema.d.ts#KindRecords
+export interface KindRecords {
+  readonly room: Room;
+  readonly scene: Scene;
+  readonly survey: Survey;
+  readonly level: Level;
+}
+
+### build/schema.d.ts#READ_CODES
+export declare const READ_CODES: readonly ["read-both"];
+
+### build/schema.d.ts#READ_CONTEXT
+export declare const READ_CONTEXT: z.core.ParseContext<z.core.$ZodIssue>;
+
+### build/schema.d.ts#ReadFinding
+export interface ReadFinding {
+  readonly level: FindingLevel;
+  readonly code: string;
+  readonly layer: string;
+  readonly room?: string | undefined;
+  readonly message: string;
+}
+
+### build/schema.d.ts#RecordRead
+export type RecordRead = { readonly [Kind in FileKind]: {
+  readonly ok: true;
+  readonly kind: Kind;
+  readonly record: KindRecords[Kind];
+  readonly version: 1 | 2;
+  readonly findings: readonly ReadFinding[];
+}; }[FileKind] | {
+  readonly ok: false;
+  readonly errors: readonly string[];
+};
+
 ### build/schema.d.ts#anchorSchema
-export declare const anchorSchema: z.ZodType<Anchor>;
+export declare const anchorSchema: z.ZodMiniType<Anchor>;
 
 ### build/schema.d.ts#levelSchema
-export declare const levelSchema: z.ZodType<Level>;
+export declare const levelSchema: z.ZodMiniType<Level>;
+
+### build/schema.d.ts#readRecord
+export declare function readRecord(value: unknown, addOns?: readonly AddOn<unknown>[]): RecordRead;
 
 ### build/schema.d.ts#roomSchema
-export declare const roomSchema: z.ZodType<Room>;
+export declare const roomSchema: z.ZodMiniType<Room>;
 
 ### build/schema.d.ts#sceneSchema
-export declare const sceneSchema: z.ZodType<Scene>;
+export declare const sceneSchema: z.ZodMiniType<Scene>;
 
 ### build/schema.d.ts#surveySchema
-export declare const surveySchema: z.ZodType<Survey>;
-
-### build/solids.chunk.d.ts#Circuit
-interface Circuit {
-  readonly id: string;
-  readonly name?: string | undefined;
-  readonly breaker?: number | undefined;
-  readonly voltage?: number | undefined;
-  readonly limit: number;
-}
-
-### build/solids.chunk.d.ts#CircuitLoad
-interface CircuitLoad {
-  readonly circuit: string;
-  readonly watts: number;
-}
+export declare const surveySchema: z.ZodMiniType<Survey>;
 
 ### build/solids.chunk.d.ts#FLOOR_DEPTH
 declare const FLOOR_DEPTH = .1;
@@ -959,13 +925,6 @@ declare const MITER_LIMIT = 4;
 ### build/solids.chunk.d.ts#OPENING_KINDS
 declare const OPENING_KINDS: readonly ["door", "window", "gap"];
 
-### build/solids.chunk.d.ts#OUTLET_PLATE
-declare const OUTLET_PLATE: {
-  readonly width: number;
-  readonly height: number;
-  readonly depth: number;
-};
-
 ### build/solids.chunk.d.ts#Opening
 interface Opening {
   readonly id: string;
@@ -979,16 +938,6 @@ interface Opening {
 
 ### build/solids.chunk.d.ts#OpeningKind
 type OpeningKind = (typeof OPENING_KINDS)[number];
-
-### build/solids.chunk.d.ts#Outlet
-interface Outlet {
-  readonly id: string;
-  readonly wall: string;
-  readonly face: WallFace;
-  readonly offset: number;
-  readonly height: number;
-  readonly circuit?: string | undefined;
-}
 
 ### build/solids.chunk.d.ts#PlacedBox
 interface PlacedBox {
@@ -1007,7 +956,6 @@ interface PlacedObject {
   readonly lift?: number | undefined;
   readonly turn?: number | undefined;
   readonly parent?: string | undefined;
-  readonly outlet?: string | undefined;
 }
 
 ### build/solids.chunk.d.ts#PlanPoint
@@ -1022,7 +970,7 @@ interface Prism {
 }
 
 ### build/solids.chunk.d.ts#ROOM_SCHEMA
-declare const ROOM_SCHEMA = "room/1";
+declare const ROOM_SCHEMA = "room/2";
 
 ### build/solids.chunk.d.ts#Room
 interface Room {
@@ -1034,15 +982,13 @@ interface Room {
   readonly walls: readonly Wall[];
   readonly openings?: readonly Opening[] | undefined;
   readonly floors?: readonly Floor[] | undefined;
-  readonly outlets?: readonly Outlet[] | undefined;
-  readonly circuits?: readonly Circuit[] | undefined;
 }
 
 ### build/solids.chunk.d.ts#SCENE_SCHEMA
-declare const SCENE_SCHEMA = "scene/1";
+declare const SCENE_SCHEMA = "scene/2";
 
 ### build/solids.chunk.d.ts#SOLID_KINDS
-declare const SOLID_KINDS: readonly ["floor", "wall", "glass", "outlet", "object"];
+declare const SOLID_KINDS: readonly ["floor", "wall", "glass", "object"];
 
 ### build/solids.chunk.d.ts#Scene
 interface Scene {
@@ -1050,7 +996,6 @@ interface Scene {
   readonly name?: string | undefined;
   readonly room: Room;
   readonly objects?: readonly PlacedObject[] | undefined;
-  readonly loads?: readonly CircuitLoad[] | undefined;
   readonly layers?: Readonly<Record<string, unknown>> | undefined;
 }
 
@@ -1188,7 +1133,6 @@ interface RoomViewerOptions {
   readonly scene: Scene;
   readonly theme?: ViewerTheme | undefined;
   readonly solids?: SolidOptions | undefined;
-  readonly loads?: LoadOptions | undefined;
   readonly markers?: MarkersOptions | undefined;
   readonly marks?: readonly Mark[] | undefined;
   readonly label?: string | undefined;
@@ -1225,8 +1169,7 @@ interface ViewerTheme {
   readonly wall: string;
   readonly glass: string;
   readonly glassOpacity: number;
-  readonly outlet: string;
-  readonly levels: Readonly<Record<LoadLevel, string>>;
+  readonly levels: Readonly<Record<Level, string>>;
   readonly halo: string;
   readonly field?: readonly string[] | undefined;
   readonly fieldOpacity?: number | undefined;

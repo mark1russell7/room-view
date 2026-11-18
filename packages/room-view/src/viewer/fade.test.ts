@@ -38,12 +38,12 @@ describe("wallShades", () => {
   });
 
   it("uses the unit of the room", () => {
-    const feet: Room = { schema: "room/1", unit: "ft", height: 8, wallThickness: 0.5, walls: [{ id: "a", from: [0, 0], to: [10, 0] }], floors: [{ id: "f", ring: [[0, -0.25], [10, -0.25], [10, -9], [0, -9]] }] }; // prettier-ignore
+    const feet: Room = { schema: "room/2", unit: "ft", height: 8, wallThickness: 0.5, walls: [{ id: "a", from: [0, 0], to: [10, 0] }], floors: [{ id: "f", ring: [[0, -0.25], [10, -0.25], [10, -9], [0, -9]] }] }; // prettier-ignore
     expect(wallShades(feet).map((shade) => shade.inner)).toEqual(["right"]);
   });
 
   it("uses the center for a wall with no floor, and gives both sides with no center", () => {
-    const bare: Room = { schema: "room/1", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "a", from: [0, 0], to: [4, 0] }] };
+    const bare: Room = { schema: "room/2", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "a", from: [0, 0], to: [4, 0] }] };
     expect(wallShades(bare, { x: 2, y: 3 }).map((shade) => shade.inner)).toEqual(["left"]);
     expect(wallShades(bare, { x: 2, y: -3 }).map((shade) => shade.inner)).toEqual(["right"]);
     expect(wallShades(bare, { x: 2, y: 0 }).map((shade) => shade.inner)).toEqual(["both"]);
@@ -51,7 +51,7 @@ describe("wallShades", () => {
   });
 
   it("skips a wall that the model does not make", () => {
-    const room: Room = { schema: "room/1", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "none", from: [1, 1], to: [1, 1] }, { id: "a", from: [0, 0], to: [4, 0] }] }; // prettier-ignore
+    const room: Room = { schema: "room/2", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "none", from: [1, 1], to: [1, 1] }, { id: "a", from: [0, 0], to: [4, 0] }] }; // prettier-ignore
     expect(wallShades(room).map((shade) => shade.frame.id)).toEqual(["a"]);
   });
 });

@@ -25,7 +25,7 @@ describe("the sample", () => {
 
 describe("the sample apartment", () => {
   const result = expandLevel(SAMPLE_LEVEL);
-  const scene: Scene = { schema: "scene/1", room: result.room, objects: result.objects };
+  const scene: Scene = { schema: "scene/2", room: result.room, objects: result.objects };
 
   it("has the name of the level format, and the sample room as its living room", () => {
     expect(SAMPLE_LEVEL.schema).toBe(LEVEL_SCHEMA);
@@ -60,7 +60,7 @@ describe("the sample apartment", () => {
     ]);
   });
 
-  it("gives one room record with a floor for each room and the circuits of each survey", () => {
+  it("gives one room record with a floor for each room", () => {
     expect(result.room.name).toBe("Sample apartment");
     expect(result.room.floors?.map((floor) => [floor.id, floor.name, floor.ring.length])).toEqual([
       ["living", "Living room", 6],
@@ -70,35 +70,30 @@ describe("the sample apartment", () => {
     ]);
     expect(result.room.walls).toHaveLength(20);
     expect(result.room.openings).toHaveLength(11);
-    expect(result.room.outlets).toHaveLength(12);
-    expect(result.room.circuits?.map((circuit) => circuit.id)).toEqual(["c", "a", "b"]);
   });
 
   it("gives the objects of each room, with the `id` of the room before each `id`", () => {
-    expect(result.objects.map((object) => [object.id, object.kind, object.parent, object.outlet])).toEqual([
-      ["living/desk", "desk", undefined, undefined],
-      ["living/display", "display", "living/desk", undefined],
-      ["living/tower", "computer", undefined, "living/north-1"],
-      ["living/sofa", "sofa", undefined, undefined],
-      ["living/rack", "rack", undefined, undefined],
-      ["living/node-1", "computer", "living/rack", "living/nook-1"],
-      ["living/node-2", "computer", "living/rack", "living/nook-1"],
-      ["living/node-3", "computer", "living/rack", "living/nook-2"],
-      ["living/node-4", "computer", "living/rack", "living/nook-2"],
-      ["hall/shelf", "shelf", undefined, undefined],
-      ["bathroom/vanity", "cabinet", undefined, undefined],
-      ["bedroom/bed", "bed", undefined, undefined],
-      ["bedroom/wardrobe", "cabinet", undefined, undefined],
+    expect(result.objects.map((object) => [object.id, object.kind, object.parent])).toEqual([
+      ["living/desk", "desk", undefined],
+      ["living/display", "display", "living/desk"],
+      ["living/tower", "computer", undefined],
+      ["living/sofa", "sofa", undefined],
+      ["living/rack", "rack", undefined],
+      ["living/node-1", "computer", "living/rack"],
+      ["living/node-2", "computer", "living/rack"],
+      ["living/node-3", "computer", "living/rack"],
+      ["living/node-4", "computer", "living/rack"],
+      ["hall/shelf", "shelf", undefined],
+      ["bathroom/vanity", "cabinet", undefined],
+      ["bedroom/bed", "bed", undefined],
+      ["bedroom/wardrobe", "cabinet", undefined],
     ]);
-    // Each outlet of an object is an outlet of the level.
-    const outlets = new Set(result.room.outlets?.map((outlet) => outlet.id));
-    for (const object of result.objects) if (object.outlet !== undefined) expect(outlets.has(object.outlet), object.id).toBe(true);
     expect(sceneSolids(scene).filter((solid) => solid.kind === "object")).toHaveLength(13);
   });
 
   it("has no fault, with its objects and with no object", () => {
     expect(checkScene(scene)).toEqual([]);
-    expect(checkScene({ schema: "scene/1", room: result.room })).toEqual([]);
+    expect(checkScene({ schema: "scene/2", room: result.room })).toEqual([]);
   });
 
   it("gives a model where each solid has a volume above 0", () => {

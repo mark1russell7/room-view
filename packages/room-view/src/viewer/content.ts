@@ -1,7 +1,6 @@
 import type { Highlight } from "@mark1russell7/visuals";
 import type { StageContent, StageFrame, StagePick } from "@mark1russell7/visuals/three";
 import type { Object3D, Raycaster } from "three";
-import type { LoadOptions } from "../loads.ts";
 import type { Scene } from "../room.ts";
 import type { Solid, SolidKind, SolidOptions } from "../solids.ts";
 import { hidingWalls } from "./fade.ts";
@@ -9,7 +8,7 @@ import { buildModel, disposeModel, paintPart, type ModelPart } from "./model.ts"
 import type { ViewerTheme } from "./theme.ts";
 import { toRoom } from "./view.ts";
 
-/** A record of a scene that the viewer shows: a floor, a wall, a window, an outlet or a placed object. */
+/** A record of a scene that the viewer shows: a floor, a wall, a window or a placed object. */
 export interface ViewerRecord {
   /** The kind of the solids of the record. A window has the kind `glass`. */
   readonly kind: SolidKind;
@@ -36,14 +35,14 @@ export const FADE_TIME = 0.11;
 
 /**
  * This function makes the content of a stage that shows the solids of a scene.
- * The solids are the floors, the walls, the windows, the plates of the outlets and the placed objects.
+ * The solids are the floors, the walls, the windows and the placed objects.
  *
  * The walls between the camera and the room become almost clear, and the pointer goes through them.
  * An object in a clear box of objects gets the pick before the box. Each pick has its distance, so a mark in front of a solid gets the pick.
  * The space of the content has the y axis up: the z axis of the scene becomes the y axis.
  */
-export function createRoomContent(scene: Scene, solids: SolidOptions = {}, loads: LoadOptions = {}): RoomContent {
-  const model = buildModel(scene, solids, loads);
+export function createRoomContent(scene: Scene, solids: SolidOptions = {}): RoomContent {
+  const model = buildModel(scene, solids);
   const first = new Map<string, ModelPart>();
   for (const part of model.parts) if (!first.has(part.record)) first.set(part.record, part);
   const byMesh = new Map<Object3D, ModelPart>(model.parts.map((part) => [part.mesh, part]));

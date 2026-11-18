@@ -1,12 +1,12 @@
 import { scaleAnchor, type Anchor } from "./anchors.ts";
 import { headingOf, squared, turned } from "./direction.ts";
 import { joinLayers, moveLayers, roomName, type LayerFinding, type RoomLayers } from "./layers.ts";
-import { ROOM_SCHEMA, type Circuit, type Floor, type Opening, type Outlet, type PlacedObject, type PlanPoint, type Room, type Wall } from "./room.ts";
+import { ROOM_SCHEMA, type Floor, type Opening, type PlacedObject, type PlanPoint, type Room, type Wall } from "./room.ts";
 import { CLOSURE_LIMIT, convertSurvey, expandSurvey, surveyAnchor, SURVEY_FLOOR, type Survey, type SurveyOptions, type SurveyResult } from "./survey.ts";
 import { LARGEST_LENGTH, metersPer, unitsPer, type LengthUnit } from "./units.ts";
 
 /** The name of the format of a level record. */
-export const LEVEL_SCHEMA = "level/1";
+export const LEVEL_SCHEMA = "level/2";
 
 /** One room of a level: the survey of the room, with an `id`. */
 export interface LevelRoom {
@@ -50,10 +50,8 @@ export interface Level {
   readonly unit: LengthUnit;
   readonly rooms: readonly LevelRoom[];
   readonly connections?: readonly LevelConnection[] | undefined;
-  /** The circuits of the level. A survey can also have circuits. Two circuits with one `id` are one circuit, and the first one stays. */
-  readonly circuits?: readonly Circuit[] | undefined;
   /**
-   * The records of each add-on for the level, by the name of its layer, for example the circuits of an apartment.
+   * The records of each add-on for the level, by the name of its layer, for example the records of the whole apartment.
    * The anchors of such a layer are on the room record of the level, so they name a wall as `LevelResult.room` names it.
    * The survey of a room has the layers of that room.
    */
@@ -137,7 +135,7 @@ export interface LevelConnectionResult {
 export interface LevelResult {
   /**
    * One room record with each room of the level, in the unit of the level.
-   * The `id` of a wall, an opening or an outlet is the `id` of its room, then `/`, then its `id` in the survey.
+   * The `id` of a wall or an opening is the `id` of its room, then `/`, then its `id` in the survey.
    * Each closed room gives one floor with the `id` and the name of the room.
    */
   readonly room: Room;
@@ -146,7 +144,7 @@ export interface LevelResult {
   /** The result of each connection, in the sequence of the connections. */
   readonly connections: readonly LevelConnectionResult[];
   /**
-   * The placed objects of each room, in the sequence of the rooms. The `id` of an object, of its parent and of its outlet
+   * The placed objects of each room, in the sequence of the rooms. The `id` of an object and of its parent
    * has the same form as the `id` of a wall. A scene record with the room record and these objects gives the model of the level.
    */
   readonly objects: readonly PlacedObject[];
@@ -508,10 +506,7 @@ export function expandLevel(level: Level, options: LevelOptions = {}): LevelResu
   const walls: Wall[] = [];
   const openings: Opening[] = [];
   const floors: Floor[] = [];
-  const outlets: Outlet[] = [];
   const objects: PlacedObject[] = [];
-  const circuits = new Map<string, Circuit>();
-  for (const circuit of level.circuits ?? []) if (!circuits.has(circuit.id)) circuits.set(circuit.id, circuit);
   rooms.forEach(({ id, survey, result }, room) => {
     const record = result.room;
     record.walls.forEach((wall, index) => {
@@ -528,14 +523,11 @@ export function expandLevel(level: Level, options: LevelOptions = {}): LevelResu
     });
     for (const opening of record.openings ?? []) openings.push({ ...opening, id: `${id}/${opening.id}`, wall: `${id}/${opening.wall}` });
     for (const floor of record.floors ?? []) floors.push({ id, ...(survey.name === undefined ? {} : { name: survey.name }), ring: floor.ring });
-    for (const outlet of record.outlets ?? []) outlets.push({ ...outlet, id: `${id}/${outlet.id}`, wall: `${id}/${outlet.wall}` });
-    for (const circuit of record.circuits ?? []) if (!circuits.has(circuit.id)) circuits.set(circuit.id, circuit);
     for (const object of result.objects) {
       objects.push({
         ...object,
         id: `${id}/${object.id}`,
         ...(object.parent === undefined ? {} : { parent: `${id}/${object.parent}` }),
-        ...(object.outlet === undefined ? {} : { outlet: `${id}/${object.outlet}` }),
       });
     }
   });
@@ -549,8 +541,6 @@ export function expandLevel(level: Level, options: LevelOptions = {}): LevelResu
     walls,
     ...(openings.length === 0 ? {} : { openings }),
     ...(floors.length === 0 ? {} : { floors }),
-    ...(outlets.length === 0 ? {} : { outlets }),
-    ...(circuits.size === 0 ? {} : { circuits: [...circuits.values()] }),
   };
   const addOns = options.addOns ?? [];
   const parts: RoomLayers[] = [];

@@ -3,11 +3,9 @@ import { createMarkers, type MarkersOptions, type MarkersTheme } from "@mark1rus
 import { checkMarks, transformMarks, type Mark } from "@mark1russell7/visuals/marks";
 import { createStage, stackContents, type StageContent } from "@mark1russell7/visuals/three";
 import { solidRecord } from "../check.ts";
-import type { LoadOptions } from "../loads.ts";
 import type { Scene } from "../room.ts";
 import { TO_Y_UP, type SolidOptions } from "../solids.ts";
 import { createRoomContent, type ViewerPick, type ViewerRecord } from "./content.ts";
-import { outletMarks } from "./outlets.ts";
 import { LIGHT_THEME, type ViewerTheme } from "./theme.ts";
 import { HOME_VIEW, TOP_VIEW } from "./view.ts";
 
@@ -23,13 +21,11 @@ export interface RoomViewerOptions {
   readonly theme?: ViewerTheme | undefined;
   /** The options of the model. */
   readonly solids?: SolidOptions | undefined;
-  /** The options of the levels of the circuits. */
-  readonly loads?: LoadOptions | undefined;
   /** The options of the picture of the marks, for example the radius of a sign. */
   readonly markers?: MarkersOptions | undefined;
   /**
    * The marks of the scene, in the space of the scene: meters, with the z axis up. `layerMarks` of the entry `/marks` gives them.
-   * With no list, the viewer makes the marks of the outlets of the scene. An empty list gives a picture with no mark.
+   * With no list, the picture has no mark.
    * The viewer draws no mark with a fault. `checkMarks` of `@mark1russell7/visuals/marks` tells each fault.
    */
   readonly marks?: readonly Mark[] | undefined;
@@ -48,10 +44,7 @@ export interface RoomViewerOptions {
 export interface RoomViewer {
   /** The canvas of the viewer. It is in the container. */
   readonly canvas: HTMLCanvasElement;
-  /**
-   * This function shows a different scene, with its marks. The view stays if a person moved it.
-   * With no list of marks, the viewer makes the marks of the outlets of the scene.
-   */
+  /** This function shows a different scene, with its marks. The view stays if a person moved it. With no list, the picture has no mark. */
   setScene(scene: Scene, marks?: readonly Mark[]): void;
   /** This function changes the colors. */
   setTheme(theme: ViewerTheme): void;
@@ -73,8 +66,8 @@ export interface RoomViewer {
   dispose(): void;
 }
 
-/** The options of the content of a viewer: the options of the model, of the levels and of the picture of the marks. */
-export type ViewerContentOptions = Pick<RoomViewerOptions, "solids" | "loads" | "markers">;
+/** The options of the content of a viewer: the options of the model and of the picture of the marks. */
+export type ViewerContentOptions = Pick<RoomViewerOptions, "solids" | "markers">;
 
 /** The record under the pointer for the stage: a solid of the room, or a mark. */
 export type StageValue = ViewerPick | Mark;
@@ -117,12 +110,12 @@ export interface ViewerContent {
 /**
  * This function makes the content of a viewer for a scene: the solids, and the marks above them.
  *
- * `marks` are in the space of the scene: meters, with the z axis up. With no list, the function makes the marks of the outlets of the scene.
+ * `marks` are in the space of the scene: meters, with the z axis up. With no list, the content has no mark.
  * A mark with a fault is not in the content. The space of the content has the y axis up.
  */
 export function createViewerContent(scene: Scene, marks?: readonly Mark[], options: ViewerContentOptions = {}): ViewerContent {
-  const room = createRoomContent(scene, options.solids, options.loads);
-  const given = marks ?? outletMarks(scene, room.solids, options.loads);
+  const room = createRoomContent(scene, options.solids);
+  const given = marks ?? [];
   const faulty = new Set(checkMarks(given).map((fault) => fault.index));
   const good = given.filter((_, index) => !faulty.has(index));
   const onStage = transformMarks(good, TO_Y_UP);
@@ -164,7 +157,7 @@ export function createViewerContent(scene: Scene, marks?: readonly Mark[], optio
  * With the keyboard, the arrow keys turn the model, `+` and `-` change the distance, `Home` shows the first view and `T` shows the plan.
  *
  * The viewer draws the marks of the scene with `@mark1russell7/visuals/markers`. A point is a sign with the color and the shape of its level.
- * With no list of marks, each outlet has a sign. An outlet or an object with a highlight then shows a line from the outlet to each object on it.
+ * A link shows while its record, or the record of one of its ends, has a highlight. A sign that a solid hides is less clear.
  *
  * The function gives `undefined` when the browser has no WebGL 2. It does not throw, and it writes no error to the console.
  */

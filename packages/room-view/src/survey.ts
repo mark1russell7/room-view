@@ -4,9 +4,7 @@ import { moveLayers, type AddOn, type LayerFinding } from "./layers.ts";
 import {
   ROOM_SCHEMA,
   SCENE_SCHEMA,
-  type Circuit,
   type Opening,
-  type Outlet,
   type PlacedObject,
   type PlanPoint,
   type Room,
@@ -17,7 +15,7 @@ import {
 import { LARGEST_LENGTH, metersPer, unitsPer, type LengthUnit } from "./units.ts";
 
 /** The name of the format of a survey record. */
-export const SURVEY_SCHEMA = "survey/1";
+export const SURVEY_SCHEMA = "survey/2";
 
 /** These are the names of the turns at a square corner. */
 export const SQUARE_TURNS: readonly ["left", "right"] = ["left", "right"];
@@ -54,9 +52,6 @@ export interface SurveyCheck {
   /** The measured distance between the two corners. */
   readonly length: number;
 }
-
-/** An outlet of a survey. It is on the inner face of its wall, so it has no field `face`. */
-export type SurveyOutlet = Omit<Outlet, "face">;
 
 /**
  * An object of a survey: a box that a person measures from a side, for example a desk, a shelf or a rack.
@@ -98,8 +93,6 @@ export interface SurveyObject {
    * With `on`, this is the height above the bottom of the holder. Then the default is the height of the holder: the object is on its top.
    */
   readonly lift?: number | undefined;
-  /** The `id` of the outlet that gives power to the object. */
-  readonly outlet?: string | undefined;
 }
 
 /**
@@ -107,7 +100,7 @@ export interface SurveyObject {
  *
  * The person goes around the room along the inner faces of the walls, in one direction.
  * Each side has the length of one face, and the turn at its end. The last turn gives the direction of the first side again.
- * An opening, an outlet and an object name their side in `wall`. Their `offset` starts at the first corner of that side.
+ * An opening and an object name their side in `wall`. Their `offset` starts at the first corner of that side.
  */
 export interface Survey {
   readonly schema: typeof SURVEY_SCHEMA;
@@ -126,8 +119,6 @@ export interface Survey {
   readonly heading?: number | undefined;
   readonly checks?: readonly SurveyCheck[] | undefined;
   readonly openings?: readonly Opening[] | undefined;
-  readonly outlets?: readonly SurveyOutlet[] | undefined;
-  readonly circuits?: readonly Circuit[] | undefined;
   readonly objects?: readonly SurveyObject[] | undefined;
   /**
    * The records of each add-on, by the name of its layer, for example `electrical/1`. A layer has the format of a layer of a scene.
@@ -305,7 +296,6 @@ export function convertSurvey(survey: Survey, unit: LengthUnit, addOns: readonly
             height: to(opening.height),
           })),
         }),
-    ...(survey.outlets === undefined ? {} : { outlets: survey.outlets.map((outlet) => ({ ...outlet, offset: to(outlet.offset), height: to(outlet.height) })) }),
     ...(survey.objects === undefined
       ? {}
       : {
@@ -337,7 +327,7 @@ export function convertSurvey(survey: Survey, unit: LengthUnit, addOns: readonly
  *    This is the transit rule of land survey. A side along an axis stays along that axis, so a room with square corners keeps them.
  *    Then the last wall ends exactly at the first corner, and the room gets a floor.
  *
- * An opening and an outlet keep their place on a side that changes its length: each `offset` and each `width` changes in the same proportion.
+ * An opening keeps its place on a side that changes its length: its `offset` and its `width` change in the same proportion.
  * Thus an opening that fits in its measured side fits in its wall, and two openings that do not overlap stay apart.
  *
  * An object keeps its size on a side that changes its length. It moves by a part of that change: its place in the free length of the side.
@@ -460,8 +450,6 @@ export function expandSurvey(survey: Survey, options: SurveyOptions = {}): Surve
     ...(survey.openings === undefined || openings === undefined ? {} : { openings: shared ? openings : survey.openings }),
     // A floor has a counter-clockwise outline.
     ...(closed ? { floors: [{ id: SURVEY_FLOOR, ...(survey.name === undefined ? {} : { name: survey.name }), ring: toLeft ? corners : [...corners].reverse() }] } : {}),
-    ...(survey.outlets === undefined ? {} : { outlets: survey.outlets.map((outlet): Outlet => ({ ...outlet, offset: outlet.offset * (factorOf.get(outlet.wall) ?? 1), face })) }),
-    ...(survey.circuits === undefined ? {} : { circuits: survey.circuits }),
   };
 
   const sideOf = new Map<string, number>();
@@ -489,13 +477,12 @@ export function expandSurvey(survey: Survey, options: SurveyOptions = {}): Surve
       ...(object.name === undefined ? {} : { name: object.name }),
       size: [object.width, object.depth, object.height] as const,
     };
-    const power = object.outlet === undefined ? {} : { outlet: object.outlet };
     if (object.on !== undefined) {
       const holder = listed.get(object.on);
       if (holder === undefined || placeOf(holder) === undefined) return undefined;
       // The x axis of the holder goes along its side for a walk to the left, and against its side for a walk to the right.
       const x = object.offset + object.width / 2 - holder.width / 2;
-      return { ...record, at: [toLeft ? x : 0 - x, out + object.depth / 2 - holder.depth / 2], lift: object.lift ?? holder.height, parent: holder.id, ...power };
+      return { ...record, at: [toLeft ? x : 0 - x, out + object.depth / 2 - holder.depth / 2], lift: object.lift ?? holder.height, parent: holder.id };
     }
     const index = object.wall === undefined ? undefined : sideOf.get(object.wall);
     if (index === undefined) return undefined;
@@ -521,7 +508,6 @@ export function expandSurvey(survey: Survey, options: SurveyOptions = {}): Surve
       at: [from[0] + along[0] * a + inward[0] * b, from[1] + along[1] * a + inward[1] * b],
       ...(object.lift === undefined ? {} : { lift: object.lift }),
       ...(turn === 0 ? {} : { turn }),
-      ...power,
     };
   };
   const objects = (survey.objects ?? []).flatMap((object) => {

@@ -1,19 +1,18 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { checkRoom, checkScene, FINDING_CODES, type Finding } from "./check.ts";
-import { circuitStates } from "./loads.ts";
-import { OPENING_KINDS, ROOM_SCHEMA, SCENE_SCHEMA, WALL_FACES, WALL_SIDES, type Room, type Scene } from "./room.ts";
+import { OPENING_KINDS, ROOM_SCHEMA, SCENE_SCHEMA, WALL_SIDES, type Room, type Scene } from "./room.ts";
 import { SAMPLE_SCENE } from "./sample.ts";
 import { boundsOfSolids, sceneSolids, solidCorners, solidVolume } from "./solids.ts";
 import { LENGTH_UNITS } from "./units.ts";
 
 /** One wall along the x axis, 4 long, 0.2 thick and 2.4 high. */
 function room(more: Partial<Room> = {}): Room {
-  return { schema: "room/1", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "a", from: [0, 0], to: [4, 0] }], ...more };
+  return { schema: "room/2", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "a", from: [0, 0], to: [4, 0] }], ...more };
 }
 
 function scene(more: Partial<Scene> = {}, roomMore: Partial<Room> = {}): Scene {
-  return { schema: "scene/1", room: room(roomMore), ...more };
+  return { schema: "scene/2", room: room(roomMore), ...more };
 }
 
 /** Each finding as one text: the level, the code, the kind of record and the `id`. */
@@ -32,7 +31,6 @@ describe("checkRoom", () => {
   it("tells a number that is not finite", () => {
     expect(found(checkRoom(room({ height: Infinity })))).toEqual(["error/number-not-finite/room/"]);
     expect(found(checkRoom(room({ walls: [{ id: "a", from: [0, 0], to: [Number.NaN, 0] }] })))).toEqual(["error/number-not-finite/wall/a", "error/wall-length/wall/a"]);
-    expect(found(checkRoom(room({ circuits: [{ id: "c", limit: Infinity }] })))).toEqual(["error/number-not-finite/circuit/c"]);
   });
 
   it("tells a length above the largest length of the model", () => {
@@ -40,8 +38,6 @@ describe("checkRoom", () => {
     expect(found(checkRoom(room({ walls: [{ id: "a", from: [0, 0], to: [4e6, 0] }] })))).toEqual(["error/number-too-large/wall/a"]);
     // The limit is a length in meters: 4 000 000 mm are 4 km.
     expect(checkRoom(room({ unit: "mm", height: 2400, wallThickness: 200, walls: [{ id: "a", from: [0, 0], to: [4e6, 0] }] }))).toEqual([]);
-    // The limit of a circuit is a power, so it has no such limit.
-    expect(checkRoom(room({ circuits: [{ id: "c", limit: 5e6 }] }))).toEqual([]);
     expect(found(checkScene(scene({ objects: [{ ...box, id: "o", at: [2, 3e6] }] })))).toEqual(["error/number-too-large/object/o"]);
     // The turn of an object is an angle, so it has no such limit.
     expect(checkScene(scene({ objects: [{ ...box, id: "o", at: [2, 3], turn: 3e6 }] }))).toEqual([]);
@@ -60,14 +56,8 @@ describe("checkRoom", () => {
       { id: "a", from: [0, 2], to: [4, 2] },
     ];
     expect(found(checkRoom(room({ walls })))).toEqual(["error/id-duplicate/wall/a"]);
-    const outlets: Room["outlets"] = [
-      { id: "x", wall: "a", face: "left", offset: 1, height: 0.3 },
-      { id: "x", wall: "a", face: "left", offset: 2, height: 0.3 },
-      { id: "x", wall: "a", face: "left", offset: 3, height: 0.3 },
-    ];
-    expect(found(checkRoom(room({ outlets })))).toEqual(["error/id-duplicate/outlet/x"]);
-    // An outlet and a wall can have the same id: the kinds are different.
-    expect(checkRoom(room({ outlets: [{ id: "a", wall: "a", face: "left", offset: 1, height: 0.3 }] }))).toEqual([]);
+    // A wall and an opening can have the same id: the kinds are different.
+    expect(checkRoom(room({ openings: [{ id: "a", wall: "a", kind: "door", offset: 1, width: 1, height: 2 }] }))).toEqual([]);
   });
 
   it("tells a size that is not above 0", () => {
@@ -136,7 +126,7 @@ describe("checkRoom", () => {
 
   it("gives the values of a finding in the unit of the room", () => {
     const findings = checkRoom({
-      schema: "room/1",
+      schema: "room/2",
       unit: "cm",
       height: 240,
       wallThickness: 20,
@@ -170,29 +160,6 @@ describe("checkRoom", () => {
       { id: "last", wall: "a", kind: "door", offset: 2.5, width: 1, height: 2 },
     ];
     expect(found(checkRoom(room({ openings })))).toEqual(["error/opening-overlap/opening/late"]);
-  });
-
-  it("tells an outlet on a wall or a circuit that the room does not have", () => {
-    expect(found(checkRoom(room({ outlets: [{ id: "x", wall: "none", face: "left", offset: 1, height: 0.3 }] })))).toEqual(["error/outlet-wall/outlet/x"]);
-    expect(found(checkRoom(room({ outlets: [{ id: "x", wall: "a", face: "left", offset: 1, height: 0.3, circuit: "z" }] })))).toEqual(["error/outlet-circuit/outlet/x"]);
-    expect(checkRoom(room({ outlets: [{ id: "x", wall: "a", face: "left", offset: 1, height: 0.3, circuit: "z" }], circuits: [{ id: "z", limit: 1800 }] }))).toEqual([]);
-  });
-
-  it("tells an outlet that is not on its wall", () => {
-    const outlet = { id: "x", wall: "a", face: "right" } as const;
-    expect(checkRoom(room({ outlets: [{ ...outlet, offset: 4, height: 2.4 }] }))).toEqual([]);
-    expect(found(checkRoom(room({ outlets: [{ ...outlet, offset: 4.5, height: 0.3 }] })))).toEqual(["error/outlet-range/outlet/x"]);
-    expect(found(checkRoom(room({ outlets: [{ ...outlet, offset: -0.1, height: 0.3 }] })))).toEqual(["error/outlet-range/outlet/x"]);
-    expect(found(checkRoom(room({ outlets: [{ ...outlet, offset: 1, height: 2.5 }] })))).toEqual(["error/outlet-range/outlet/x"]);
-    expect(found(checkRoom(room({ outlets: [{ ...outlet, offset: 1, height: -0.1 }] })))).toEqual(["error/outlet-range/outlet/x"]);
-  });
-
-  it("tells an outlet in an opening", () => {
-    const openings: Room["openings"] = [{ id: "door", wall: "a", kind: "door", offset: 1, width: 1, height: 2 }];
-    const outlet = { id: "x", wall: "a", face: "left" } as const;
-    expect(found(checkRoom(room({ openings, outlets: [{ ...outlet, offset: 1.5, height: 0.3 }] })))).toEqual(["warning/outlet-in-opening/outlet/x"]);
-    expect(checkRoom(room({ openings, outlets: [{ ...outlet, offset: 2.5, height: 0.3 }] }))).toEqual([]);
-    expect(checkRoom(room({ openings, outlets: [{ ...outlet, offset: 1.5, height: 2.2 }] }))).toEqual([]);
   });
 
   it("tells a floor with no area", () => {
@@ -234,17 +201,6 @@ describe("checkRoom", () => {
       ),
     ).toEqual(["error/floor-ring/floor/f"]);
   });
-
-  it("tells a circuit with a limit that is not above 0", () => {
-    expect(found(checkRoom(room({ circuits: [{ id: "c", limit: 0 }] })))).toEqual(["error/circuit-limit/circuit/c"]);
-  });
-
-  it("tells a circuit with a breaker or a voltage that is not above 0", () => {
-    expect(checkRoom(room({ circuits: [{ id: "c", breaker: 15, voltage: 120, limit: 1440 }] }))).toEqual([]);
-    expect(found(checkRoom(room({ circuits: [{ id: "c", breaker: 0, limit: 1440 }] })))).toEqual(["error/circuit-limit/circuit/c"]);
-    expect(found(checkRoom(room({ circuits: [{ id: "c", voltage: -120, limit: 1440 }] })))).toEqual(["error/circuit-limit/circuit/c"]);
-    expect(found(checkRoom(room({ circuits: [{ id: "c", breaker: Infinity, limit: 1440 }] })))).toEqual(["error/number-not-finite/circuit/c"]);
-  });
 });
 
 describe("checkScene", () => {
@@ -284,12 +240,6 @@ describe("checkScene", () => {
     );
     expect(found(loop)).toEqual(["error/object-cycle/object/a", "error/object-cycle/object/b", "error/object-cycle/object/self"]);
     expect(loop[0]!.message).toBe('The parents of the object "a" make a loop.');
-  });
-
-  it("tells an object with an outlet that the room does not have", () => {
-    expect(found(checkScene(scene({ objects: [{ ...box, id: "o", at: [2, 2], outlet: "none" }] })))).toEqual(["error/object-outlet/object/o"]);
-    const outlets: Room["outlets"] = [{ id: "x", wall: "a", face: "left", offset: 1, height: 0.3 }];
-    expect(checkScene(scene({ objects: [{ ...box, id: "o", at: [2, 2], outlet: "x" }] }, { outlets }))).toEqual([]);
   });
 
   it("tells an object that is not on a floor", () => {
@@ -337,14 +287,6 @@ describe("checkScene", () => {
     // An object above the top of the wall is not in the wall.
     expect(checkScene(scene({ objects: [{ ...box, id: "o", at: [2, 0.3], lift: 2.4 }] }))).toEqual([]);
   });
-
-  it("tells the faults of the loads", () => {
-    const circuits: Room["circuits"] = [{ id: "c", limit: 1800 }];
-    expect(checkScene(scene({ loads: [{ circuit: "c", watts: 0 }] }, { circuits }))).toEqual([]);
-    expect(found(checkScene(scene({ loads: [{ circuit: "z", watts: 10 }] }, { circuits })))).toEqual(["error/load-circuit/load/z"]);
-    expect(found(checkScene(scene({ loads: [{ circuit: "c", watts: -1 }] }, { circuits })))).toEqual(["error/load-watts/load/c"]);
-    expect(found(checkScene(scene({ loads: [{ circuit: "c", watts: Number.NaN }] }, { circuits })))).toEqual(["error/load-watts/load/c"]);
-  });
 });
 
 describe("a record with faults", () => {
@@ -360,17 +302,14 @@ describe("a record with faults", () => {
     walls: fc.array(fc.record({ id, from: point, to: point, thickness: maybe(number), height: maybe(number), side: maybe(fc.constantFrom(...WALL_SIDES)) }), { maxLength: 4 }),
     openings: fc.array(fc.record({ id, wall: id, kind: fc.constantFrom(...OPENING_KINDS), offset: number, width: number, sill: maybe(number), height: number }), { maxLength: 3 }),
     floors: fc.array(fc.record({ id, ring: fc.array(point, { maxLength: 5 }) }), { maxLength: 2 }),
-    outlets: fc.array(fc.record({ id, wall: id, face: fc.constantFrom(...WALL_FACES), offset: number, height: number, circuit: maybe(id) }), { maxLength: 3 }),
-    circuits: fc.array(fc.record({ id, limit: number }), { maxLength: 2 }),
   });
   const anyScene: fc.Arbitrary<Scene> = fc.record({
     schema: fc.constant(SCENE_SCHEMA),
     room: anyRoom,
-    objects: fc.array(fc.record({ id, kind: fc.constant("box"), size: fc.tuple(number, number, number), at: point, lift: maybe(number), turn: maybe(number), parent: maybe(id), outlet: maybe(id) }), { maxLength: 4 }),
-    loads: fc.array(fc.record({ circuit: id, watts: number }), { maxLength: 3 }),
+    objects: fc.array(fc.record({ id, kind: fc.constant("box"), size: fc.tuple(number, number, number), at: point, lift: maybe(number), turn: maybe(number), parent: maybe(id) }), { maxLength: 4 }),
   });
 
-  it("does not stop the checks, the model or the loads", () => {
+  it("does not stop the checks or the model", () => {
     fc.assert(
       fc.property(anyScene, (record) => {
         const findings = checkScene(record);
@@ -382,13 +321,12 @@ describe("a record with faults", () => {
           for (const corner of solidCorners(solid)) expect(Number.isFinite(corner.x + corner.y + corner.z), solid.id).toBe(true);
         }
         expect(boundsOfSolids(solids) === undefined).toBe(solids.length === 0);
-        expect(circuitStates(record)).toHaveLength(record.room.circuits?.length ?? 0);
       }),
     );
   });
 
-  it("does not stop for a wall to infinity with an outlet", () => {
-    const record = scene({}, { walls: [{ id: "c", from: [0, 0], to: [0, -Infinity] }], outlets: [{ id: "a", wall: "c", face: "left", offset: 0, height: 0 }] });
+  it("does not stop for a wall to infinity with an opening", () => {
+    const record = scene({}, { walls: [{ id: "c", from: [0, 0], to: [0, -Infinity] }], openings: [{ id: "a", wall: "c", kind: "window", offset: 0, width: 1, sill: 0.5, height: 1 }] });
     expect(found(checkScene(record))).toContain("error/number-not-finite/wall/c");
     expect(sceneSolids(record)).toEqual([]);
   });
@@ -415,7 +353,6 @@ describe("a record with faults", () => {
       wallThickness: fc.constantFrom(0.25, 0.5),
       walls: each(fc.record({ id, from: spot, to: spot }), 3),
       floors: each(fc.record({ id, ring: fc.array(spot, { minLength: 3, maxLength: 5 }) }), 2),
-      outlets: each(fc.record({ id, wall: id, face: fc.constantFrom(...WALL_FACES), offset: quarters(-1, 8), height: quarters(-1, 8) }), 2),
     });
     const plainScene: fc.Arbitrary<Scene> = fc.record({
       schema: fc.constant(SCENE_SCHEMA),
@@ -431,7 +368,6 @@ describe("a record with faults", () => {
         const short = new Set(findings.filter((finding) => finding.code === "wall-short").map((finding) => finding.at));
         for (const wall of record.room.walls) if (!short.has(wall.id)) expect(made).toContain(`wall:${wall.id}`);
         for (const floor of record.room.floors ?? []) expect(made).toContain(`floor:${floor.id}`);
-        for (const outlet of record.room.outlets ?? []) expect(made).toContain(`outlet:${outlet.id}`);
         for (const object of record.objects ?? []) expect(made).toContain(`object:${object.id}`);
       }),
       { numRuns: 60, maxSkipsPerRun: 2000 },

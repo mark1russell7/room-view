@@ -39,3 +39,26 @@ export function joinMarks(parts: readonly LayerPart<MarkLayer>[]): MarkLayer {
 export function joinAddOn(schema: string, seen: SceneSpace[] = []): AddOn<MarkLayer> {
   return { ...markAddOn(schema, seen), join: joinMarks };
 }
+
+/**
+ * This function makes the test add-on of a schema name with the read `v1`. A record of version 1 kept its marks in fields of its own.
+ * A room, a survey and a level had a list `marks`, and an object had the size `mark`. The mark of an object is on that object.
+ */
+export function oldMarkAddOn(schema: string): AddOn<MarkLayer> {
+  return {
+    ...joinAddOn(schema),
+    v1: {
+      fields: { room: ["marks"], survey: ["marks"], level: ["marks"], object: ["mark"] },
+      read(record, kind): LayerParse<MarkLayer> | undefined {
+        const raw = record as { readonly marks?: unknown; readonly room?: { readonly marks?: unknown }; readonly objects?: unknown };
+        const list = kind === "scene" ? raw.room?.marks : raw.marks;
+        const objects: readonly unknown[] = (kind === "scene" || kind === "survey") && Array.isArray(raw.objects) ? raw.objects : [];
+        const sized = objects.filter((object): object is { readonly id: string; readonly mark: number } => typeof (object as { mark?: unknown }).mark === "number");
+        if (list === undefined && sized.length === 0) return undefined;
+        if (list !== undefined && !Array.isArray(list)) return { ok: false, errors: [`The old field "marks" of the ${kind} is not a list.`] };
+        const own = (list ?? []) as MarkLayer["marks"];
+        return { ok: true, layer: { marks: [...own, ...sized.map((object) => ({ id: `mark-${object.id}`, anchor: { on: "object", object: object.id } as const, size: object.mark }))] } };
+      },
+    },
+  };
+}

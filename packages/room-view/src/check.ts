@@ -13,16 +13,7 @@ export const FINDING_LEVELS: readonly ["error", "warning"] = ["error", "warning"
 export type FindingLevel = (typeof FINDING_LEVELS)[number];
 
 /** These are the kinds of the records that a finding can name. */
-export const RECORD_KINDS: readonly ["room", "wall", "opening", "floor", "outlet", "circuit", "object", "load"] = [
-  "room",
-  "wall",
-  "opening",
-  "floor",
-  "outlet",
-  "circuit",
-  "object",
-  "load",
-];
+export const RECORD_KINDS: readonly ["room", "wall", "opening", "floor", "object"] = ["room", "wall", "opening", "floor", "object"];
 
 /** A kind of record. */
 export type RecordKind = (typeof RECORD_KINDS)[number];
@@ -62,20 +53,12 @@ export const FINDING_CODES: readonly [
   "opening-range",
   "opening-height",
   "opening-overlap",
-  "outlet-wall",
-  "outlet-circuit",
-  "outlet-range",
-  "outlet-in-opening",
   "floor-ring",
-  "circuit-limit",
   "object-parent",
   "object-cycle",
-  "object-outlet",
   "object-outside",
   "object-overlap",
   "object-in-wall",
-  "load-circuit",
-  "load-watts",
 ] = [
   "number-not-finite",
   "number-too-large",
@@ -88,20 +71,12 @@ export const FINDING_CODES: readonly [
   "opening-range",
   "opening-height",
   "opening-overlap",
-  "outlet-wall",
-  "outlet-circuit",
-  "outlet-range",
-  "outlet-in-opening",
   "floor-ring",
-  "circuit-limit",
   "object-parent",
   "object-cycle",
-  "object-outlet",
   "object-outside",
   "object-overlap",
   "object-in-wall",
-  "load-circuit",
-  "load-watts",
 ];
 
 /** A code of a finding. */
@@ -113,13 +88,13 @@ export interface Finding {
   readonly code: FindingCode;
   /** The kind of the record with the fault. */
   readonly record: RecordKind;
-  /** The `id` of the record with the fault. For a load, it is the `id` of the circuit. For the room record, it is empty. */
+  /** The `id` of the record with the fault. For the room record, it is empty. */
   readonly at: string;
   /** The fault in plain words, with the values. */
   readonly message: string;
   /**
-   * The `id` of the second record of the fault. It is the other opening or the other object of an overlap, or the opening that an outlet is in.
-   * It is also the wall that an object overlaps, or the parent or the outlet that an object names. A fault of one record has none.
+   * The `id` of the second record of the fault. It is the other opening or the other object of an overlap.
+   * It is also the wall that an object overlaps, or the parent that an object names. A fault of one record has none.
    */
   readonly other?: string | undefined;
 }
@@ -184,8 +159,6 @@ export function checkRoom(room: Room, options: CheckOptions = {}): readonly Find
   /** This function tells if a size of the record is 0 for the checks. */
   const none = (size: number): boolean => !(size * scale > SMALL);
   const openings = room.openings ?? [];
-  const outlets = room.outlets ?? [];
-  const circuits = room.circuits ?? [];
   const floors = room.floors ?? [];
 
   if (holdsBadNumber([room.height, room.wallThickness])) error("number-not-finite", "room", "", "The height or the wall thickness of the room is not a finite number.");
@@ -194,14 +167,11 @@ export function checkRoom(room: Room, options: CheckOptions = {}): readonly Find
     ["wall", room.walls],
     ["opening", openings],
     ["floor", floors],
-    ["outlet", outlets],
-    ["circuit", circuits],
   ];
   for (const [record, list] of lists) {
     for (const item of list) {
       if (holdsBadNumber(item)) error("number-not-finite", record, item.id, `A number of the ${record} "${item.id}" is not finite.`);
-      // The limit of a circuit is a power, not a length.
-      if (record !== "circuit" && holdsLargeNumber(item, largest)) error("number-too-large", record, item.id, `A length of the ${record} "${item.id}" is above 1 000 km, the largest length of the model.`);
+      if (holdsLargeNumber(item, largest)) error("number-too-large", record, item.id, `A length of the ${record} "${item.id}" is above 1 000 km, the largest length of the model.`);
     }
     for (const id of repeated(list.map((item) => item.id))) error("id-duplicate", record, id, `Two or more records of the kind ${record} have the id "${id}".`);
   }
@@ -273,38 +243,10 @@ export function checkRoom(room: Room, options: CheckOptions = {}): readonly Find
     }
   }
 
-  const circuitIds = new Set(circuits.map((circuit) => circuit.id));
-  for (const outlet of outlets) {
-    if (outlet.circuit !== undefined && !circuitIds.has(outlet.circuit)) error("outlet-circuit", "outlet", outlet.id, `The outlet "${outlet.id}" is on the circuit "${outlet.circuit}", which the room does not have.`);
-    const found = frameOf.get(outlet.wall);
-    if (found === undefined) {
-      error("outlet-wall", "outlet", outlet.id, `The outlet "${outlet.id}" is on the wall "${outlet.wall}", which the room does not have.`);
-      continue;
-    }
-    const along = outlet.offset * scale;
-    const height = outlet.height * scale;
-    if (!(along >= 0 && along <= found.frame.length + SMALL && height >= 0 && height <= found.frame.height + SMALL)) {
-      error(
-        "outlet-range",
-        "outlet",
-        outlet.id,
-        `The outlet "${outlet.id}" is at ${show(outlet.offset)} along the wall "${outlet.wall}" and at the height ${show(outlet.height)}. The wall has the length ${show(found.frame.length / scale)} and the height ${show(found.frame.height / scale)}.`,
-      );
-      continue;
-    }
-    const hole = (holes.get(outlet.wall) ?? []).find((item) => along > item.from && along < item.to && height > item.sill && height < item.top);
-    if (hole !== undefined) warning("outlet-in-opening", "outlet", outlet.id, `The outlet "${outlet.id}" is in the opening "${hole.id}" of the wall "${outlet.wall}".`, hole.id);
-  }
-
   for (const floor of floors) {
     if (floor.ring.length < 3 || !(regionArea({ kind: "polygon", points: floor.ring }) * scale * scale > SMALL * SMALL)) {
       error("floor-ring", "floor", floor.id, `The floor "${floor.id}" has no area. Its ring must have 3 or more corners that are not on one line.`);
     }
-  }
-  for (const circuit of circuits) {
-    if (!(circuit.limit > 0)) error("circuit-limit", "circuit", circuit.id, `The limit of the circuit "${circuit.id}" is ${show(circuit.limit)} W. It must be above 0.`);
-    if (circuit.breaker !== undefined && !(circuit.breaker > 0)) error("circuit-limit", "circuit", circuit.id, `The breaker of the circuit "${circuit.id}" is ${show(circuit.breaker)} A. It must be above 0.`);
-    if (circuit.voltage !== undefined && !(circuit.voltage > 0)) error("circuit-limit", "circuit", circuit.id, `The voltage of the circuit "${circuit.id}" is ${show(circuit.voltage)} V. It must be above 0.`);
   }
   return findings;
 }
@@ -335,7 +277,8 @@ function extentOf(object: PlacedObject, transform: Transform3, scale: number): E
 }
 
 /**
- * This function gives each fault of a scene record: the faults of its room, then the faults of its placed objects and its loads.
+ * This function gives each fault of a scene record: the faults of its room, then the faults of its placed objects.
+ * `checkLayers` examines the layers of the scene.
  * A scene with no finding of the level `error` gives a full model.
  */
 export function checkScene(scene: Scene, options: CheckOptions = {}): readonly Finding[] {
@@ -350,8 +293,6 @@ export function checkScene(scene: Scene, options: CheckOptions = {}): readonly F
   const scale = metersPer(room.unit);
   const objects = scene.objects ?? [];
   const byId = new Map(objects.map((object) => [object.id, object] as const));
-  const outletIds = new Set((room.outlets ?? []).map((outlet) => outlet.id));
-  const circuitIds = new Set((room.circuits ?? []).map((circuit) => circuit.id));
   /** This function tells if each size of an object is above 0 for the checks. */
   const hasSize = (object: PlacedObject): boolean => object.size.every((size) => size * scale > SMALL);
 
@@ -378,7 +319,6 @@ export function checkScene(scene: Scene, options: CheckOptions = {}): readonly F
     if (!hasSize(object)) error("size-not-positive", "object", object.id, `The size of the object "${object.id}" is ${object.size.map(show).join(" by ")}. Each number must be above 0.`);
     if (object.parent !== undefined && !byId.has(object.parent)) error("object-parent", "object", object.id, `The object "${object.id}" is on the object "${object.parent}", which the scene does not have.`, object.parent);
     else if (holders(object) === undefined) error("object-cycle", "object", object.id, `The parents of the object "${object.id}" make a loop.`);
-    if (object.outlet !== undefined && !outletIds.has(object.outlet)) error("object-outlet", "object", object.id, `The object "${object.id}" uses the outlet "${object.outlet}", which the room does not have.`, object.outlet);
   }
 
   const transforms = objectTransforms(scene);
@@ -412,10 +352,6 @@ export function checkScene(scene: Scene, options: CheckOptions = {}): readonly F
     }
   }
 
-  for (const load of scene.loads ?? []) {
-    if (!circuitIds.has(load.circuit)) error("load-circuit", "load", load.circuit, `A load is on the circuit "${load.circuit}", which the room does not have.`);
-    if (!(load.watts >= 0 && Number.isFinite(load.watts))) error("load-watts", "load", load.circuit, `A load of the circuit "${load.circuit}" is ${show(load.watts)} W. It must be a finite number, 0 or more.`);
-  }
   return findings;
 }
 

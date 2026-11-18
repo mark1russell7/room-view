@@ -1,4 +1,4 @@
-import type { LoadLevel } from "../loads.ts";
+import type { Level } from "@mark1russell7/visuals/marks";
 
 /**
  * The colors of a viewer. Each color is a CSS hex color, for example `#22364a`.
@@ -14,10 +14,8 @@ export interface ViewerTheme {
   readonly glass: string;
   /** The part of the glass that is not clear, from 0 to 1. */
   readonly glassOpacity: number;
-  /** The color of an outlet with no circuit. */
-  readonly outlet: string;
-  /** The color of the marks of each level, and of the plates of the outlets of a circuit at each level of its load. */
-  readonly levels: Readonly<Record<LoadLevel, string>>;
+  /** The color of the marks of each level. */
+  readonly levels: Readonly<Record<Level, string>>;
   /** The color of the line around the sign of a mark. It is the color of the page, so a sign is clear on each solid. */
   readonly halo: string;
   /**
@@ -45,7 +43,6 @@ export const LIGHT_THEME: ViewerTheme = {
   wall: "#fcfcfb",
   glass: "#8fc4e8",
   glassOpacity: 0.35,
-  outlet: "#55677a",
   levels: { unknown: "#55677a", ok: "#1f5fa8", near: "#d9662f", over: "#c62f2f" },
   halo: "#ffffff",
   object: "#b8c0c8",
@@ -62,7 +59,6 @@ export const DARK_THEME: ViewerTheme = {
   wall: "#1f4a73",
   glass: "#9fd0ff",
   glassOpacity: 0.25,
-  outlet: "#a9bfd4",
   levels: { unknown: "#a9bfd4", ok: "#6fb3f2", near: "#f5a962", over: "#f0625f" },
   halo: "#0e2740",
   object: "#2a5580",
