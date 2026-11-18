@@ -10,7 +10,7 @@ The package has no browser part. Each function is a plain function, and each for
 
 | Entry | What it has |
 | --- | --- |
-| `@mark1russell7/electrical` | The records of a layer, the circuit formulas, the states, the checks and the move of an old scene. |
+| `@mark1russell7/electrical` | The records of a layer, the circuit formulas, the states, the checks, the layer of a level and the move of an old scene. |
 | `@mark1russell7/electrical/schema` | `electricalSchema`, the zod schema of a layer, and `parseElectrical`. |
 | `@mark1russell7/electrical/add-on` | `electrical`, the add-on value for the contract of the core. |
 | `@mark1russell7/electrical/marks` | `electricalMarks` and `electricalAddOnMarks`: the records of a layer as marks for a viewer. |
@@ -102,6 +102,12 @@ const read = readLayer(scene, electrical);
 | `circuit-no-limit` | warning | A circuit has no limit, and it does not have a breaker and a voltage. |
 | `circuit-limits` | warning | The field `limit` of a circuit and its rated limit are not equal. |
 | `circuit-over` | warning | The known load of a circuit is above its limit. |
+
+The add-on has the function `join`, so `expandLevel` of the core gives one electrical layer for a level. `joinElectrical` of the root entry is that function:
+
+- An outlet and a feed of a room get the `id` of the room before their `id`, for example `kitchen/o1`.
+- A circuit keeps its `id`, because one circuit gives power to outlets in more than one room. The first circuit of an `id` stays.
+- A record of the layer of the level record stays as it is.
 
 ## The marks
 

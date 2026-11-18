@@ -135,3 +135,18 @@ export function sceneSpace(scene: Scene): SceneSpace {
   };
   return { scene, scale, wall: (id) => walls.get(id), object: (id) => objects.get(id), transform, frame };
 }
+
+/**
+ * This function gives an anchor with each length times a factor. A direction stays, because it has no unit.
+ * `convertSurvey` uses it to change the unit of the anchors of a layer.
+ */
+export function scaleAnchor(anchor: Anchor, factor: number): Anchor {
+  if (anchor.on === "wall") return { ...anchor, offset: anchor.offset * factor, height: anchor.height * factor };
+  if (anchor.on === "object") {
+    if (anchor.at === undefined) return anchor;
+    const [x, y, z] = anchor.at;
+    return { ...anchor, at: [x * factor, y * factor, z * factor] };
+  }
+  const [x, y] = anchor.at;
+  return { ...anchor, at: [x * factor, y * factor] };
+}

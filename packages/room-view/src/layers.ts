@@ -41,6 +41,45 @@ export interface AddOn<Layer> {
   withAnchors(layer: Layer, anchors: ReadonlyMap<string, Anchor>): Layer;
   /** This function gives the faults of the meaning of a layer. The core examines the anchors, so this function does not. */
   check(layer: Layer, space: SceneSpace): readonly AddOnFault[];
+  /**
+   * This function gives one layer from the parts of a level: the layer of the level record, then the layer of each room.
+   *
+   * - A record of a part gets the name `part.name(id)`. Each `id` of the layer that names such a record or a placed object gets it too.
+   * - A record that all the rooms share keeps its `id`, for example a circuit of an apartment. The first record of an `id` stays.
+   * - The core changes the anchors before this function, so the function does not change an anchor.
+   *
+   * `expandLevel` does not carry the layer of a room when its add-on has no such function.
+   */
+  join?(parts: readonly LayerPart<Layer>[]): Layer;
+}
+
+/** One part of the layers of a level, for the function `join` of an add-on. `layerPart` makes it. */
+export interface LayerPart<Layer> {
+  /** The `id` of the room of the layer. The layer of the level record has no room. */
+  readonly room?: string | undefined;
+  readonly layer: Layer;
+  /**
+   * This function gives the name in the level of a record of the part, from its `id` in the part.
+   * A record of a room gets the name that `roomName` gives, and a record of the level record keeps its `id`.
+   * The function also gives the name of a record of the core that the part names, for example a placed object.
+   */
+  readonly name: (id: string) => string;
+}
+
+/**
+ * This function gives the name in a level of a record of a room. The name is the `id` of the room, a slash and the `id` in the survey.
+ * `expandLevel` gives each wall, each opening and each placed object such a name. The function `join` of an add-on gives it to the records of a room.
+ */
+export function roomName(room: string, id: string): string {
+  return `${room}/${id}`;
+}
+
+/**
+ * This function makes one part of the layers of a level. With no room, the part is the layer of the level record.
+ * Its function `name` has the rule of `roomName`, so an add-on does not write that rule again.
+ */
+export function layerPart<Layer>(layer: Layer, room?: string): LayerPart<Layer> {
+  return room === undefined ? { layer, name: (id) => id } : { room, layer, name: (id) => roomName(room, id) };
 }
 
 /** These are the codes of the faults of a layer that the core finds. */
@@ -59,6 +98,8 @@ export interface LayerFinding {
   readonly message: string;
   /** The `id` of the second record of the fault. A fault of one record has none. */
   readonly other?: string | undefined;
+  /** The `id` of the room of the layer. Only a finding of `expandLevel` about the layer of a room has it. */
+  readonly room?: string | undefined;
 }
 
 /** This function gives the add-on of each schema name. The first add-on of a name is used. */
@@ -113,4 +154,122 @@ export function checkLayers(scene: Scene, addOns: readonly AddOn<unknown>[]): re
     findings.push(...own);
   }
   return findings;
+}
+
+/** The result of a change of layers: the layers that the function carried, and a finding for each layer that it did not carry. */
+export interface LayersMove {
+  /** The layers of the result, in the order of their names. */
+  readonly layers: Readonly<Record<string, unknown>>;
+  /** One finding or more for each layer that is not in the result. Each finding has the level `error`. */
+  readonly findings: readonly LayerFinding[];
+}
+
+/** The read of one layer for a change: the add-on and the layer, or the findings that tell why the layer has no read. */
+type LayerRead = { readonly addOn: AddOn<unknown>; readonly layer: unknown } | readonly LayerFinding[];
+
+/** This function reads one layer with the add-on of its name. `room` is the `id` of the room of the layer, in a level. */
+function readForChange(name: string, value: unknown, byName: ReadonlyMap<string, AddOn<unknown>>, room?: string): LayerRead {
+  const where = room === undefined ? {} : { room };
+  const of = room === undefined ? "" : ` of the room "${room}"`;
+  const finding = (code: (typeof LAYER_CODES)[number], message: string): LayerFinding => ({ level: "error", code, layer: name, at: "", message, ...where });
+  if (!isLayerName(name)) {
+    return [finding("layer-name", `The layer "${name}"${of} has a name that is not a word, a slash and a version, for example "electrical/1". The result does not have the layer.`)];
+  }
+  const addOn = byName.get(name);
+  if (addOn === undefined) return [finding("layer-unknown", `No add-on of the list reads the layer "${name}"${of}. The result does not have the layer.`)];
+  const read = addOn.parse(value);
+  if (!read.ok) return read.errors.map((message) => finding("layer-form", message));
+  return { addOn, layer: read.layer };
+}
+
+/**
+ * This function gives layers with each anchor changed by `move`. The add-on of each layer comes from the list.
+ * `expandSurvey` uses it to put the layers of a survey on the room record. A host uses it when it moves the records of a room.
+ *
+ * A layer that the function cannot read is not in the result, because its anchors are in the old space. A finding tells each such layer:
+ *
+ * - `layer-name`: the name is not a layer name.
+ * - `layer-unknown`: no add-on of the list has the name.
+ * - `layer-form`: the add-on found a fault in the form of the layer.
+ *
+ * `room` is the `id` of the room of the layers, in a level. Each finding gets it.
+ */
+export function moveLayers(
+  layers: Readonly<Record<string, unknown>> | undefined,
+  addOns: readonly AddOn<unknown>[],
+  move: (anchor: Anchor) => Anchor,
+  room?: string,
+): LayersMove {
+  const byName = addOnsByName(addOns);
+  const given = layers ?? {};
+  const moved: [string, unknown][] = [];
+  const findings: LayerFinding[] = [];
+  for (const name of Object.keys(given).sort(compareText)) {
+    const read = readForChange(name, given[name], byName, room);
+    if ("addOn" in read) {
+      const anchors = new Map<string, Anchor>();
+      for (const [key, anchor] of read.addOn.anchors(read.layer)) anchors.set(key, move(anchor));
+      moved.push([name, read.addOn.withAnchors(read.layer, anchors)]);
+    } else findings.push(...read);
+  }
+  return { layers: Object.fromEntries(moved), findings };
+}
+
+/** The layers of one room of a level, for `joinLayers`. The anchors have the names of the level already. */
+export interface RoomLayers {
+  /** The `id` of the room. */
+  readonly room: string;
+  readonly layers: Readonly<Record<string, unknown>> | undefined;
+}
+
+/**
+ * This function gives the layers of a level. Each name gets one layer, from the layer of the level record and the layers of the rooms.
+ * The function `join` of the add-on of each name makes that layer. `expandLevel` uses this function.
+ *
+ * - A layer that only the level record has stays as it is, because its anchors are on the room record of the level already.
+ *   `checkLayers` examines it.
+ * - The layer of a room needs an add-on of its name with the function `join`. Without it, a finding tells the layer of each room,
+ *   and the layer of the level record stays as it is. The codes are the codes of `moveLayers`.
+ *   An add-on with no function `join` gives the code `layer-unknown`.
+ * - With such an add-on, a part with a fault in its form is not in the layer of the result. A finding tells the part.
+ */
+export function joinLayers(own: Readonly<Record<string, unknown>> | undefined, rooms: readonly RoomLayers[], addOns: readonly AddOn<unknown>[]): LayersMove {
+  const byName = addOnsByName(addOns);
+  const level = own ?? {};
+  const names = new Set(Object.keys(level));
+  for (const room of rooms) for (const name of Object.keys(room.layers ?? {})) names.add(name);
+  const joined: [string, unknown][] = [];
+  const findings: LayerFinding[] = [];
+  for (const name of [...names].sort(compareText)) {
+    const inLevel = Object.hasOwn(level, name);
+    const inRooms = rooms.filter((room) => room.layers !== undefined && Object.hasOwn(room.layers, name));
+    const addOn = isLayerName(name) ? byName.get(name) : undefined;
+    const join = addOn?.join?.bind(addOn);
+    if (join === undefined || inRooms.length === 0) {
+      if (inLevel) joined.push([name, level[name]]);
+      for (const { room, layers } of inRooms) {
+        if (addOn === undefined) {
+          const read = readForChange(name, layers?.[name], byName, room);
+          if (!("addOn" in read)) findings.push(...read);
+        } else {
+          const message = `The add-on of the layer "${name}" has no function "join", so the result does not have the layer of the room "${room}".`;
+          findings.push({ level: "error", code: "layer-unknown", layer: name, at: "", message, room });
+        }
+      }
+      continue;
+    }
+    const parts: LayerPart<unknown>[] = [];
+    if (inLevel) {
+      const read = readForChange(name, level[name], byName);
+      if ("addOn" in read) parts.push(layerPart(read.layer));
+      else findings.push(...read);
+    }
+    for (const { room, layers } of inRooms) {
+      const read = readForChange(name, layers?.[name], byName, room);
+      if ("addOn" in read) parts.push(layerPart(read.layer, room));
+      else findings.push(...read);
+    }
+    if (parts.length > 0) joined.push([name, join(parts)]);
+  }
+  return { layers: Object.fromEntries(joined), findings };
 }

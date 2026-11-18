@@ -97,6 +97,9 @@ const circuitLoad = z.strictObject({
   watts: z.number(),
 });
 
+// The layers of a scene, of a survey or of a level. The core does not read a layer, so it keeps each value. The add-on of a layer examines its form.
+const layers = z.record(z.string().refine(isLayerName, "A layer name is a word, a slash and a version, for example electrical/1."), z.unknown()).readonly().optional();
+
 /**
  * The schema of a scene record. It examines the form of the record, and it refuses a field that the format does not have.
  * `checkScene` examines the meaning of a record with a correct form.
@@ -107,8 +110,7 @@ export const sceneSchema: z.ZodType<Scene> = z.strictObject({
   room: roomSchema,
   objects: z.array(placedObject).readonly().optional(),
   loads: z.array(circuitLoad).readonly().optional(),
-  // The core does not read a layer, so it keeps each value. The add-on of a layer examines its form.
-  layers: z.record(z.string().refine(isLayerName, "A layer name is a word, a slash and a version, for example electrical/1."), z.unknown()).readonly().optional(),
+  layers,
 });
 
 const surveySide = z.strictObject({
@@ -167,6 +169,7 @@ export const surveySchema: z.ZodType<Survey> = z.strictObject({
   outlets: z.array(surveyOutlet).readonly().optional(),
   circuits: z.array(circuit).readonly().optional(),
   objects: z.array(surveyObject).readonly().optional(),
+  layers,
 });
 
 const connectionEnd = z.strictObject({
@@ -188,4 +191,5 @@ export const levelSchema: z.ZodType<Level> = z.strictObject({
     .readonly()
     .optional(),
   circuits: z.array(circuit).readonly().optional(),
+  layers,
 });

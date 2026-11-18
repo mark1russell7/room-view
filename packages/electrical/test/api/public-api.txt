@@ -40,6 +40,7 @@ circuitStates: build/states.chunk.d.ts#circuitStates
 electricalSpace: build/states.chunk.d.ts#electricalSpace
 evaluateCircuit: build/states.chunk.d.ts#evaluateCircuit
 fromSceneV1: build/index.d.ts#fromSceneV1
+joinElectrical: build/index.d.ts#joinElectrical
 loadCurrent: build/states.chunk.d.ts#loadCurrent
 loadRatio: build/states.chunk.d.ts#loadRatio
 loadVars: build/states.chunk.d.ts#loadVars
@@ -128,6 +129,9 @@ export declare function checkElectrical(layer: ElectricalLayer, space: SceneSpac
 
 ### build/index.d.ts#fromSceneV1
 export declare function fromSceneV1(scene: SceneV1): ElectricalLayer;
+
+### build/index.d.ts#joinElectrical
+export declare function joinElectrical(parts: readonly LayerPart<ElectricalLayer>[]): ElectricalLayer;
 
 ### build/index.d.ts#outletAnchors
 export declare function outletAnchors(layer: ElectricalLayer): ReadonlyMap<string, Anchor>;

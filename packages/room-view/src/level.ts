@@ -1,7 +1,9 @@
+import { scaleAnchor, type Anchor } from "./anchors.ts";
 import { headingOf, squared, turned } from "./direction.ts";
+import { joinLayers, moveLayers, roomName, type LayerFinding, type RoomLayers } from "./layers.ts";
 import { ROOM_SCHEMA, type Circuit, type Floor, type Opening, type Outlet, type PlacedObject, type PlanPoint, type Room, type Wall } from "./room.ts";
-import { CLOSURE_LIMIT, convertSurvey, expandSurvey, type Survey, type SurveyOptions, type SurveyResult } from "./survey.ts";
-import { LARGEST_LENGTH, metersPer, type LengthUnit } from "./units.ts";
+import { CLOSURE_LIMIT, convertSurvey, expandSurvey, surveyAnchor, SURVEY_FLOOR, type Survey, type SurveyOptions, type SurveyResult } from "./survey.ts";
+import { LARGEST_LENGTH, metersPer, unitsPer, type LengthUnit } from "./units.ts";
 
 /** The name of the format of a level record. */
 export const LEVEL_SCHEMA = "level/1";
@@ -50,6 +52,12 @@ export interface Level {
   readonly connections?: readonly LevelConnection[] | undefined;
   /** The circuits of the level. A survey can also have circuits. Two circuits with one `id` are one circuit, and the first one stays. */
   readonly circuits?: readonly Circuit[] | undefined;
+  /**
+   * The records of each add-on for the level, by the name of its layer, for example the circuits of an apartment.
+   * The anchors of such a layer are on the room record of the level, so they name a wall as `LevelResult.room` names it.
+   * The survey of a room has the layers of that room.
+   */
+  readonly layers?: Readonly<Record<string, unknown>> | undefined;
 }
 
 /**
@@ -71,9 +79,12 @@ export interface LevelRoomResult {
   readonly place: RoomPlace;
   /** The number of the group of the room, from 0. The rooms of one group have a path of connections between them. */
   readonly group: number;
-  /** The survey of the room in the unit of the level. Its `start` and its `heading` are the place of the room in the level. */
+  /**
+   * The survey of the room in the unit of the level. Its `start` and its `heading` are the place of the room in the level.
+   * It has no layers, because the layers of each room go to `LevelResult.layers`.
+   */
   readonly survey: Survey;
-  /** The expansion of that survey. */
+  /** The expansion of that survey. Its `frame` moves an anchor of the room, in the unit of the level, to the room record of the level. */
   readonly result: SurveyResult;
 }
 
@@ -139,12 +150,40 @@ export interface LevelResult {
    * has the same form as the `id` of a wall. A scene record with the room record and these objects gives the model of the level.
    */
   readonly objects: readonly PlacedObject[];
+  /**
+   * The layers of the level on its room record. Each name has one layer, from the layer of the level and the layers of the rooms.
+   * A level with no layers gives none. The function `join` of the add-on of each name makes the layer, as `joinLayers` tells.
+   * A layer of a room is here only when an add-on of the options read it.
+   */
+  readonly layers?: Readonly<Record<string, unknown>> | undefined;
+  /**
+   * One finding or more for each layer of a room or of the level that is not in `layers`. A finding about a room has the `id` of the room.
+   * The findings of the read of each room come first, in the sequence of the rooms. The findings of `joinLayers` follow.
+   */
+  readonly layerFindings: readonly LayerFinding[];
 }
 
 /** The options of the expansion of a level. */
 export interface LevelOptions extends SurveyOptions {
   /** The distance between two groups of rooms, in the unit of the level. The default is 1 m. A value that is not a length of 0 or more gives the default. */
   readonly groupGap?: number | undefined;
+}
+
+/** This function gives a survey with no layers. */
+function withoutLayers(survey: Survey): Survey {
+  const { layers, ...rest } = survey;
+  return layers === undefined ? survey : rest;
+}
+
+/**
+ * This function gives an anchor of a room with the names of the level. A wall and an object get the name that `roomName` gives.
+ * The floor of a room has the `id` of the room in a level.
+ */
+function inRoom(room: string, anchor: Anchor): Anchor {
+  if (anchor.on === "wall") return { ...anchor, wall: roomName(room, anchor.wall) };
+  if (anchor.on === "object") return { ...anchor, object: roomName(room, anchor.object) };
+  if (anchor.floor === undefined) return anchor;
+  return { ...anchor, floor: anchor.floor === SURVEY_FLOOR ? room : roomName(room, anchor.floor) };
 }
 
 /** The largest angle between the two walls of a connection that fits, in degrees. */
@@ -286,6 +325,9 @@ function placeFrom(known: Place, knownHole: Hole, hole: Hole, depth: number): Pl
  * This applies to the two walls of a connection, and to two walls that overlap.
  * A wall that is in part an outer wall gets the same thickness along its full length.
  *
+ * The layers of each room go to the room record of the level in one change. The change has the unit of the level, the place of the room, then the names of the level.
+ * Then the function `join` of each add-on gives one layer for the level. The layer of the level record comes first.
+ *
  * `checkRoom` examines the room record. It tells when two rooms overlap.
  */
 export function expandLevel(level: Level, options: LevelOptions = {}): LevelResult {
@@ -294,7 +336,8 @@ export function expandLevel(level: Level, options: LevelOptions = {}): LevelResu
   const inRange = (value: number): boolean => Number.isFinite(value) && Math.abs(value) * scale <= LARGEST_LENGTH;
   const size = (value: number | undefined): number | undefined => (value !== undefined && inRange(value) && value * scale > SMALL ? value : undefined);
   const count = level.rooms.length;
-  const surveys = level.rooms.map((room) => convertSurvey(room.survey, unit));
+  // The layers of a room go to the level in one change after the places are known, so each survey of the walk has none.
+  const surveys = level.rooms.map((room) => convertSurvey(withoutLayers(room.survey), unit));
   // Each room in the frame of its survey: the first corner is the origin, and the first side goes along the x axis.
   const owns = surveys.map((survey) => expandSurvey({ ...survey, start: undefined, heading: undefined }, options));
 
@@ -509,5 +552,24 @@ export function expandLevel(level: Level, options: LevelOptions = {}): LevelResu
     ...(outlets.length === 0 ? {} : { outlets }),
     ...(circuits.size === 0 ? {} : { circuits: [...circuits.values()] }),
   };
-  return { room, rooms, connections: results, objects };
+  const addOns = options.addOns ?? [];
+  const parts: RoomLayers[] = [];
+  const findings: LayerFinding[] = [];
+  rooms.forEach(({ id, result }, index) => {
+    const given = level.rooms[index]?.survey;
+    if (given?.layers === undefined) return;
+    const factor = unitsPer(given.unit, unit);
+    const moved = moveLayers(given.layers, addOns, (anchor) => inRoom(id, surveyAnchor(scaleAnchor(anchor, factor), result.frame)), id);
+    parts.push({ room: id, layers: moved.layers });
+    findings.push(...moved.findings);
+  });
+  const layers = level.layers === undefined && parts.length === 0 ? undefined : joinLayers(level.layers, parts, addOns);
+  return {
+    room,
+    rooms,
+    connections: results,
+    objects,
+    ...(layers === undefined ? {} : { layers: layers.layers }),
+    layerFindings: layers === undefined ? findings : [...findings, ...layers.findings],
+  };
 }

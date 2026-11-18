@@ -398,3 +398,38 @@ describe("surveySchema, the objects of a survey", () => {
     expect(levelSchema.parse(JSON.parse(JSON.stringify(SAMPLE_LEVEL))).rooms.map((room) => room.survey.objects?.length)).toEqual([9, 1, 1, 2]);
   });
 });
+
+describe("the layers of a survey and of a level", () => {
+  const layers = { "electrical/1": { schema: "electrical/1", outlets: [] }, "mark/1": 5 };
+  const BAD_NAMES = ["", "Mark", "mark:1/1"];
+  /** The sample level with a value as the layers of the survey of its first room. */
+  const inFirstRoom = (value: unknown): unknown => ({
+    ...SAMPLE_LEVEL,
+    rooms: SAMPLE_LEVEL.rooms.map((room, index) => (index === 0 ? { ...room, survey: { ...room.survey, layers: value } } : room)),
+  });
+
+  it("accepts the layers of a survey, and keeps each layer as it is", () => {
+    expect(surveySchema.parse({ ...SAMPLE_SURVEY, layers }).layers).toEqual(layers);
+    expect(surveySchema.parse(JSON.parse(JSON.stringify({ ...SAMPLE_SURVEY, layers }))).layers).toEqual(layers);
+    expect(surveySchema.parse({ ...SAMPLE_SURVEY, layers: {} }).layers).toEqual({});
+  });
+
+  it("refuses the layers of a survey with a name that is not a layer name, and layers that are not a record", () => {
+    for (const name of BAD_NAMES) expect(surveySchema.safeParse({ ...SAMPLE_SURVEY, layers: { [name]: {} } }).success, name).toBe(false);
+    expect(surveySchema.safeParse({ ...SAMPLE_SURVEY, layers: "mark/1" }).success).toBe(false);
+  });
+
+  it("accepts the layers of a level and of the survey of a room", () => {
+    expect(levelSchema.parse({ ...SAMPLE_LEVEL, layers }).layers).toEqual(layers);
+    expect(levelSchema.parse(inFirstRoom(layers)).rooms[0]?.survey.layers).toEqual(layers);
+  });
+
+  it("refuses the layers of a level with a name that is not a layer name, and layers that are not a record", () => {
+    for (const name of BAD_NAMES) {
+      expect(levelSchema.safeParse({ ...SAMPLE_LEVEL, layers: { [name]: {} } }).success, name).toBe(false);
+      expect(levelSchema.safeParse(inFirstRoom({ [name]: {} })).success, name).toBe(false);
+    }
+    expect(levelSchema.safeParse({ ...SAMPLE_LEVEL, layers: "mark/1" }).success).toBe(false);
+    expect(levelSchema.safeParse(inFirstRoom("mark/1")).success).toBe(false);
+  });
+});

@@ -1,6 +1,9 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import type { Anchor } from "./anchors.ts";
 import { checkRoom, checkScene } from "./check.ts";
+import { joinAddOn, markAddOn, type MarkLayer } from "./layers.fixture.ts";
+import { checkLayers } from "./layers.ts";
 import {
   CONNECTION_FAULTS,
   CONNECTION_TURN_LIMIT,
@@ -15,7 +18,7 @@ import {
 } from "./level.ts";
 import type { Opening, PlanPoint, Room } from "./room.ts";
 import { SAMPLE_LEVEL, SAMPLE_SURVEY } from "./sample.ts";
-import { expandSurvey, type Survey, type SurveyObject, type SurveySide, type SurveyTurn } from "./survey.ts";
+import { expandSurvey, resultScene, type Survey, type SurveyObject, type SurveySide, type SurveyTurn } from "./survey.ts";
 
 /** The sides `s0`, `s1` and so on, from a list of lengths and a list of turns. */
 function sides(lengths: readonly number[], turns: readonly SurveyTurn[]): SurveySide[] {
@@ -126,6 +129,7 @@ describe("expandLevel, one room", () => {
       rooms: [],
       connections: [],
       objects: [],
+      layerFindings: [],
     });
     expect(expandLevel({ schema: "level/1", name: "Home", unit: "ft", rooms: [] }).room).toEqual({ schema: "room/1", name: "Home", unit: "ft", height: 1, wallThickness: 1, walls: [] });
   });
@@ -678,5 +682,209 @@ describe("expandLevel, the objects of a level", () => {
     const text = JSON.stringify(SAMPLE_LEVEL);
     expandLevel(SAMPLE_LEVEL);
     expect(JSON.stringify(SAMPLE_LEVEL)).toBe(text);
+  });
+});
+
+/** A layer of the test add-on with one mark at each anchor. The marks have the ids `m0`, `m1` and so on. */
+function marks(...anchors: readonly Anchor[]): MarkLayer {
+  return { marks: anchors.map((anchor, index) => ({ id: `m${index}`, anchor, size: 1 })) };
+}
+
+/** The marks of the layer `mark/1` of a result. */
+function marksOf(result: LevelResult): MarkLayer["marks"] {
+  return (result.layers?.["mark/1"] as MarkLayer | undefined)?.marks ?? [];
+}
+
+describe("expandLevel, the layers of a level", () => {
+  const MARK = joinAddOn("mark/1");
+  const desk: SurveyObject = { id: "desk", kind: "desk", wall: "s0", offset: 0.5, width: 1, depth: 0.5, height: 0.8 };
+
+  it("has no layers and no layer finding for a level with no layers", () => {
+    const result = expandLevel(TWO, { addOns: [MARK] });
+    expect("layers" in result).toBe(false);
+    expect(result.layerFindings).toEqual([]);
+    expect(expandLevel(TWO).layerFindings).toEqual([]);
+  });
+
+  it("gives each anchor of a room the names of the level, at the place of the room", () => {
+    const top: Anchor = { on: "wall", wall: "a/s2", face: "left", offset: 2, height: 1 };
+    const inA = marks({ on: "wall", wall: "s0", face: "right", offset: 1, height: 0.3 });
+    const inB = marks({ on: "wall", wall: "s1", face: "left", offset: 2, height: 0.3 }, { on: "floor", at: [1, 2], floor: "floor" }, { on: "ceiling", at: [2, 1] }, { on: "object", object: "desk", at: [0, 0, 0.8] });
+    const result = expandLevel(
+      level(
+        [
+          { id: "a", survey: { ...A, layers: { "mark/1": inA } } },
+          { id: "b", survey: { ...B, objects: [desk], layers: { "mark/1": inB } } },
+        ],
+        [AB],
+        { layers: { "mark/1": { marks: [{ id: "top", anchor: top, size: 2 }] } } },
+      ),
+      { addOns: [MARK] },
+    );
+    const list = marksOf(result);
+    // The mark of the level record comes first, then the marks of each room, with the `id` of the room before each `id`.
+    expect(list.map((mark) => mark.id)).toEqual(["top", "a/m0", "b/m0", "b/m1", "b/m2", "b/m3"]);
+    expect(list[0]).toEqual({ id: "top", anchor: top, size: 2 });
+    expect(list[1]?.anchor).toEqual({ on: "wall", wall: "a/s0", face: "left", offset: 1, height: 0.3 });
+    expect(list[2]?.anchor).toEqual({ on: "wall", wall: "b/s1", face: "left", offset: 2, height: 0.3 });
+    // Room B starts at (4.15, -0.45). The floor of a room has the `id` of the room.
+    const [, , , floor, ceiling, object] = list.map((mark) => mark.anchor);
+    expect(floor?.on === "floor" ? floor.floor : undefined).toBe("b");
+    expectPoint(floor?.on === "floor" ? floor.at : undefined, 5.15, 1.55, 12);
+    expect(ceiling !== undefined && "floor" in ceiling).toBe(false);
+    expectPoint(ceiling?.on === "ceiling" ? ceiling.at : undefined, 6.15, 0.55, 12);
+    expect(object).toEqual({ on: "object", object: "b/desk", at: [0, 0, 0.8] });
+    expect(result.layerFindings).toEqual([]);
+    // Each anchor is on the room record of the level.
+    expect(checkLayers(resultScene(result), [MARK])).toEqual([]);
+  });
+
+  it("gives a different floor of a room the name of the room before its `id`", () => {
+    const inA = marks({ on: "floor", at: [1, 1], floor: "rug" }, { on: "floor", at: [1, 1] });
+    const result = expandLevel(level([{ id: "a", survey: { ...A, layers: { "mark/1": inA } } }]), { addOns: [MARK] });
+    expect(marksOf(result).map((mark) => mark.anchor)).toEqual([
+      { on: "floor", at: [1, 1], floor: "a/rug" },
+      { on: "floor", at: [1, 1] },
+    ]);
+  });
+
+  it("changes the anchors of a room in a different unit to the unit of the level", () => {
+    // B is 10 ft by 10 ft, and it starts at (4.15, 1.45 - 5.5 ft).
+    const feet = survey(sides([10, 10, 10, 10], LEFT4), {
+      unit: "ft",
+      height: 8,
+      wallThickness: 0.5,
+      openings: [{ ...door("d", "s3", 3, 3), height: 6.5 }],
+      objects: [{ ...desk, offset: 2, width: 3, depth: 2, height: 2.5 }],
+      layers: { "mark/1": marks({ on: "wall", wall: "s1", face: "left", offset: 5, height: 1 }, { on: "floor", at: [5, 5] }, { on: "object", object: "desk", at: [0, 0, 2.5] }) },
+    });
+    const result = expandLevel(withB(feet), { addOns: [MARK] });
+    const [wall, floor, object] = marksOf(result).map((mark) => mark.anchor);
+    expect(wall?.on === "wall" ? [wall.wall, wall.face] : undefined).toEqual(["b/s1", "left"]);
+    expect(wall?.on === "wall" ? wall.offset : undefined).toBeCloseTo(5 * 0.3048, 12);
+    expect(wall?.on === "wall" ? wall.height : undefined).toBeCloseTo(0.3048, 12);
+    expectPoint(floor?.on === "floor" ? floor.at : undefined, 4.15 + 5 * 0.3048, 1.45 - 0.5 * 0.3048, 9);
+    expect(object?.on === "object" ? object.at?.[2] : undefined).toBeCloseTo(2.5 * 0.3048, 12);
+    expect(checkLayers(resultScene(result), [MARK])).toEqual([]);
+  });
+
+  it("gives a level in a different unit than its surveys, with the layer of the level record as it is", () => {
+    const top: Anchor = { on: "wall", wall: "a/s0", face: "left", offset: 100, height: 30 };
+    const inB = marks({ on: "floor", at: [1, 2] });
+    const result = expandLevel({ ...withB({ ...B, layers: { "mark/1": inB } }), unit: "cm", layers: { "mark/1": marks(top) } }, { addOns: [MARK] });
+    const [first, second] = marksOf(result);
+    // The anchors of the level record are in the unit of the level already.
+    expect(first).toEqual({ id: "m0", anchor: top, size: 1 });
+    expect(second?.id).toBe("b/m0");
+    expectPoint(second?.anchor.on === "floor" ? second.anchor.at : undefined, 515, 155, 6);
+    expect(checkLayers(resultScene(result), [MARK])).toEqual([]);
+  });
+
+  it("tells a layer of a room that has no add-on, with the `id` of the room", () => {
+    const rooms: LevelRoom[] = [
+      { id: "a", survey: A },
+      { id: "b", survey: { ...B, layers: { "pipe/1": { taps: [] }, "mark/1": marks({ on: "wall", wall: "s0", face: "left", offset: 1, height: 1 }) } } },
+    ];
+    const result = expandLevel(level(rooms, [AB]), { addOns: [MARK] });
+    expect(Object.keys(result.layers ?? {})).toEqual(["mark/1"]);
+    expect(result.layerFindings).toEqual([
+      {
+        level: "error",
+        code: "layer-unknown",
+        layer: "pipe/1",
+        at: "",
+        message: `No add-on of the list reads the layer "pipe/1" of the room "b". The result does not have the layer.`,
+        room: "b",
+      },
+    ]);
+    // With no add-on, the result has no layer of a room, and a finding tells each layer.
+    const bare = expandLevel(level(rooms, [AB]));
+    expect(bare.layers).toEqual({});
+    expect(bare.layerFindings.map((finding) => [finding.code, finding.layer, finding.room])).toEqual([
+      ["layer-unknown", "mark/1", "b"],
+      ["layer-unknown", "pipe/1", "b"],
+    ]);
+  });
+
+  it("keeps the layer of the level record when the add-on has no function `join`, and tells the layer of each room", () => {
+    const own = { "mark/1": marks({ on: "wall", wall: "a/s0", face: "left", offset: 1, height: 1 }), "pipe/1": { taps: [] } };
+    const rooms: LevelRoom[] = [
+      { id: "a", survey: { ...A, layers: { "mark/1": marks() } } },
+      { id: "b", survey: B },
+    ];
+    const result = expandLevel(level(rooms, [AB], { layers: own }), { addOns: [markAddOn("mark/1")] });
+    expect(result.layers).toEqual(own);
+    expect(result.layerFindings).toEqual([
+      {
+        level: "error",
+        code: "layer-unknown",
+        layer: "mark/1",
+        at: "",
+        message: `The add-on of the layer "mark/1" has no function "join", so the result does not have the layer of the room "a".`,
+        room: "a",
+      },
+    ]);
+  });
+
+  it("gives the findings of the read of each room first, then the findings of the join", () => {
+    const rooms: LevelRoom[] = [
+      { id: "a", survey: { ...A, layers: { "mark/1": marks() } } },
+      { id: "b", survey: { ...B, layers: { "pipe/1": { taps: [] } } } },
+    ];
+    const result = expandLevel(level(rooms, [AB]), { addOns: [markAddOn("mark/1")] });
+    expect(result.layerFindings.map((finding) => [finding.code, finding.layer, finding.room])).toEqual([
+      ["layer-unknown", "pipe/1", "b"],
+      ["layer-unknown", "mark/1", "a"],
+    ]);
+  });
+
+  it("gives the survey of each room with no layers, and does not change the level record", () => {
+    const record = level(
+      [
+        { id: "a", survey: { ...A, layers: { "mark/1": marks({ on: "wall", wall: "s0", face: "left", offset: 1, height: 1 }) } } },
+        { id: "b", survey: B },
+      ],
+      [AB],
+    );
+    const text = JSON.stringify(record);
+    const result = expandLevel(record, { addOns: [MARK] });
+    expect(result.rooms.map((room) => "layers" in room.survey)).toEqual([false, false]);
+    expect(result.rooms.map((room) => "layers" in room.result)).toEqual([false, false]);
+    expect(result.rooms.map((room) => room.result.layerFindings)).toEqual([[], []]);
+    expect(JSON.stringify(record)).toBe(text);
+  });
+
+  it("puts a mark of a room at the place of an outlet with the same numbers, for each room and each unit", () => {
+    const size = fc.double({ min: 2, max: 12, noNaN: true });
+    const part = fc.double({ min: 0, max: 1, noNaN: true });
+    const unit = fc.constantFrom("m", "ft", "cm");
+    fc.assert(
+      fc.property(size, size, fc.boolean(), fc.integer({ min: 0, max: 3 }), part, part, unit, unit, (width, depth, toLeft, index, along, up, own, of) => {
+        const turn = toLeft ? "left" : "right";
+        const wall = `s${index}`;
+        const offset = along * (index % 2 === 0 ? width : depth);
+        const height = up * 2;
+        const b = survey(sides([width, depth, width, depth], [turn, turn, turn, turn]), {
+          unit: own,
+          outlets: [{ id: "o", wall, offset, height }],
+          layers: { "mark/1": marks({ on: "wall", wall, face: "left", offset, height }) },
+        });
+        const result = expandLevel(
+          level(
+            [
+              { id: "a", survey: A },
+              { id: "b", survey: b },
+            ],
+            [],
+            { unit: of },
+          ),
+          { addOns: [MARK] },
+        );
+        const outlet = result.room.outlets?.find((item) => item.id === "b/o");
+        expect(outlet).toBeDefined();
+        expect(marksOf(result)).toEqual([{ id: "b/m0", anchor: { on: "wall", wall: outlet?.wall, face: outlet?.face, offset: outlet?.offset, height: outlet?.height }, size: 1 }]);
+        expect(result.layerFindings).toEqual([]);
+      }),
+    );
   });
 });
