@@ -1,23 +1,27 @@
 import {
+  ANCHOR_CODES,
+  checkLayers,
   checkRoom,
   checkScene,
   metersPer,
+  resultScene,
   SCENE_SCHEMA,
   SURVEY_SCHEMA,
+  type AddOn,
   type Finding,
+  type FindingLevel,
   type FormCollection,
   type FormUsual,
   type LayerForm,
   type LengthUnit,
   type Opening,
-  type PlacedObject,
   type Room,
   type Survey,
   type SurveyObject,
   type SurveyResult,
   type SurveyTurn,
 } from "@mark1russell7/room-view";
-import { collectionOf, FORMS } from "./add-ons.ts";
+import { collectionOf, CORE_ADD_ONS, FORMS } from "./add-ons.ts";
 import { ELECTRICAL } from "./electrical.ts";
 import { storeFromV1 } from "./store-v1.ts";
 
@@ -1565,8 +1569,16 @@ function fieldWords(kind: FeatureKind, field: FeatureField): string {
   return kind === "point" ? "height above the floor" : "height";
 }
 
-/** This function gives the two messages of a finding of the room check about a feature: the full message and the short message. */
-function findingTexts(finding: Finding, item: PlacedFeature, name: string, wall: string): readonly [text: string, note: string] {
+/** A fault of the place of a feature. The room check finds the faults of an opening, and the check of the layers finds the faults of a point. */
+interface PlaceFault {
+  readonly code: string;
+  readonly level: FindingLevel;
+}
+
+const ANCHOR_FAULTS: ReadonlySet<string> = new Set(ANCHOR_CODES);
+
+/** This function gives the two messages of a fault of the place of a feature: the full message and the short message. */
+function findingTexts(finding: PlaceFault, item: PlacedFeature, name: string, wall: string): readonly [text: string, note: string] {
   const label = `${name.slice(0, 1).toUpperCase()}${name.slice(1)}`;
   const numbers = item.reading.state === "ok" ? item.reading.numbers : undefined;
   switch (finding.code) {
@@ -1580,9 +1592,9 @@ function findingTexts(finding: Finding, item: PlacedFeature, name: string, wall:
       return [`${label} on ${wall} is higher than the wall.`, "It is higher than the wall."];
     case "opening-overlap":
       return [`${label} on ${wall} is in the space of a different opening.`, "It is in the space of a different opening of this wall."];
-    case "outlet-range":
+    case "anchor-range":
       return [`${label} is not on ${wall}.`, "It is not on the wall."];
-    case "outlet-in-opening":
+    case "anchor-in-opening":
       return [`${label} on ${wall} is in an opening.`, "It is in an opening of this wall."];
     default:
       return [`Examine the numbers of ${name} on ${wall}.`, "Examine its numbers."];
@@ -1591,15 +1603,23 @@ function findingTexts(finding: Finding, item: PlacedFeature, name: string, wall:
 
 /**
  * This function gives the faults of the features of a draft, in the sequence of the walk. A feature has one fault at most.
- * The first field that needs a value comes before a fault of the place of the feature, which the room check finds.
+ * The first field that needs a value comes before a fault of the place of the feature.
  * A feature on a wall with no length has no fault of its place.
+ *
+ * The room check finds the fault of the place of an opening. A point is a record of a layer, so the check of the layers finds the fault of its anchor.
+ * `result` has its layers only from an expansion with the add-ons, as `roomResult` gives it. `addOns` are those add-ons.
  */
-export function featureFaults(draft: Draft, result: SurveyResult, forms: readonly LayerForm[] = FORMS): readonly FeatureFault[] {
+export function featureFaults(draft: Draft, result: SurveyResult, forms: readonly LayerForm[] = FORMS, addOns: readonly AddOn<unknown>[] = CORE_ADD_ONS): readonly FeatureFault[] {
   const placed = placedFeatures(draft, forms);
   if (placed.length === 0) return [];
-  const findings = new Map<string, Finding>();
+  const findings = new Map<string, PlaceFault>();
   for (const finding of checkRoom(result.room)) {
-    if ((finding.record === "opening" || finding.record === "outlet") && !findings.has(finding.at)) findings.set(finding.at, finding);
+    if (finding.record === "opening" && !findings.has(finding.at)) findings.set(finding.at, finding);
+  }
+  if (result.layers !== undefined) {
+    for (const finding of checkLayers(resultScene(result), addOns)) {
+      if (ANCHOR_FAULTS.has(finding.code) && !findings.has(finding.at)) findings.set(finding.at, finding);
+    }
   }
   return placed.flatMap((item): FeatureFault[] => {
     const { side, feature, id, reading } = item;
@@ -1621,18 +1641,14 @@ export function featureFaults(draft: Draft, result: SurveyResult, forms: readonl
 }
 
 /**
- * This function gives a room record with no opening and no outlet that has an error.
+ * This function gives a room record with no opening that has an error.
  * A room with an error does not give a full model, so the page shows and saves this record.
+ * A point is a record of a layer, so `shownLayers` removes a point that has an error.
  */
 export function shownRoom(room: Room, faults: readonly FeatureFault[]): Room {
   const bad = new Set(faults.filter((fault) => fault.level === "error").map((fault) => fault.id));
-  if (bad.size === 0) return room;
-  const { openings, outlets, ...rest } = room;
-  return {
-    ...rest,
-    ...(openings === undefined ? {} : { openings: openings.filter((item) => !bad.has(item.id)) }),
-    ...(outlets === undefined ? {} : { outlets: outlets.filter((item) => !bad.has(item.id)) }),
-  };
+  if (bad.size === 0 || room.openings === undefined) return room;
+  return { ...room, openings: room.openings.filter((item) => !bad.has(item.id)) };
 }
 
 /** The place of a feature along its wall, for the drawing. */
@@ -1754,18 +1770,6 @@ export function objectFaults(draft: Draft, result: SurveyResult): readonly Objec
     if (finding === undefined) return [];
     const [text, note] = objectTexts(finding, item.words, where, byId);
     return [{ ...base, level: finding.level, text, note }];
-  });
-}
-
-/**
- * This function gives the objects for a shown room.
- * The page does not show an outlet with an error, so an object does not keep an outlet that the shown room does not have.
- */
-export function shownObjects(room: Room, objects: readonly PlacedObject[]): readonly PlacedObject[] {
-  const outlets = new Set((room.outlets ?? []).map((item) => item.id));
-  return objects.map((object): PlacedObject => {
-    const { outlet, ...rest } = object;
-    return outlet === undefined || outlets.has(outlet) ? object : rest;
   });
 }
 
@@ -2143,7 +2147,7 @@ export function storeText(store: Store): string {
  * This function gives the name of the file of a room.
  * The name has the letters and digits of the name of the room in small letters, with a hyphen between the words.
  */
-export function fileName(draft: Draft, kind: "survey" | "room"): string {
+export function fileName(draft: Draft, kind: "survey" | "scene"): string {
   const words = nameWords(draft.name);
   return `${words.length === 0 ? "room" : words.join("-")}.${kind}.json`;
 }

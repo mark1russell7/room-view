@@ -1,4 +1,5 @@
-import { checkRoom, expandLevel, expandSurvey, LEVEL_SCHEMA, type Level, type LevelResult } from "@mark1russell7/room-view";
+import type { ElectricalLayer } from "@mark1russell7/electrical";
+import { LEVEL_SCHEMA, type Level, type LevelResult } from "@mark1russell7/room-view";
 import { SAMPLE_LEVEL, SAMPLE_SURVEY } from "@mark1russell7/room-view/sample";
 import { describe, expect, it } from "vitest";
 import {
@@ -21,9 +22,9 @@ import {
   type Store,
   type TypedLength,
 } from "./draft.ts";
-import { circuitOf, circuitsOf as storeCircuits, withCircuit, withNewCircuit, withOutletCircuit, type DraftCircuit } from "./electrical.fixture.ts";
+import { circuitOf, circuitsOf as storeCircuits, withCircuit, withNewCircuit, withOutletCircuit, wiring, type DraftCircuit } from "./electrical.fixture.ts";
 import { ELECTRICAL } from "./electrical.ts";
-import { roomSurvey, storeLists } from "./layers.ts";
+import { levelResult, roomResult, roomSurvey, shownLayers, storeLists, storeSystem } from "./layers.ts";
 import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, roomIds, shownLevel, shownLevelObjects, surveyDrafts, type Joint } from "./level.ts";
 
 const typed = (text: string): TypedLength => ({ value: text, inches: "" });
@@ -89,9 +90,9 @@ const PAIR = withConnection(storeOf([A, B]), end(0, "f1"), end(1, "f2"));
 /** The two rooms with their two doors joined. The second connection is a check of the first one. */
 const TWICE = withConnection(PAIR, end(0, "f2"), end(1, "f1"));
 
-const expand = (store: Store): LevelResult => expandLevel(levelOf(store));
+const expand = (store: Store): LevelResult => levelResult(levelOf(store));
 const joints = (store: Store): readonly Joint[] => jointsOf(store, expand(store));
-const statusFor = (draft: Draft): Status => statusOf(draft, expandSurvey(roomSurvey(draft)));
+const statusFor = (draft: Draft): Status => statusOf(draft, roomResult(roomSurvey(draft)));
 const statusAll = (store: Store): Status => levelStatus(store.rooms, store.rooms.map(statusFor), expand(store), joints(store));
 
 /** This function gives a store with a different room B. */
@@ -109,6 +110,10 @@ const WIRED: Store = (() => {
 
 /** This function gives the circuit of each feature of each room. */
 const circuitsOf = (rooms: readonly Draft[]): readonly (readonly (string | undefined)[])[] => rooms.map((room) => room.sides.flatMap((side) => side.features.map((item) => circuitOf(item))));
+
+/** This function gives the circuit of each outlet of each room of a level record. */
+const outletCircuits = (level: Level): readonly (readonly (string | undefined)[] | undefined)[] =>
+  level.rooms.map((room) => wiring(room.survey.layers)?.outlets?.map((item) => item.circuit));
 
 /** This function gives the circuits of the lists of the rooms of a file, as a store has them. */
 const listed = (drafts: { readonly lists: readonly DraftList[] }): readonly DraftCircuit[] => storeCircuits({ ...storeOf([A]), lists: drafts.lists });
@@ -137,24 +142,27 @@ describe("levelOf", () => {
     expect(levelOf(storeOf([exampleDraft("ft-in"), A])).unit).toBe("in");
   });
 
-  it("lists the circuits of the store, and each outlet names the id of its circuit", () => {
+  it("lists the circuits of the store in its layer, and each outlet of a room names the id of its circuit", () => {
     const level = levelOf(WIRED);
-    expect(level.circuits).toEqual([
-      { id: "kitchen", name: "Kitchen", breaker: 20, voltage: 230, limit: 3680 },
-      { id: "circuit-2", breaker: 16, voltage: 230, limit: 2944 },
-    ]);
-    expect(level.rooms.map((room) => room.survey.outlets?.map((item) => item.circuit))).toEqual([["kitchen"], ["kitchen"]]);
-    // The level lists the circuits, so the survey of a room lists none.
-    expect(level.rooms.every((room) => !("circuits" in room.survey))).toBe(true);
-    expect(Object.keys(levelOf(PAIR))).not.toContain("circuits");
-    // The circuit of each outlet is a circuit of the level, so the room record of the level has no fault.
-    expect(checkRoom(expandLevel(level).room).filter((finding) => finding.level === "error")).toEqual([]);
+    expect(wiring(level.layers)).toEqual({
+      schema: ELECTRICAL.layer,
+      circuits: [
+        { id: "kitchen", name: "Kitchen", breaker: 20, voltage: 230 },
+        { id: "circuit-2", breaker: 16, voltage: 230 },
+      ],
+    });
+    expect(outletCircuits(level)).toEqual([["kitchen"], ["kitchen"]]);
+    // The level lists the circuits, so the layer of a room lists none.
+    expect(level.rooms.map((room) => wiring(room.survey.layers)?.circuits)).toEqual([undefined, undefined]);
+    expect(Object.keys(levelOf(PAIR))).not.toContain("layers");
+    // The circuit of each outlet is a circuit of the level, so the layers of the level have no fault.
+    expect(levelResult(level).layerFindings).toEqual([]);
   });
 
   it("gives no outlet a circuit with a bad number", () => {
     const level = levelOf(withCircuit(WIRED, "r1", { breaker: "0" }));
-    expect(level.circuits?.map((item) => item.id)).toEqual(["circuit-2"]);
-    expect(level.rooms.map((room) => room.survey.outlets?.map((item) => item.circuit))).toEqual([[undefined], [undefined]]);
+    expect(wiring(level.layers)?.circuits?.map((item) => item.id)).toEqual(["circuit-2"]);
+    expect(outletCircuits(level)).toEqual([[undefined], [undefined]]);
   });
 
   it("makes one connection for each connection of the store, with the ids of the openings", () => {
@@ -206,22 +214,30 @@ describe("draftsOf", () => {
 
   it("keeps the first circuit of an id, from the level or from a survey", () => {
     const level = levelOf(WIRED);
-    const kitchen = level.circuits?.[0];
-    const withSurvey = (circuits: Level["circuits"]): Level => ({ ...level, rooms: level.rooms.map((room, index) => (index === 1 ? { ...room, survey: { ...room.survey, circuits } } : room)) });
-    const same = draftsOf(withSurvey([...(kitchen === undefined ? [] : [kitchen]), { id: "hall", limit: 2944 }]));
+    const kitchen = wiring(level.layers)?.circuits?.[0];
+    /** This function gives the level with circuits in the electrical layer of the second room. */
+    const withSurvey = (circuits: NonNullable<ElectricalLayer["circuits"]>): Level => ({
+      ...level,
+      rooms: level.rooms.map((room, index) => {
+        const layer = wiring(room.survey.layers);
+        return index === 1 && layer !== undefined ? { ...room, survey: { ...room.survey, layers: { [ELECTRICAL.layer]: { ...layer, circuits } } } } : room;
+      }),
+    });
+    const same = draftsOf(withSurvey([...(kitchen === undefined ? [] : [kitchen]), { id: "hall" }]));
     expect(listed(same).map((item) => [item.key, item.name])).toEqual([
       ["r1", "Kitchen"],
       ["r2", ""],
       ["r3", ""],
     ]);
     expect(same.more).toBe(false);
-    const other = draftsOf(withSurvey([{ id: "kitchen", breaker: 15, voltage: 120, limit: 1440 }]));
+    const other = draftsOf(withSurvey([{ id: "kitchen", breaker: 15, voltage: 120 }]));
     expect(listed(other)[0]).toEqual({ key: "r1", name: "Kitchen", breaker: "20", voltage: "230" });
     expect(other.more).toBe(true);
   });
 
   it("tells an outlet of a circuit that the level does not have", () => {
-    const drafts = draftsOf({ ...levelOf(WIRED), circuits: [] });
+    // The level has no electrical layer, so it has no circuit.
+    const drafts = draftsOf({ ...levelOf(WIRED), layers: {} });
     expect(listed(drafts)).toEqual([]);
     expect(circuitsOf(drafts.rooms)).toEqual([[undefined], [undefined]]);
     expect(drafts.more).toBe(true);
@@ -249,10 +265,11 @@ describe("draftsOf", () => {
     const result = expand(store);
     expect(result.objects).toHaveLength(13);
     expect(result.objects.filter((object) => object.id.startsWith("bedroom/")).map((object) => object.kind).sort()).toEqual(["bed", "cabinet"]);
-    const objects = shownLevelObjects(result, shownLevel(result));
+    const objects = shownLevelObjects(result);
     expect(objects).toEqual(result.objects);
-    // The tower and the four nodes of the rack have an outlet.
-    expect(objects.filter((object) => object.outlet !== undefined)).toHaveLength(5);
+    // The tower and the four nodes of the rack have a feed from an outlet.
+    expect(wiring(result.layers)?.feeds).toHaveLength(5);
+    expect(wiring(shownLayers(shownLevel(result), objects, result.layers, storeSystem(store)))?.feeds).toHaveLength(5);
   });
 
   it("reads the level record of a store again", () => {
@@ -497,15 +514,16 @@ describe("shownLevel", () => {
     expect(shown.floors?.map((floor) => floor.id)).toEqual(["a"]);
   });
 
-  it("has no feature with an error", () => {
+  it("keeps each wall and each opening of a room with a bad point, and `shownLayers` removes the point", () => {
     // An outlet at 5 m is not on a wall of 4 m.
     const store = withB(PAIR, box("B", { 3: [hole("f1", "0.1"), hole("f2", "1.9")], 0: [hole("f3", "5", "", "outlet")] }));
     const result = expand(store);
-    expect(result.room.outlets?.map((item) => item.id)).toEqual(["b/outlet-1"]);
+    expect(wiring(result.layers)?.outlets?.map((item) => item.id)).toEqual(["b/outlet-1"]);
     const shown = shownLevel(result);
-    expect(shown.outlets).toEqual([]);
     expect(shown.walls).toHaveLength(8);
     expect(shown.openings).toHaveLength(4);
+    // The layer has no other record, so no layer stays.
+    expect(shownLayers(shown, shownLevelObjects(result), result.layers, "metric")).toBeUndefined();
   });
 });
 
@@ -513,7 +531,7 @@ describe("shownLevelObjects", () => {
   it("gives the objects of a level with no fault", () => {
     const result = expand(withB(TWICE, box("B", { 3: [hole("f1", "0.1"), hole("f2", "1.9")] }, undefined, { 0: [cabinet("o1", "1")] })));
     expect(result.objects.map((object) => object.id)).toEqual(["b/cabinet-1"]);
-    expect(shownLevelObjects(result, shownLevel(result))).toEqual(result.objects);
+    expect(shownLevelObjects(result)).toEqual(result.objects);
   });
 
   it("has no object of a room that does not close", () => {
@@ -521,16 +539,16 @@ describe("shownLevelObjects", () => {
     const two = box("B", { 3: [hole("f1", "0.1"), hole("f2", "1.9")] }, ["4", "3", "4", "2"], { 0: [cabinet("o1", "1")] });
     const result = expand(withConnection(storeOf([one, two]), end(0, "f1"), end(1, "f2")));
     expect(result.objects.map((object) => object.id)).toEqual(["a/cabinet-1", "b/cabinet-1"]);
-    expect(shownLevelObjects(result, shownLevel(result)).map((object) => object.id)).toEqual(["a/cabinet-1"]);
+    expect(shownLevelObjects(result).map((object) => object.id)).toEqual(["a/cabinet-1"]);
   });
 
-  it("removes an outlet with an error from an object", () => {
+  it("keeps an object with a feed from a bad outlet, and `shownLayers` removes the outlet and its feed", () => {
     // An outlet at 5 m is not on a wall of 4 m.
     const room = box("B", { 3: [hole("f1", "0.1"), hole("f2", "1.9")], 0: [hole("f3", "5", "", "outlet")] }, undefined, { 0: [cabinet("o1", "1", "f3")] });
     const result = expand(withB(PAIR, room));
-    expect(result.objects.map((object) => object.outlet)).toEqual(["b/outlet-1"]);
-    const objects = shownLevelObjects(result, shownLevel(result));
+    expect(wiring(result.layers)?.feeds?.map((feed) => [feed.object, feed.outlet])).toEqual([["b/cabinet-1", "b/outlet-1"]]);
+    const objects = shownLevelObjects(result);
     expect(objects.map((object) => object.id)).toEqual(["b/cabinet-1"]);
-    expect(objects[0]?.outlet).toBeUndefined();
+    expect(shownLayers(shownLevel(result), objects, result.layers, "metric")).toBeUndefined();
   });
 });

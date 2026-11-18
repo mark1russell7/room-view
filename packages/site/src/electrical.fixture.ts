@@ -1,3 +1,5 @@
+import type { ElectricalLayer } from "@mark1russell7/electrical";
+import { electrical } from "@mark1russell7/electrical/add-on";
 import {
   listRecords,
   ownedBy,
@@ -23,6 +25,13 @@ import { ELECTRICAL } from "./electrical.ts";
 // The store of the page knows no topic, and the page makes its inputs from the forms of the add-ons.
 // The tests of the store, of the files and of the levels use outlets and circuits as their records of an add-on.
 // The functions of this file make and read those records with the functions of the store. Only tests use this file.
+
+/** This function gives the electrical layer in the layers of a record. A record with no such layer gives `undefined`. */
+export function wiring(layers: Readonly<Record<string, unknown>> | undefined): ElectricalLayer | undefined {
+  if (layers === undefined || !Object.hasOwn(layers, ELECTRICAL.layer)) return undefined;
+  const read = electrical.parse(layers[ELECTRICAL.layer]);
+  return read.ok ? read.layer : undefined;
+}
 
 /** This function tells if a feature is an outlet: a point of the collection of the outlets of the electrical layer. */
 export function isOutlet(feature: DraftFeature): boolean {
