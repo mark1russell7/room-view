@@ -1,4 +1,4 @@
-import type { AddOn, FormSystem, FormValue, LayerForm, Level, Survey } from "@mark1russell7/room-view";
+import type { AddOn, FormSystem, FormValue, LayerForm } from "@mark1russell7/room-view";
 import type { AddOnMarks } from "@mark1russell7/room-view/marks";
 
 // An add-on of the page "Measure a room": the type that the page knows about a topic.
@@ -31,13 +31,6 @@ export interface PageAddOn<Layer = unknown> {
    * An add-on with no such function has no mark in the 3D view.
    */
   marks?(): Promise<AddOnMarks<Layer>>;
-  /**
-   * This function gives the layer of the old fields of a survey record, from the time before a survey record had layers.
-   * A survey with no such field gives `undefined`. The page uses the function only for a survey with no layer of the form.
-   */
-  fromSurvey?(survey: Survey): Layer | undefined;
-  /** This function gives the layer of the old fields of a level record, as `fromSurvey` does for a survey record. */
-  fromLevel?(level: Level): Layer | undefined;
   /**
    * This function removes from a layer each value that the page calculates from the fields of the form.
    * The form does not have such a value. Without this function, the page tells a person that the file has data that the page does not keep.

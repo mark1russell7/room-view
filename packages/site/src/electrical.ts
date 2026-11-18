@@ -1,4 +1,4 @@
-import { ELECTRICAL_SCHEMA, electricalSpace, evaluateCircuit, fromLevelV1, fromSurveyV1, RATED_LIMIT, type Circuit, type ElectricalLayer } from "@mark1russell7/electrical";
+import { ELECTRICAL_SCHEMA, electricalSpace, evaluateCircuit, RATED_LIMIT, type Circuit, type ElectricalLayer } from "@mark1russell7/electrical";
 import { electrical } from "@mark1russell7/electrical/add-on";
 import { ELECTRICAL_FORM } from "@mark1russell7/electrical/form";
 import { readFormRecord, type FormSystem, type FormValue } from "@mark1russell7/room-view";
@@ -8,8 +8,7 @@ import type { PageAddOn } from "./page-add-on.ts";
 //
 // The page writes the records of the electrical form as the layer `electrical/1` of a survey record and of a level record.
 // The add-on of the package reads that layer, and the page reads the records of the form from it.
-// This file has the parts that the form does not have: the texts of the add-on for the page, the limit of a circuit, and the read of an old file.
-// An old file has the outlets, the circuits and the outlet of an object as fields of a survey record. The package moves them to a layer.
+// This file has the parts that the form does not have: the texts of the add-on for the page, and the limit of a circuit.
 
 /** The names of the electrical layer that the page uses: the layer, three collections and seven fields. */
 export interface ElectricalNames {
@@ -102,11 +101,6 @@ function plainLayer(layer: ElectricalLayer, system: FormSystem): ElectricalLayer
   return { ...layer, circuits };
 }
 
-/** This function gives a layer that has a record. A layer with no record gives `undefined`. */
-function withRecords(layer: ElectricalLayer): ElectricalLayer | undefined {
-  return layer.outlets === undefined && layer.circuits === undefined && layer.feeds === undefined ? undefined : layer;
-}
-
 /**
  * This function gives a power in watts as text. A power below 100 has one decimal place at most, and each other power has none.
  * With no `locale`, the text has the number format of the browser.
@@ -119,10 +113,10 @@ export function wattText(watts: number, locale?: string): string {
 const ADD_BREAKER = "Add a breaker";
 
 /**
- * The electrical add-on of the page: its form, the add-on of the package, its marks, its texts and the read of an old file.
+ * The electrical add-on of the page: its form, the add-on of the package, its marks and its texts.
  *
  * The marks come with the 3D view, so the first load of the page does not have them.
- * An old file has no layer. `fromSurveyV1` and `fromLevelV1` of the package move its electrical fields to a layer.
+ * An old file has no layer. The read `v1` of the add-on of the package moves its electrical fields to a layer.
  */
 export const ELECTRICAL_ADD_ON: PageAddOn<ElectricalLayer> = {
   form: ELECTRICAL_FORM,
@@ -131,8 +125,6 @@ export const ELECTRICAL_ADD_ON: PageAddOn<ElectricalLayer> = {
     const { electricalAddOnMarks } = await import("@mark1russell7/electrical/marks");
     return electricalAddOnMarks();
   },
-  fromSurvey: (survey) => withRecords(fromSurveyV1(survey)),
-  fromLevel: (level) => withRecords(fromLevelV1(level)),
   plain: plainLayer,
   lists: {
     [ELECTRICAL.circuits]: {

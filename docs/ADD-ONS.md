@@ -84,6 +84,16 @@ interface AddOn<Layer> {
   check(layer: Layer, space: SceneSpace): readonly AddOnFault[];
   /** This optional function gives one layer from the parts of a level. The section about a survey and a level tells its rules. */
   join?(parts: readonly LayerPart<Layer>[]): Layer;
+  /** The optional read of the old records of the add-on in the records of version 1 of the core. The section about version 2 tells its rules. */
+  readonly v1?: AddOnV1<Layer>;
+}
+
+/** The read of the old fields of an add-on in a record of version 1. */
+interface AddOnV1<Layer> {
+  /** The names of the old fields in each kind of record, and in each object. */
+  readonly fields: { readonly [Kind in FileKind | "object"]?: readonly string[] };
+  /** This function gives the layer of the old fields of a record, or `undefined` for a record with no old record. */
+  read(record: unknown, kind: FileKind): LayerParse<Layer> | undefined;
 }
 
 /** The marks of one add-on. This value is in the entry `/marks` of the add-on, so the root entry has no visual part. */
@@ -111,6 +121,20 @@ function layerMarks(scene: Scene, addOns: readonly AddOn<unknown>[], marks: read
 - The function `marks` is a method, as the functions of `AddOn` are. Thus one list holds the marks values of different layers.
 
 `recordName(kind, id)` gives one name for each record, for example `object:desk` or `electrical/1:o1`. The kind of a record of a layer is the name of the layer. A finding, a mark and the selection use this name, so a click on a finding selects its mark.
+
+### Version 2 of the formats
+
+The core of version 2 has no record of a topic. `room/2`, `scene/2`, `survey/2` and `level/2` have only space and layers.
+`readRecord` of the entry `/schema` reads a record of version 1 or of version 2, and it gives the record in version 2:
+
+- The read removes the old fields of each add-on with the read `v1`: from the record, from each object and from each nested survey.
+- The function `read` of the add-on gives the layer of these fields. The level record and the survey of each room get a layer.
+- A record with a layer and the old fields of the same add-on keeps the layer. The warning `read-both` tells it.
+- A field of version 1 that no add-on of the list removes is a fault of the form. `readRecord` does not throw.
+- A `room/1` with old records gives a `scene/2`, because a room record has no layers.
+
+The schemas of the core use `zod/mini`. A page that reads the layers at each change loads the schemas at its start, and `zod/mini` keeps that script small.
+`zod/mini` has no messages, so `READ_CONTEXT` of the core gives the English messages of zod to each read. An add-on gives it to the read of its layer too.
 
 ### The layers of a survey and of a level
 
@@ -199,7 +223,8 @@ A mark is a record that a viewer draws. A mark has no topic. The marks are in `@
 The first add-on is a package in this repository: `@mark1russell7/electrical`, in `packages/electrical`.
 
 - The root entry is the model, with no browser part: the records of the layer, its checks and the formulas. It imports no zod.
-- The entry `/schema` has the zod schema of the layer. The entry `/add-on` has the add-on value for the contract of the core.
+- The entry `/schema` has the schema of the layer in `zod/mini` and `electricalV1`, the read of the old records. The entry `/add-on` has the add-on value.
+- The entry `/sample` has the samples of the core with an electrical layer.
 - The entry `/marks` maps the records to the marks of `@mark1russell7/visuals`.
 - `@mark1russell7/cluster-design` imports the formulas of the root entry. It does not keep a copy.
 
@@ -247,10 +272,11 @@ The add-on also has these parts:
   A link goes from its outlet to the center of its placed object. A record with no place gives no mark.
 - The form: `ELECTRICAL_FORM` of the entry `/form` has the circuits, the outlets of the walls and the power of each object. The site gets them from the add-on, not from the core.
 - The layer of a level: `joinElectrical` is the function `join` of the add-on. An outlet and a feed get the name of their room, for example `kitchen/o1`.
-  A circuit keeps its `id`, because one circuit gives power to outlets in more than one room.
+  A circuit keeps its `id`, because one circuit gives power to outlets in more than one room. The first circuit of an `id` stays.
 - `fromSceneV1` moves the electrical records of a `scene/1` to a layer: the outlets, the circuits, the loads and the outlet of each object. The loads of a circuit become its `otherLoad`.
 - `fromSurveyV1` and `fromLevelV1` move the old electrical records of a `survey/1` and of a `level/1` to layers.
   A circuit keeps its `id`, so an outlet of a different room names it.
+- `electricalV1` is the read `v1` of the add-on. It gives these moves to `readRecord` of the core.
 
 ## The form of the site
 
@@ -378,12 +404,14 @@ Thus `@mark1russell7/room-view` goes to 0.2.3, and `@mark1russell7/electrical` g
 The ids outside a layer in the form are a feature of the core. The move of an old survey and of an old level is a feature of the add-on.
 Thus `@mark1russell7/room-view` goes to 0.2.4, and `@mark1russell7/electrical` goes to 0.3.4.
 The page that writes the layers changes only the site. The site is not a package on npm, so it has no version.
-The last part of step 6 removes records from the public API, so `@mark1russell7/room-view` then goes to 0.3.0.
+The last part of step 6 removes the electrical records, their types and the loads from the public API of the core, and the formats go to version 2.
+Before 1.0.0, a break raises MINOR, so `@mark1russell7/room-view` goes to 0.3.0.
+The schemas of the core and of the add-on change their type to the types of `zod/mini`, so `@mark1russell7/electrical` goes to 0.4.0.
 
-- `room/1` and `scene/1` stay readable. `fromSceneV1` of the electrical add-on gives the electrical layer of a `scene/1`. Step 6 adds the move of the scene to `scene/2`.
+- The records of version 1 stay readable: `readRecord` of the core gives the record in version 2, with the layers of the add-ons.
 - A page can read the old electrical records of a `survey/1` and of a `level/1`: `fromSurveyV1` and `fromLevelV1` of the electrical add-on give their layers.
 - `@mark1russell7/electrical` starts at 0.1.0. It depends on the core of this workspace, so a new version of the core gives a new version of the add-on.
-- The core rejects `outlets` in a `room/2` with a finding that names `fromSceneV1`.
+- The core rejects `outlets` in a `room/2`: the schema refuses a field that the format does not have.
 
 ## The steps
 
@@ -405,7 +433,7 @@ The first steps add, and the last step removes. Thus each step keeps the page an
    For this part, the form keeps a field that names a record outside its layer (`@mark1russell7/room-view` 0.2.4).
    The electrical add-on moves the old records of a survey and of a level to layers (`@mark1russell7/electrical` 0.3.4).
    Last, the core removes `outlets`, `circuits`, `loads` and `PlacedObject.outlet`, also from a survey and from a level.
-   It gives `room/2`, `scene/2`, `survey/2` and `level/2`. This part is the break of the version.
+   It gives `room/2`, `scene/2`, `survey/2` and `level/2`, and `readRecord` reads the old files (`@mark1russell7/room-view` 0.3.0, `@mark1russell7/electrical` 0.4.0).
 7. The procedures packages.
 
 ## The answers of the review
