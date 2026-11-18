@@ -39,7 +39,7 @@ check("the legend counts the outlets of each level", text('.legend-item[data-lev
 // The plan shows each outlet with the sign of its level. The 3D picture has no elements to examine.
 const plan = $("#viewer svg.plan");
 if (plan !== null) {
-  const signs = (shape: string): number => plan.querySelectorAll(`[data-record^="outlet:"][data-shape="${shape}"]`).length;
+  const signs = (shape: string): number => plan.querySelectorAll(`[data-record^="electrical/1:"][data-shape="${shape}"]`).length;
   check("the plan shows the outlets of a circuit near its limit as triangles", signs("triangle") === 2 && signs("disc") === 5, [signs("triangle"), signs("disc")]);
 }
 

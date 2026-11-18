@@ -29,10 +29,9 @@ describe("buildModel", () => {
     expect(south.every((part) => part.wall === "south")).toBe(true);
   });
 
-  it("puts a window and an outlet with their wall", () => {
+  it("puts a window with its wall", () => {
     expect(partOf(model, "glass:window-east").wall).toBe("east");
     expect(partOf(model, "glass:window-east").record).toBe("opening:window-east");
-    expect(partOf(model, "outlet:nook-2").wall).toBe("inset-east");
     expect(partOf(model, "floor:floor").wall).toBeUndefined();
     expect(partOf(model, "object:desk").wall).toBeUndefined();
   });
@@ -59,9 +58,9 @@ describe("buildModel", () => {
   });
 
   it("knows the place of each mesh in the world before the first picture", () => {
-    // The group turns the z axis of the room to the y axis, so a part 0.3 m above the floor is at y = 0.3.
-    const outlet = partOf(model, "outlet:south-1");
-    expect(outlet.mesh.matrixWorld.elements[13]).toBeCloseTo(0.3, 6);
+    // The group turns the z axis of the room to the y axis. The desk is 0.74 m high, so its center is at y = 0.37.
+    const desk = partOf(model, "object:desk");
+    expect(desk.mesh.matrixWorld.elements[13]).toBeCloseTo(0.37, 6);
   });
 });
 
@@ -137,52 +136,6 @@ describe("paintPart", () => {
     const selected = desk.lines.material.linewidth;
     paintPart(desk, SAMPLE_SCENE, LIGHT_THEME, 0);
     expect(selected).toBe(desk.lines.material.linewidth * 2);
-    disposeModel(model);
-  });
-
-  it("gives the plate of an outlet the color of the level of its circuit", () => {
-    const model = buildModel(SAMPLE_SCENE);
-    const ok = partOf(model, "outlet:south-1");
-    const near = partOf(model, "outlet:nook-2");
-    paintPart(ok, SAMPLE_SCENE, LIGHT_THEME, 0);
-    paintPart(near, SAMPLE_SCENE, LIGHT_THEME, 0);
-    expect(ok.level).toBe("ok");
-    expect(near.level).toBe("near");
-    expect(hex(ok.mesh.material.color)).toBe(LIGHT_THEME.levels.ok);
-    expect(hex(near.mesh.material.color)).toBe(LIGHT_THEME.levels.near);
-    paintPart(near, SAMPLE_SCENE, DARK_THEME, 0);
-    expect(hex(near.mesh.material.color)).toBe(DARK_THEME.levels.near);
-    disposeModel(model);
-  });
-
-  it("makes the plate of an outlet less clear on a clear wall", () => {
-    const model = buildModel(SAMPLE_SCENE);
-    const outlet = partOf(model, "outlet:south-1");
-    paintPart(outlet, SAMPLE_SCENE, LIGHT_THEME, 0);
-    expect(outlet.mesh.material.opacity).toBe(1);
-    outlet.fade = 1;
-    paintPart(outlet, SAMPLE_SCENE, LIGHT_THEME, 0);
-    expect(outlet.mesh.material.opacity).toBeCloseTo(0.35, 9);
-    // A clear plate writes no depth, so it does not hide its sign.
-    expect(outlet.mesh.material.depthWrite).toBe(false);
-    disposeModel(model);
-  });
-
-  it("uses the option near of the loads", () => {
-    // The circuit of this outlet has 420 W of 1440 W.
-    const model = buildModel(SAMPLE_SCENE, {}, { near: 0.25 });
-    expect(partOf(model, "outlet:south-1").level).toBe("near");
-    disposeModel(model);
-  });
-
-  it("gives the plate of an outlet with no circuit the color of outlets", () => {
-    const outlets = [{ id: "free", wall: "south", face: "left" as const, offset: 1, height: 0.3 }];
-    const scene = { ...SAMPLE_SCENE, room: { ...SAMPLE_SCENE.room, outlets }, objects: [] };
-    const model = buildModel(scene);
-    const free = partOf(model, "outlet:free");
-    paintPart(free, scene, LIGHT_THEME, 0);
-    expect(free.level).toBeUndefined();
-    expect(hex(free.mesh.material.color)).toBe(LIGHT_THEME.outlet);
     disposeModel(model);
   });
 });

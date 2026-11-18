@@ -20,8 +20,8 @@ const layer: ElectricalLayer = {
 /** One wall along the x axis, 4 long, and a desk. The scene has the layers of the argument. */
 function scene(layers?: Readonly<Record<string, unknown>>): Scene {
   return {
-    schema: "scene/1",
-    room: { schema: "room/1", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "a", from: [0, 0], to: [4, 0] }] },
+    schema: "scene/2",
+    room: { schema: "room/2", unit: "m", height: 2.4, wallThickness: 0.2, walls: [{ id: "a", from: [0, 0], to: [4, 0] }] },
     objects: [{ id: "desk", kind: "desk", size: [2, 1, 0.75], at: [2, 1.5] }],
     ...(layers === undefined ? {} : { layers }),
   };
@@ -167,7 +167,7 @@ describe("the layer of a level", () => {
       feeds: [{ id: "f", object: "desk", outlet: "o", watts: 90 }],
     };
     const survey: Survey = {
-      schema: "survey/1",
+      schema: "survey/2",
       unit: "m",
       height: 2.5,
       wallThickness: 0.15,
@@ -176,7 +176,7 @@ describe("the layer of a level", () => {
       layers: { "electrical/1": inRoom },
     };
     const level: Level = {
-      schema: "level/1",
+      schema: "level/2",
       unit: "m",
       rooms: [
         { id: "kitchen", survey },

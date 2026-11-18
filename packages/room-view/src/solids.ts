@@ -18,7 +18,7 @@ import type { OpeningKind, PlacedObject, Room, Scene } from "./room.ts";
 import { LARGEST_LENGTH, lengthsInRange, metersPer } from "./units.ts";
 
 /** These are the kinds of a solid. */
-export const SOLID_KINDS: readonly ["floor", "wall", "glass", "outlet", "object"] = ["floor", "wall", "glass", "outlet", "object"];
+export const SOLID_KINDS: readonly ["floor", "wall", "glass", "object"] = ["floor", "wall", "glass", "object"];
 
 /** A kind of solid. */
 export type SolidKind = (typeof SOLID_KINDS)[number];
@@ -49,7 +49,7 @@ export interface Solid {
   /** The name of the solid. Each solid of a model has a different name. */
   readonly id: string;
   readonly kind: SolidKind;
-  /** The `id` of the record that the solid comes from: a wall, a floor, an opening, an outlet or a placed object. */
+  /** The `id` of the record that the solid comes from: a wall, a floor, an opening or a placed object. */
   readonly source: string;
   readonly shape: SolidShape;
 }
@@ -67,9 +67,6 @@ export const FLOOR_DEPTH = 0.1;
 
 /** The thickness of the glass of a window, in meters. */
 export const GLASS_THICKNESS = 0.02;
-
-/** The size of the plate of an outlet, in meters. The plate of a duplex outlet in North America is 70 mm by 115 mm. */
-export const OUTLET_PLATE: { readonly width: number; readonly height: number; readonly depth: number } = { width: 0.07, height: 0.115, depth: 0.012 };
 
 /**
  * The transform from the room, where the z axis points up, to a space where the y axis points up.
@@ -193,7 +190,7 @@ function wallSolids(room: Room, frame: WallFrame, footprint: WallFootprint, scal
 
 /**
  * This function gives the 3D model of a room as a list of solids.
- * The solids are the floors, the walls with their openings, the glass of the windows and the outlets.
+ * The solids are the floors, the walls with their openings and the glass of the windows. The marks of the layers show the records of the add-ons.
  *
  * The function does not stop for a record with a fault. It skips each part that it cannot make.
  * One example is a wall with no length. A second example is an opening on a wall that the room does not have.
@@ -214,31 +211,6 @@ export function roomSolids(room: Room, options: SolidOptions = {}): readonly Sol
   frames.forEach((frame, index) => {
     solids.push(...wallSolids(room, frame, footprints[index]!, scale, depth));
   });
-  const byId = new Map(frames.map((frame) => [frame.id, frame] as const));
-  for (const outlet of room.outlets ?? []) {
-    const frame = byId.get(outlet.wall);
-    if (frame === undefined || !isMade(frame)) continue;
-    const along = outlet.offset * scale;
-    const height = outlet.height * scale;
-    if (!lengthsInRange(along, height)) continue;
-    solids.push({
-      id: `outlet:${outlet.id}`,
-      kind: "outlet",
-      source: outlet.id,
-      shape: {
-        kind: "box",
-        box: {
-          x: along - OUTLET_PLATE.width / 2,
-          y: outlet.face === "left" ? frame.leftOffset : frame.rightOffset - OUTLET_PLATE.depth,
-          z: height - OUTLET_PLATE.height / 2,
-          w: OUTLET_PLATE.width,
-          h: OUTLET_PLATE.depth,
-          d: OUTLET_PLATE.height,
-        },
-        transform: wallTransform(frame),
-      },
-    });
-  }
   return solids;
 }
 

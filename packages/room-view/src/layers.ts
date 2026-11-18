@@ -51,6 +51,33 @@ export interface AddOn<Layer> {
    * `expandLevel` does not carry the layer of a room when its add-on has no such function.
    */
   join?(parts: readonly LayerPart<Layer>[]): Layer;
+  /**
+   * The read of the old records of the topic. A record of version 1 of the core kept some of them in fields of its own.
+   * `readRecord` of the entry `/schema` uses it. An add-on with no such records has none.
+   */
+  readonly v1?: AddOnV1<Layer> | undefined;
+}
+
+/** These are the kinds of the files of the core: `room`, `scene`, `survey` and `level`. */
+export const FILE_KINDS: readonly ["room", "scene", "survey", "level"] = ["room", "scene", "survey", "level"];
+
+/** A kind of a file of the core. */
+export type FileKind = (typeof FILE_KINDS)[number];
+
+/** The old records of an add-on in the records of version 1 of the core: their fields, and the read of their layer. */
+export interface AddOnV1<Layer> {
+  /**
+   * The names of the fields of each kind of record that keep the old records. Version 2 of the core does not have these fields.
+   * The names of `object` are the fields of each placed object of a scene and of each object of a survey.
+   */
+  readonly fields: { readonly [Kind in FileKind | "object"]?: readonly string[] | undefined };
+  /**
+   * This function gives the layer of the old records of a record of version 1, or `undefined` for a record with none of them.
+   * The record is the JSON of the file, or the JSON of the survey of a room of a level. The function examines the form of its own fields.
+   * The schema of version 2 examines the other fields after the read. A layer of a survey has the anchors of a survey, as `Survey.layers` tells.
+   * A room record has no layers, so the layer of a `room` is the layer of a scene of that room.
+   */
+  read(record: unknown, kind: FileKind): LayerParse<Layer> | undefined;
 }
 
 /** One part of the layers of a level, for the function `join` of an add-on. `layerPart` makes it. */

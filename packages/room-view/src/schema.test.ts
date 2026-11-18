@@ -29,7 +29,7 @@ describe("roomSchema", () => {
   });
 
   it("accepts a room with only its necessary fields", () => {
-    const room = { schema: "room/1", unit: "ft", height: 8, wallThickness: 0.4, walls: [] };
+    const room = { schema: "room/2", unit: "ft", height: 8, wallThickness: 0.4, walls: [] };
     expect(roomSchema.parse(room)).toEqual(room);
   });
 
@@ -41,7 +41,7 @@ describe("roomSchema", () => {
         }),
       ),
     ).toBe(false);
-    for (const list of ["walls", "openings", "floors", "outlets", "circuits"]) {
+    for (const list of ["walls", "openings", "floors"]) {
       const changed = roomWith((room) => {
         first(room, list)["note"] = "x";
       });
@@ -52,7 +52,7 @@ describe("roomSchema", () => {
   it("refuses a different schema name, a unit that the format does not have and a record with no walls field", () => {
     const changes: readonly ((room: Data) => void)[] = [
       (room) => {
-        room["schema"] = "room/2";
+        room["schema"] = "room/3";
       },
       (room) => {
         room["unit"] = "yd";
@@ -81,13 +81,7 @@ describe("roomSchema", () => {
         first(room, "openings")["kind"] = "arch";
       },
       (room) => {
-        first(room, "outlets")["face"] = "top";
-      },
-      (room) => {
         first(room, "floors")["ring"] = [[0, 0, 0]];
-      },
-      (room) => {
-        first(room, "circuits")["limit"] = null;
       },
     ];
     for (const change of changes) expect(accepts(roomWith(change))).toBe(false);
@@ -99,13 +93,15 @@ describe("roomSchema", () => {
         first(room, "walls")["id"] = "";
       },
       (room) => {
-        first(room, "outlets")["circuit"] = "";
-      },
-      (room) => {
         first(room, "openings")["wall"] = "";
       },
     ];
     for (const change of changes) expect(accepts(roomWith(change))).toBe(false);
+  });
+
+  it("refuses the old fields of version 1: an add-on keeps those records in a layer of a scene", () => {
+    expect(accepts({ ...SAMPLE_ROOM, outlets: [] })).toBe(false);
+    expect(accepts({ ...SAMPLE_ROOM, circuits: [] })).toBe(false);
   });
 
   it("does not examine the meaning of a record", () => {
@@ -129,27 +125,28 @@ describe("sceneSchema", () => {
   });
 
   it("accepts a scene with only its necessary fields", () => {
-    const scene = { schema: "scene/1", room: { schema: "room/1", unit: "m", height: 2.4, wallThickness: 0.1, walls: [] } };
+    const scene = { schema: "scene/2", room: { schema: "room/2", unit: "m", height: 2.4, wallThickness: 0.1, walls: [] } };
     expect(sceneSchema.parse(scene)).toEqual(scene);
   });
 
   it("refuses a record with a fault in its form", () => {
     const object = { id: "o", kind: "box", size: [1, 1, 1], at: [0, 0] };
-    const sceneAccepts = (more: Data): boolean => sceneSchema.safeParse({ schema: "scene/1", room: SAMPLE_ROOM, ...more }).success;
-    expect(sceneAccepts({ objects: [object], loads: [{ circuit: "a", watts: 5 }] })).toBe(true);
-    expect(sceneAccepts({ schema: "scene/2" })).toBe(false);
+    const sceneAccepts = (more: Data): boolean => sceneSchema.safeParse({ schema: "scene/2", room: SAMPLE_ROOM, ...more }).success;
+    expect(sceneAccepts({ objects: [object] })).toBe(true);
+    expect(sceneAccepts({ schema: "scene/3" })).toBe(false);
     expect(sceneAccepts({ room: { ...SAMPLE_ROOM, unit: "yd" } })).toBe(false);
     expect(sceneAccepts({ view: "top" })).toBe(false);
     expect(sceneAccepts({ objects: [{ ...object, color: "red" }] })).toBe(false);
     expect(sceneAccepts({ objects: [{ ...object, size: [1, 1] }] })).toBe(false);
     expect(sceneAccepts({ objects: [{ ...object, kind: "" }] })).toBe(false);
     expect(sceneAccepts({ objects: [{ ...object, turn: Number.NaN }] })).toBe(false);
-    expect(sceneAccepts({ loads: [{ circuit: "a" }] })).toBe(false);
-    expect(sceneAccepts({ loads: [{ circuit: "a", watts: 5, phase: 1 }] })).toBe(false);
+    // Version 2 has no loads and no outlet of an object: a layer keeps them.
+    expect(sceneAccepts({ loads: [{ circuit: "a", watts: 5 }] })).toBe(false);
+    expect(sceneAccepts({ objects: [{ ...object, outlet: "a" }] })).toBe(false);
   });
 
   it("keeps each layer, and refuses a layer name that is not a word, a slash and a version", () => {
-    const scene = { schema: "scene/1", room: SAMPLE_ROOM, layers: { "mark/1": { marks: [{ id: "m", size: 1 }] }, "pipe/1": 7 } };
+    const scene = { schema: "scene/2", room: SAMPLE_ROOM, layers: { "mark/1": { marks: [{ id: "m", size: 1 }] }, "pipe/1": 7 } };
     expect(sceneSchema.parse(JSON.parse(JSON.stringify(scene)))).toEqual(scene);
     expect(sceneSchema.safeParse({ ...scene, layers: { "": {} } }).success).toBe(false);
     expect(sceneSchema.safeParse({ ...scene, layers: { Mark: {} } }).success).toBe(false);
@@ -205,7 +202,7 @@ describe("anchorSchema", () => {
 
 describe("surveySchema", () => {
   const survey = {
-    schema: "survey/1",
+    schema: "survey/2",
     name: "Study",
     unit: "ft",
     height: 8,
@@ -220,8 +217,6 @@ describe("surveySchema", () => {
     heading: 30,
     checks: [{ id: "diagonal", from: "south", to: "north", length: 15.6 }],
     openings: [{ id: "door", wall: "south", kind: "door", offset: 1, width: 3, height: 6.8 }],
-    outlets: [{ id: "o", wall: "east", offset: 2, height: 1, circuit: "a" }],
-    circuits: [{ id: "a", limit: 1800 }],
   };
   const surveyAccepts = (more: Data): boolean => surveySchema.safeParse({ ...survey, ...more }).success;
   const side = { id: "a", length: 1, turn: "left" };
@@ -233,13 +228,13 @@ describe("surveySchema", () => {
   });
 
   it("accepts a survey with only its necessary fields", () => {
-    const small = { schema: "survey/1", unit: "m", height: 2.4, wallThickness: 0.1, sides: [] };
+    const small = { schema: "survey/2", unit: "m", height: 2.4, wallThickness: 0.1, sides: [] };
     expect(surveySchema.parse(small)).toEqual(small);
   });
 
   it("refuses a record with a fault in its form", () => {
     expect(surveyAccepts({ sides: [side] })).toBe(true);
-    expect(surveyAccepts({ schema: "survey/2" })).toBe(false);
+    expect(surveyAccepts({ schema: "survey/3" })).toBe(false);
     expect(surveyAccepts({ unit: "yd" })).toBe(false);
     expect(surveyAccepts({ color: "red" })).toBe(false);
     expect(surveyAccepts({ sides: undefined })).toBe(false);
@@ -253,21 +248,16 @@ describe("surveySchema", () => {
     expect(surveyAccepts({ heading: "north" })).toBe(false);
     expect(surveyAccepts({ checks: [{ id: "d", from: "south", to: "north" }] })).toBe(false);
     expect(surveyAccepts({ openings: [{ id: "door", wall: "south", kind: "arch", offset: 1, width: 3, height: 6.8 }] })).toBe(false);
-    expect(surveyAccepts({ circuits: [{ id: "a" }] })).toBe(false);
-    expect(surveyAccepts({ circuits: [{ id: "a", breaker: 15, voltage: 120, limit: 1440 }] })).toBe(true);
-    expect(surveyAccepts({ circuits: [{ id: "a", breaker: "15 A", limit: 1440 }] })).toBe(false);
-    expect(surveyAccepts({ circuits: [{ id: "a", voltage: null, limit: 1440 }] })).toBe(false);
-  });
-
-  it("refuses an outlet with a face, because the expansion gives the face", () => {
-    expect(surveyAccepts({ outlets: [{ id: "o", wall: "east", face: "left", offset: 2, height: 1 }] })).toBe(false);
+    // Version 2 has no outlets and no circuits: a layer keeps them.
+    expect(surveyAccepts({ circuits: [{ id: "a", limit: 1440 }] })).toBe(false);
+    expect(surveyAccepts({ outlets: [] })).toBe(false);
   });
 
   it("does not examine the meaning of a record", () => {
-    // The expansion counts a length below 0 as 0, and the checks tell an outlet on a wall that the room does not have.
+    // The expansion counts a length below 0 as 0, and the checks tell an opening on a wall that the room does not have.
     expect(surveyAccepts({ sides: [{ ...side, length: -1 }] })).toBe(true);
     expect(surveyAccepts({ sides: [{ ...side, turn: 720 }] })).toBe(true);
-    expect(surveyAccepts({ outlets: [{ id: "o", wall: "none", offset: 2, height: 1 }] })).toBe(true);
+    expect(surveyAccepts({ openings: [{ id: "door", wall: "none", kind: "door", offset: 1, width: 3, height: 6.8 }] })).toBe(true);
   });
 
   it("gives a survey whose room record has the form of the room format", () => {
@@ -280,7 +270,7 @@ describe("surveySchema", () => {
 
 describe("levelSchema", () => {
   const room = {
-    schema: "survey/1",
+    schema: "survey/2",
     unit: "m",
     height: 2.4,
     wallThickness: 0.1,
@@ -289,7 +279,7 @@ describe("levelSchema", () => {
   };
   const link = { id: "door", from: { room: "hall", opening: "door" }, to: { room: "study", opening: "door" }, thickness: 0.12 };
   const level = {
-    schema: "level/1",
+    schema: "level/2",
     name: "Home",
     unit: "m",
     rooms: [
@@ -297,7 +287,6 @@ describe("levelSchema", () => {
       { id: "study", survey: { ...room, unit: "ft" } },
     ],
     connections: [link],
-    circuits: [{ id: "a", name: "Circuit A", limit: 1800 }],
   };
   const levelAccepts = (more: Data): boolean => levelSchema.safeParse({ ...level, ...more }).success;
 
@@ -309,14 +298,14 @@ describe("levelSchema", () => {
   });
 
   it("accepts a level with only its necessary fields", () => {
-    const small = { schema: "level/1", unit: "m", rooms: [] };
+    const small = { schema: "level/2", unit: "m", rooms: [] };
     expect(levelSchema.parse(small)).toEqual(small);
     expect(levelAccepts({ connections: [{ id: "door", from: link.from, to: link.to }] })).toBe(true);
   });
 
   it("refuses a record with a fault in its form", () => {
     expect(levelAccepts({})).toBe(true);
-    expect(levelAccepts({ schema: "level/2" })).toBe(false);
+    expect(levelAccepts({ schema: "level/3" })).toBe(false);
     expect(levelAccepts({ unit: "yd" })).toBe(false);
     expect(levelAccepts({ color: "red" })).toBe(false);
     expect(levelAccepts({ rooms: undefined })).toBe(false);
@@ -324,7 +313,7 @@ describe("levelSchema", () => {
     expect(levelAccepts({ rooms: [{ id: "", survey: room }] })).toBe(false);
     expect(levelAccepts({ rooms: [{ id: "hall" }] })).toBe(false);
     expect(levelAccepts({ rooms: [{ id: "hall", survey: room, floor: 2 }] })).toBe(false);
-    expect(levelAccepts({ rooms: [{ id: "hall", survey: { ...room, schema: "survey/2" } }] })).toBe(false);
+    expect(levelAccepts({ rooms: [{ id: "hall", survey: { ...room, schema: "survey/1" } }] })).toBe(false);
     expect(levelAccepts({ rooms: [{ id: "hall", survey: { ...room, sides: [{ id: "a", length: 3 }] } }] })).toBe(false);
     expect(levelAccepts({ connections: [{ id: "door", from: link.from }] })).toBe(false);
     expect(levelAccepts({ connections: [{ from: link.from, to: link.to }] })).toBe(false);
@@ -346,7 +335,7 @@ describe("levelSchema", () => {
   });
 
   it("gives a level whose room record has the form of the room format", () => {
-    for (const record of [level, SAMPLE_LEVEL, { schema: "level/1", unit: "in", rooms: [] }]) {
+    for (const record of [level, SAMPLE_LEVEL, { schema: "level/2", unit: "in", rooms: [] }]) {
       const result = expandLevel(levelSchema.parse(record));
       expect(roomSchema.parse(result.room)).toEqual(result.room);
     }
@@ -361,7 +350,7 @@ describe("surveySchema, the objects of a survey", () => {
     expect(withObjects()).toBe(true);
     expect(withObjects(object)).toBe(true);
     expect(withObjects(object, { id: "lamp", kind: "lamp", on: "desk", offset: 0, width: 0.2, depth: 0.2, height: 0.4 })).toBe(true);
-    expect(withObjects({ ...object, name: "Desk", gap: 0.05, lift: 0.1, outlet: "south-1" })).toBe(true);
+    expect(withObjects({ ...object, name: "Desk", gap: 0.05, lift: 0.1 })).toBe(true);
     expect(withObjects({ ...object, on: "rack" })).toBe(true);
     // The schema examines the form only. `expandSurvey` gives no place to an object with no side and no holder.
     expect(withObjects({ id: "a", kind: "desk", offset: 0, width: 1, depth: 1, height: 1 })).toBe(true);
@@ -380,6 +369,7 @@ describe("surveySchema, the objects of a survey", () => {
     expect(withObjects({ ...object, height: Number.NaN })).toBe(false);
     expect(withObjects({ ...object, offset: Infinity })).toBe(false);
     expect(withObjects({ ...object, gap: null })).toBe(false);
+    expect(withObjects({ ...object, outlet: "south-1" })).toBe(false);
     expect(withObjects(null)).toBe(false);
     expect(surveySchema.safeParse({ ...SAMPLE_SURVEY, objects: object }).success).toBe(false);
   });

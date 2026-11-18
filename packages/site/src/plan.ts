@@ -1,6 +1,6 @@
-import { fromSceneV1, outletLevels } from "@mark1russell7/electrical";
-import { levelShape, planShapes, SHAPE_OUTLINES, shapeRing, solidRecord, type LevelShape, type PlanShape } from "@mark1russell7/room-view";
+import { planShapes, solidRecord, type PlanShape } from "@mark1russell7/room-view";
 import type { RoomViewer, RoomViewerOptions, ViewerPick, ViewerRecord, ViewerTheme } from "@mark1russell7/room-view/three";
+import { SHAPE_OUTLINES, levelShape, shapeRing, type LevelShape, type Mark, type PointMark } from "@mark1russell7/visuals/marks";
 
 /** The part of a viewer that the page uses. The 3D viewer and the plan have these functions. */
 export type RoomStage = Pick<RoomViewer, "setTheme" | "setView" | "highlight" | "select" | "dispose">;
@@ -11,11 +11,11 @@ const CUT = 1.2;
 /** The space around the plan, in meters. */
 const MARGIN = 0.25;
 
-/** The radius of the sign of an outlet with a disc, in meters. The plate of an outlet is too small for a plan. */
-const OUTLET_RADIUS = 0.09;
+/** The radius of the sign of a point mark with a disc, in meters. */
+const SIGN_RADIUS = 0.09;
 
-/** The size of the line that marks an outlet, as a factor of the size of its sign. */
-const OUTLET_MARK = 1.5;
+/** The size of the line that marks a selected sign, as a factor of the size of the sign. */
+const SIGN_MARK = 1.5;
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -35,32 +35,41 @@ function pathOf(shape: PlanShape): string {
 }
 
 /**
- * This function gives the outline of the sign of an outlet as the data of a path. The center of the sign is the center of the shape.
+ * This function gives the outline of a sign as the data of a path, around a point of the plan.
  * `factor` changes the size: 1 gives the outline of the sign.
  */
-export function signPath(shape: PlanShape, sign: LevelShape, factor: number): string {
-  const count = Math.max(shape.ring.length, 1);
-  const x = shape.ring.reduce((sum, point) => sum + point[0], 0) / count;
-  const y = shape.ring.reduce((sum, point) => sum + point[1], 0) / count;
-  const corners = shapeRing(sign, OUTLET_RADIUS * factor);
+export function signPath(center: readonly [number, number], sign: LevelShape, factor: number): string {
+  const [x, y] = center;
+  const corners = shapeRing(sign, SIGN_RADIUS * factor);
   return `${corners.map(([dx, dy], index) => `${index === 0 ? "M" : "L"}${String(x + dx)} ${String(-(y + dy))}`).join(" ")} Z`;
+}
+
+/** This function gives the point of the plan below a point mark. */
+const centerOf = (mark: PointMark): readonly [number, number] => [mark.frame.at.x, mark.frame.at.y];
+
+/** A part of the drawing: a shape of the scene, or the sign of a point mark. */
+type Part = { readonly key: string; readonly element: SVGPathElement } & ({ readonly shape: PlanShape } | { readonly mark: PointMark });
+
+/** The part under the pointer: the pick of a shape, as the 3D viewer gives a solid, or a point mark. */
+interface Hit {
+  readonly key: string;
+  readonly pick: ViewerPick | undefined;
+  readonly mark: Mark | undefined;
 }
 
 /**
  * This function shows the plan of a scene as a drawing, for a browser that has no WebGL 2.
  * The drawing shows the room from above, with a cut through the walls. A person can point at a part and select it, as in the 3D viewer.
+ * Each point mark is a sign at its point, above the shapes. The plan does not show the other kinds of marks.
  */
 export function createPlanView(container: HTMLElement, options: RoomViewerOptions & { readonly theme: ViewerTheme }): RoomStage {
   const { scene } = options;
-  const levels = outletLevels(fromSceneV1(scene), options.loads);
-  const signOf = (shape: PlanShape): LevelShape => levelShape(levels.get(shape.source));
-  // An outlet is above each other shape, so that a wall does not hide it.
-  const cut = planShapes(scene, { ...options.solids, cut: CUT });
-  const shapes = [...cut.filter((shape) => shape.kind !== "outlet"), ...cut.filter((shape) => shape.kind === "outlet")];
-  const points = shapes.flatMap((shape) => shape.ring);
-  // A scene with no solid has a plan of 1 by 1 m.
-  const xs = points.length === 0 ? [0, 1] : points.map(([x]) => x);
-  const ys = points.length === 0 ? [0, 1] : points.map(([, y]) => y);
+  const shapes = planShapes(scene, { ...options.solids, cut: CUT });
+  const points = (options.marks ?? []).filter((mark: Mark): mark is PointMark => mark.type === "point");
+  const corners = [...shapes.flatMap((shape) => shape.ring), ...points.map(centerOf)];
+  // A scene with no solid and no mark has a plan of 1 by 1 m.
+  const xs = corners.length === 0 ? [0, 1] : corners.map(([x]) => x);
+  const ys = corners.length === 0 ? [0, 1] : corners.map(([, y]) => y);
   const left = Math.min(...xs) - MARGIN;
   const right = Math.max(...xs) + MARGIN;
   const bottom = Math.min(...ys) - MARGIN;
@@ -69,31 +78,36 @@ export function createPlanView(container: HTMLElement, options: RoomViewerOption
   const picture = svg("svg", { class: "plan", viewBox: `${String(left)} ${String(-top)} ${String(right - left)} ${String(top - bottom)}`, role: "img" });
   picture.setAttribute("aria-label", options.label ?? "Plan of the room");
   const fills = svg("g", {});
+  const signs = svg("g", { class: "plan-signs" });
   const marks = svg("g", { class: "plan-marks" });
-  picture.append(fills, marks);
+  // A sign is above each shape, so that a wall does not hide it.
+  picture.append(fills, signs, marks);
 
-  const parts = shapes.map((shape) => {
-    const element = svg("path", {});
-    element.dataset["record"] = keyOf(shape);
-    if (shape.kind === "outlet") {
-      const sign = signOf(shape);
+  const parts: Part[] = [
+    ...shapes.map((shape): Part => {
+      const element = svg("path", { d: pathOf(shape), "stroke-width": "1", "vector-effect": "non-scaling-stroke" });
+      element.dataset["record"] = keyOf(shape);
+      fills.append(element);
+      return { key: keyOf(shape), element, shape };
+    }),
+    ...points.map((mark): Part => {
+      const sign = levelShape(mark.level);
       const outline = SHAPE_OUTLINES[sign];
       // The line of a ring is its sign: it is between the hole and the outline, and its width is in meters.
-      const middle = (1 + outline.hole / outline.radius) / 2;
-      element.setAttribute("d", signPath(shape, sign, outline.hole > 0 ? middle : 1));
-      if (outline.hole > 0) element.setAttribute("stroke-width", String((outline.radius - outline.hole) * OUTLET_RADIUS));
+      const ring = outline.hole > 0;
+      const element = svg("path", { d: signPath(centerOf(mark), sign, ring ? (1 + outline.hole / outline.radius) / 2 : 1) });
+      if (ring) element.setAttribute("stroke-width", String((outline.radius - outline.hole) * SIGN_RADIUS));
+      else {
+        element.setAttribute("stroke-width", "1.5");
+        element.setAttribute("vector-effect", "non-scaling-stroke");
+      }
+      element.dataset["record"] = mark.record;
       element.dataset["shape"] = sign;
-      element.dataset["level"] = levels.get(shape.source) ?? "none";
-    } else {
-      element.setAttribute("d", pathOf(shape));
-    }
-    if (!element.hasAttribute("stroke-width")) {
-      element.setAttribute("stroke-width", shape.kind === "outlet" ? "1.5" : "1");
-      element.setAttribute("vector-effect", "non-scaling-stroke");
-    }
-    fills.append(element);
-    return { shape, element };
-  });
+      element.dataset["level"] = mark.level;
+      signs.append(element);
+      return { key: mark.record, element, mark };
+    }),
+  ];
 
   let theme = options.theme;
   let highlighted: readonly (ViewerRecord | string)[] = [];
@@ -111,41 +125,40 @@ export function createPlanView(container: HTMLElement, options: RoomViewerOption
   }
 
   function paint(): void {
-    for (const { shape, element } of parts) {
-      if (shape.kind === "outlet") {
-        // An outlet has the color and the shape of the level of its circuit, with the color of the page around it or in it.
-        const level = levels.get(shape.source);
-        const color = level === undefined ? theme.outlet : theme.levels[level];
-        const ring = SHAPE_OUTLINES[signOf(shape)].hole > 0;
-        element.setAttribute("fill", ring ? theme.halo : color);
-        element.setAttribute("stroke", ring ? color : theme.halo);
+    for (const part of parts) {
+      if ("mark" in part) {
+        // A sign has the color and the shape of its level, with the color of the page around it or in it.
+        const color = theme.levels[part.mark.level];
+        const ring = SHAPE_OUTLINES[levelShape(part.mark.level)].hole > 0;
+        part.element.setAttribute("fill", ring ? theme.halo : color);
+        part.element.setAttribute("stroke", ring ? color : theme.halo);
         continue;
       }
-      element.setAttribute("fill", fillOf(shape, theme));
-      element.setAttribute("stroke", shape.kind === "floor" ? "none" : theme.edge);
+      part.element.setAttribute("fill", fillOf(part.shape, theme));
+      part.element.setAttribute("stroke", part.shape.kind === "floor" ? "none" : theme.edge);
     }
     const strong = selected === undefined ? undefined : keyOf(selected);
     const light = new Set(highlighted.map(keyOf));
     marks.replaceChildren();
-    for (const { shape } of parts) {
-      const key = keyOf(shape);
-      if (key !== strong && !light.has(key)) continue;
-      // The mark of an outlet is a line around its sign, so the color of the sign stays.
-      const outlet = shape.kind === "outlet";
-      const mark = svg("path", { d: outlet ? signPath(shape, signOf(shape), OUTLET_MARK) : pathOf(shape) });
+    for (const part of parts) {
+      if (part.key !== strong && !light.has(part.key)) continue;
+      // The mark of a sign is a line around it, so the color of the sign stays.
+      const sign = "mark" in part;
+      const mark = svg("path", { d: sign ? signPath(centerOf(part.mark), levelShape(part.mark.level), SIGN_MARK) : pathOf(part.shape) });
       mark.setAttribute("vector-effect", "non-scaling-stroke");
-      mark.setAttribute("fill", outlet ? "none" : theme.accent);
-      mark.setAttribute("fill-opacity", key === strong ? "0.55" : "0.3");
+      mark.setAttribute("fill", sign ? "none" : theme.accent);
+      mark.setAttribute("fill-opacity", part.key === strong ? "0.55" : "0.3");
       mark.setAttribute("stroke", theme.accent);
-      mark.setAttribute("stroke-width", key === strong ? "4" : "2.5");
+      mark.setAttribute("stroke-width", part.key === strong ? "4" : "2.5");
       marks.append(mark);
     }
   }
 
-  /** This function gives the shape under the pointer, as the 3D viewer gives a solid. */
-  function pickAt(target: EventTarget | null): ViewerPick | undefined {
-    const shape = parts.find((item) => item.element === target)?.shape;
-    return shape === undefined ? undefined : { kind: shape.kind, source: shape.source, solid: shape.solid };
+  function hitAt(target: EventTarget | null): Hit | undefined {
+    const part = parts.find((item) => item.element === target);
+    if (part === undefined) return undefined;
+    if ("mark" in part) return { key: part.key, pick: undefined, mark: part.mark };
+    return { key: part.key, pick: { kind: part.shape.kind, source: part.shape.source, solid: part.shape.solid }, mark: undefined };
   }
 
   const abort = new AbortController();
@@ -153,11 +166,10 @@ export function createPlanView(container: HTMLElement, options: RoomViewerOption
     "pointermove",
     (event) => {
       if (event.pointerType === "touch") return;
-      const pick = pickAt(event.target);
-      const key = pick === undefined ? undefined : keyOf(pick);
-      if (key === hovered) return;
-      hovered = key;
-      options.onHover?.(pick);
+      const hit = hitAt(event.target);
+      if (hit?.key === hovered) return;
+      hovered = hit?.key;
+      options.onHover?.(hit?.pick, hit?.mark);
     },
     { signal: abort.signal },
   );
@@ -173,10 +185,10 @@ export function createPlanView(container: HTMLElement, options: RoomViewerOption
   picture.addEventListener(
     "click",
     (event) => {
-      const pick = pickAt(event.target);
-      selected = pick;
+      const hit = hitAt(event.target);
+      selected = hit?.mark === undefined ? hit?.pick : hit.key;
       paint();
-      options.onSelect?.(pick);
+      options.onSelect?.(hit?.pick, hit?.mark);
     },
     { signal: abort.signal },
   );

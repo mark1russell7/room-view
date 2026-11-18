@@ -7,9 +7,9 @@ import { solidGeometry } from "./geometry.ts";
 
 /** A scene in feet with a wall that is not along an axis, and objects with turns that are not right angles. */
 const TURNED_SCENE: Scene = {
-  schema: "scene/1",
+  schema: "scene/2",
   room: {
-    schema: "room/1",
+    schema: "room/2",
     unit: "ft",
     height: 8,
     wallThickness: 0.5,
@@ -29,7 +29,6 @@ const TURNED_SCENE: Scene = {
         ],
       },
     ],
-    outlets: [{ id: "o", wall: "a", face: "left", offset: 8, height: 1 }],
   },
   objects: [
     { id: "box", kind: "box", size: [2, 1, 3], at: [3, 9], turn: 30 },
@@ -67,7 +66,7 @@ describe.each([
   const solids = sceneSolids(scene);
 
   it("has a solid of each kind", () => {
-    expect(new Set(solids.map((solid) => solid.kind))).toEqual(new Set(["floor", "wall", "glass", "outlet", "object"]));
+    expect(new Set(solids.map((solid) => solid.kind))).toEqual(new Set(["floor", "wall", "glass", "object"]));
   });
 
   it("has its vertices at the corners of the solid", () => {

@@ -5,7 +5,7 @@ import { ELECTRICAL_SCHEMA, type Circuit, type ElectricalLayer, type Feed, type 
 
 /**
  * The electrical records of a `scene/1`: the outlets and the circuits of its room, the outlet of each object, and the loads.
- * A scene record of the core has this form.
+ * A scene record of version 1 of the core had this form. The read `v1` of the add-on gives the layer of these records.
  */
 export interface SceneV1 {
   readonly room: {
@@ -35,7 +35,7 @@ export interface SceneV1 {
 
 /**
  * The electrical records of a `survey/1`: its outlets and its circuits, and the outlet of each object.
- * A survey record of the core has this form. An outlet of a survey is on the inner face of its side, so it has no `face`.
+ * A survey record of version 1 of the core had this form. An outlet of a survey is on the inner face of its side, so it has no `face`.
  */
 export interface SurveyV1 {
   readonly outlets?:
@@ -52,7 +52,7 @@ export interface SurveyV1 {
   readonly objects?: SceneV1["objects"];
 }
 
-/** The electrical records of a `level/1`: the circuits of the level. A level record of the core has this form. */
+/** The electrical records of a `level/1`: the circuits of the level. A level record of version 1 of the core had this form. */
 export interface LevelV1 {
   readonly circuits?: SceneV1["room"]["circuits"];
 }
@@ -137,7 +137,7 @@ function toLayer(scene: SceneV1, keeps: "outlets" | "circuits"): ElectricalLayer
  * - The outlet of an object becomes a feed with no watts, with the `id` `feed-` and the `id` of the object.
  *
  * The ids of a layer are unique. Thus a circuit with the `id` of an outlet gets the `id` `circuit-` and its old `id`, and each record that names it follows.
- * A load of a circuit that the room does not have has no place in a layer. `checkScene` of the core gives an error for it.
+ * A load of a circuit that the room does not have has no place in a layer, so the move drops it. The check of version 1 of the core gave an error for it.
  */
 export function fromSceneV1(scene: SceneV1): ElectricalLayer {
   // The outlets come first, so each outlet keeps its `id`: a mark and a selection name an outlet.

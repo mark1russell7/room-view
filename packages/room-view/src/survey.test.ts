@@ -32,7 +32,7 @@ function sides(lengths: readonly number[], turns: readonly SurveyTurn[]): Survey
 
 /** A survey in meters with the sides of the argument, and a change. */
 function survey(list: readonly SurveySide[], change: Partial<Survey> = {}): Survey {
-  return { schema: "survey/1", unit: "m", height: 2.5, wallThickness: 0.15, sides: list, ...change };
+  return { schema: "survey/2", unit: "m", height: 2.5, wallThickness: 0.15, sides: list, ...change };
 }
 
 const LEFT4: readonly SurveyTurn[] = ["left", "left", "left", "left"];
@@ -54,7 +54,7 @@ function expectPoint(point: PlanPoint | undefined, x: number, y: number, digits 
 
 describe("expandSurvey, a walk with square corners", () => {
   it("has the names of the format", () => {
-    expect(SURVEY_SCHEMA).toBe("survey/1");
+    expect(SURVEY_SCHEMA).toBe("survey/2");
     expect(SQUARE_TURNS).toEqual(["left", "right"]);
     expect(CLOSURE_LIMIT).toBe(0.01);
   });
@@ -70,7 +70,7 @@ describe("expandSurvey, a walk with square corners", () => {
     expect(result.walk).toEqual([...result.corners, [0, 0]]);
     expect(result.closure).toEqual({ gap: 0, ratio: 0, turn: 0, closed: true });
     expect(result.room).toEqual({
-      schema: "room/1",
+      schema: "room/2",
       unit: "m",
       height: 2.5,
       wallThickness: 0.15,
@@ -87,7 +87,8 @@ describe("expandSurvey, a walk with square corners", () => {
   });
 
   it("puts each wall on the other side for a walk to the right, and keeps a counter-clockwise floor", () => {
-    const result = expandSurvey(survey(sides([4, 3, 4, 3], RIGHT4), { outlets: [{ id: "o", wall: "s0", offset: 1, height: 0.3 }] }));
+    const layers = { "mark/1": marks({ on: "wall", wall: "s0", face: "left", offset: 1, height: 0.3 }) };
+    const result = expandSurvey(survey(sides([4, 3, 4, 3], RIGHT4), { layers }), { addOns: [MARK] });
     expect(result.corners).toEqual([
       [0, 0],
       [4, 0],
@@ -102,7 +103,8 @@ describe("expandSurvey, a walk with square corners", () => {
       [4, 0],
       [0, 0],
     ]);
-    expect(result.room.outlets).toEqual([{ id: "o", wall: "s0", offset: 1, height: 0.3, face: "right" }]);
+    // A mark on a wall is on the face in the room.
+    expect(anchorsOf(result.layers)).toEqual([{ on: "wall", wall: "s0", face: "right", offset: 1, height: 0.3 }]);
     expect(checkRoom(result.room)).toEqual([]);
   });
 
@@ -118,8 +120,6 @@ describe("expandSurvey, a walk with square corners", () => {
     expect(result.closure).toEqual({ gap: 0, ratio: 0, turn: 0, closed: true });
     expect(result.room.walls).toEqual(SAMPLE_ROOM.walls.slice(0, 6));
     expect(result.room.openings).toEqual(SAMPLE_ROOM.openings);
-    expect(result.room.outlets).toEqual(SAMPLE_ROOM.outlets);
-    expect(result.room.circuits).toEqual(SAMPLE_ROOM.circuits);
     expect(result.room.floors?.[0]?.ring).toEqual(SAMPLE_ROOM.walls.slice(0, 6).map((wall) => wall.from));
     expect(result.checks).toEqual([{ id: "diagonal", measured: 5, model: 5, difference: 0 }]);
     expect(checkRoom(result.room)).toEqual([]);
@@ -305,40 +305,23 @@ describe("expandSurvey, the records of a survey", () => {
     expect(result.checks[0]?.model).toBe(5);
   });
 
-  it("passes the openings, the circuits and the name, and gives each outlet the inner face", () => {
+  it("passes the openings and the name", () => {
     const openings = [{ id: "door", wall: "s0", kind: "door", offset: 0.6, width: 0.9, height: 2.05 }] as const;
-    const circuits = [{ id: "a", name: "Circuit A", limit: 1440 }];
-    const result = expandSurvey(
-      survey(sides([4, 3, 4, 3], LEFT4), {
-        name: "Study",
-        openings,
-        outlets: [
-          { id: "o1", wall: "s1", offset: 1, height: 0.3, circuit: "a" },
-          { id: "o2", wall: "s3", offset: 2, height: 1.1 },
-        ],
-        circuits,
-      }),
-    );
+    const result = expandSurvey(survey(sides([4, 3, 4, 3], LEFT4), { name: "Study", openings }));
     expect(result.room.name).toBe("Study");
     expect(result.room.openings).toBe(openings);
-    expect(result.room.circuits).toBe(circuits);
-    expect(result.room.outlets).toEqual([
-      { id: "o1", wall: "s1", offset: 1, height: 0.3, circuit: "a", face: "left" },
-      { id: "o2", wall: "s3", offset: 2, height: 1.1, face: "left" },
-    ]);
     expect(result.room.floors?.[0]).toEqual({ id: "floor", name: "Study", ring: result.corners });
     expect(checkRoom(result.room)).toEqual([]);
   });
 
-  it("keeps each opening and each outlet at its place on a side that shares the gap", () => {
+  it("keeps each opening at its place on a side that shares the gap", () => {
     const openings = [
       // The first opening ends at the end of its side, and the second opening has the full length of its side.
       { id: "end", wall: "s0", kind: "gap", offset: 3.12, width: 0.9, height: 2 },
       { id: "full", wall: "s2", kind: "gap", offset: 0, width: 4, height: 2 },
       { id: "same", wall: "s1", kind: "door", offset: 1, width: 0.9, height: 2 },
     ] as const;
-    // The outlet is at the end of its side, above the opening.
-    const result = expandSurvey(survey(sides([4.02, 3, 4, 3], LEFT4), { openings, outlets: [{ id: "o", wall: "s0", offset: 4.02, height: 2.2 }] }));
+    const result = expandSurvey(survey(sides([4.02, 3, 4, 3], LEFT4), { openings }));
     const width = 4.02 * (1 - 0.02 / 8.02);
     const [end, full, same] = result.room.openings ?? [];
     expect((end?.offset ?? 0) + (end?.width ?? 0)).toBeCloseTo(width, 12);
@@ -347,7 +330,6 @@ describe("expandSurvey, the records of a survey", () => {
     expect(full?.width).toBeCloseTo(width, 12);
     // A side along the y axis has no gap to share, so its opening does not change.
     expect(same).toBe(openings[2]);
-    expect(result.room.outlets?.[0]?.offset).toBeCloseTo(width, 12);
     expect(checkRoom(result.room)).toEqual([]);
     // A walk with no gap keeps the measured numbers, and an open walk also keeps them.
     expect(expandSurvey(survey(sides([4, 3, 4, 3], LEFT4), { openings })).room.openings).toBe(openings);
@@ -356,7 +338,7 @@ describe("expandSurvey, the records of a survey", () => {
 
   it("has no optional list that the survey does not have", () => {
     const room = expandSurvey(survey(sides([4, 3, 4, 3], LEFT4))).room;
-    for (const field of ["name", "openings", "outlets", "circuits"]) expect(field in room, field).toBe(false);
+    for (const field of ["name", "openings"]) expect(field in room, field).toBe(false);
     expect("name" in (room.floors?.[0] ?? {})).toBe(false);
   });
 
@@ -486,7 +468,7 @@ describe("convertSurvey", () => {
     expect(convertSurvey(SAMPLE_SURVEY, "m")).toBe(SAMPLE_SURVEY);
   });
 
-  it("changes each length, and keeps each turn, each angle, each `id` and each circuit", () => {
+  it("changes each length, and keeps each turn, each angle and each `id`", () => {
     const feet = survey(
       [
         { id: "a", length: 12.5, turn: "left", thickness: 0.5, height: 7.5 },
@@ -504,12 +486,10 @@ describe("convertSurvey", () => {
           { id: "w", wall: "a", kind: "window", offset: 1.5, width: 3, sill: 2.5, height: 4 },
           { id: "g", wall: "b", kind: "gap", offset: 0.5, width: 3, height: 6.5 },
         ],
-        outlets: [{ id: "o", wall: "a", offset: 2, height: 1.5, circuit: "c" }],
-        circuits: [{ id: "c", name: "C", limit: 1800 }],
       },
     );
     expect(convertSurvey(feet, "in")).toEqual({
-      schema: "survey/1",
+      schema: "survey/2",
       name: "Study",
       unit: "in",
       height: 96,
@@ -525,8 +505,6 @@ describe("convertSurvey", () => {
         { id: "w", wall: "a", kind: "window", offset: 18, width: 36, sill: 30, height: 48 },
         { id: "g", wall: "b", kind: "gap", offset: 6, width: 36, height: 78 },
       ],
-      outlets: [{ id: "o", wall: "a", offset: 24, height: 18, circuit: "c" }],
-      circuits: [{ id: "c", name: "C", limit: 1800 }],
     });
   });
 
@@ -567,7 +545,7 @@ function placedIn(turns: readonly SurveyTurn[], objects: readonly SurveyObject[]
 
 /** The limits of a placed object in the model, in the frame of a side: along the side from its first corner, into the room from its face, and up. */
 function limits(result: SurveyResult, id: string, side: number, toLeft = true): Record<"near" | "far" | "back" | "front" | "bottom" | "top", number> {
-  const solid = sceneSolids({ schema: "scene/1", room: result.room, objects: result.objects }).find((item) => item.kind === "object" && item.source === id);
+  const solid = sceneSolids({ schema: "scene/2", room: result.room, objects: result.objects }).find((item) => item.kind === "object" && item.source === id);
   const wall = result.room.walls[side]!;
   const length = Math.hypot(wall.to[0] - wall.from[0], wall.to[1] - wall.from[1]);
   const along: PlanPoint = [(wall.to[0] - wall.from[0]) / length, (wall.to[1] - wall.from[1]) / length];
@@ -615,7 +593,7 @@ describe("expandSurvey, the objects of a survey", () => {
       { id: "o3", kind: "desk", size: [1, 0.5, 0.8], at: [0.25, -2], turn: 270 },
     ]);
     const result = expandSurvey(survey(sides([4, 3, 4, 3], RIGHT4), { objects }));
-    expect(checkScene({ schema: "scene/1", room: result.room, objects: result.objects })).toEqual([]);
+    expect(checkScene({ schema: "scene/2", room: result.room, objects: result.objects })).toEqual([]);
     [0, 1, 2, 3].forEach((side) => expectLimits(limits(result, `o${side}`, side, false), 0.5, 1.5, 0, 0.5, 0, 0.8));
   });
 
@@ -625,9 +603,9 @@ describe("expandSurvey, the objects of a survey", () => {
     expectLimits(limits(result, "a", 1), 1, 2, 0.2, 0.7, 1.1, 1.9);
   });
 
-  it("passes the class, the name and the outlet, and adds no field", () => {
-    const [named, plain] = placedIn(LEFT4, [box("a", { kind: "rack", name: "Rack", wall: "s0", lift: 0, outlet: "o1" }), box("b", { wall: "s0", offset: 2 })]);
-    expect(named).toEqual({ id: "a", kind: "rack", name: "Rack", size: [1, 0.5, 0.8], at: [0.5, 0.25], lift: 0, outlet: "o1" });
+  it("passes the class and the name, and adds no field", () => {
+    const [named, plain] = placedIn(LEFT4, [box("a", { kind: "rack", name: "Rack", wall: "s0", lift: 0 }), box("b", { wall: "s0", offset: 2 })]);
+    expect(named).toEqual({ id: "a", kind: "rack", name: "Rack", size: [1, 0.5, 0.8], at: [0.5, 0.25], lift: 0 });
     expect(Object.keys(plain ?? {})).toEqual(["id", "kind", "size", "at"]);
   });
 
@@ -642,7 +620,7 @@ describe("expandSurvey, the objects of a survey", () => {
     expectPoint(placed?.at, -0.3, -0.2, 12);
     // The near edge of the display is 0.2 from the near edge of the desk, and its back is 0.1 from the back of the desk.
     expectLimits(limits(result, "display", 0), 1.2, 1.8, 0.1, 0.3, 0.75, 1.15);
-    expect(checkScene({ schema: "scene/1", room: result.room, objects: result.objects })).toEqual([]);
+    expect(checkScene({ schema: "scene/2", room: result.room, objects: result.objects })).toEqual([]);
   });
 
   it("measures an object on its holder from the near edge of the holder for each side and each direction of the walk", () => {
@@ -725,7 +703,7 @@ describe("expandSurvey, the objects of a survey", () => {
     // A distance below 0 is possible: the object goes past the corner or into the wall, and `checkScene` tells it.
     const past = expandSurvey(survey(sides([4, 3, 4, 3], LEFT4), { objects: [box("past", { wall: "s0", offset: -0.5, gap: -0.25 })] }));
     expect(past.objects).toEqual([{ id: "past", kind: "desk", size: [1, 0.5, 0.8], at: [0, 0] }]);
-    expect(checkScene({ schema: "scene/1", room: past.room, objects: past.objects }).map((finding) => finding.code)).toContain("object-in-wall");
+    expect(checkScene({ schema: "scene/2", room: past.room, objects: past.objects }).map((finding) => finding.code)).toContain("object-in-wall");
   });
 
   it("gives no place to an object on a side with no length", () => {
@@ -768,9 +746,9 @@ describe("expandSurvey, the objects of a survey", () => {
 
   it("gives the objects of the sample scene from the measurements of the sample survey", () => {
     const result = expandSurvey(SAMPLE_SURVEY);
-    const scene = { schema: "scene/1", room: result.room, objects: result.objects } as const;
-    expect(result.objects.map((object) => [object.id, object.kind, object.name, object.parent, object.outlet])).toEqual(
-      (SAMPLE_SCENE.objects ?? []).map((object) => [object.id, object.kind, object.name, object.parent, object.outlet]),
+    const scene = { schema: "scene/2", room: result.room, objects: result.objects } as const;
+    expect(result.objects.map((object) => [object.id, object.kind, object.name, object.parent])).toEqual(
+      (SAMPLE_SCENE.objects ?? []).map((object) => [object.id, object.kind, object.name, object.parent]),
     );
     expect(checkScene(scene)).toEqual([]);
     const own = objectTransforms(scene);
@@ -811,7 +789,7 @@ describe("expandSurvey, the laws of the objects", () => {
         expect(result.objects).toHaveLength(1);
         expectLimits(limits(result, "a", side, toLeft), offset, offset + object.width, gap, gap + object.depth, 1.5 * p5, 1.5 * p5 + 0.8);
         // The object is in the room: it is on the floor, and it is in no wall.
-        expect(checkScene({ schema: "scene/1", room: result.room, objects: result.objects })).toEqual([]);
+        expect(checkScene({ schema: "scene/2", room: result.room, objects: result.objects })).toEqual([]);
       }),
     );
   });
@@ -859,7 +837,7 @@ describe("expandSurvey, the laws of the objects", () => {
           // A parent is an object of the result. Thus the model has each object of the result.
           if (placed.parent !== undefined) expect(result.objects.some((other) => other.id === placed.parent)).toBe(true);
         }
-        const solids = sceneSolids({ schema: "scene/1", room: result.room, objects: result.objects }).filter((solid) => solid.kind === "object");
+        const solids = sceneSolids({ schema: "scene/2", room: result.room, objects: result.objects }).filter((solid) => solid.kind === "object");
         expect(solids.length).toBeLessThanOrEqual(result.objects.length);
       }),
     );
@@ -871,12 +849,12 @@ describe("convertSurvey, the objects of a survey", () => {
     const feet = survey(sides([12, 10, 12, 10], LEFT4), {
       unit: "ft",
       objects: [
-        { id: "desk", kind: "desk", name: "Desk", wall: "s0", offset: 1.5, width: 5, depth: 2.5, height: 2.5, gap: 0.25, lift: 0.5, outlet: "o" },
+        { id: "desk", kind: "desk", name: "Desk", wall: "s0", offset: 1.5, width: 5, depth: 2.5, height: 2.5, gap: 0.25, lift: 0.5 },
         { id: "lamp", kind: "lamp", on: "desk", offset: 0.5, width: 1, depth: 0.75, height: 1.5 },
       ],
     });
     expect(convertSurvey(feet, "in").objects).toEqual([
-      { id: "desk", kind: "desk", name: "Desk", wall: "s0", offset: 18, width: 60, depth: 30, height: 30, gap: 3, lift: 6, outlet: "o" },
+      { id: "desk", kind: "desk", name: "Desk", wall: "s0", offset: 18, width: 60, depth: 30, height: 30, gap: 3, lift: 6 },
       { id: "lamp", kind: "lamp", on: "desk", offset: 6, width: 12, depth: 9, height: 18 },
     ]);
     expect(Object.keys(convertSurvey(feet, "in").objects?.[1] ?? {})).toEqual(Object.keys(feet.objects?.[1] ?? {}));
@@ -990,15 +968,12 @@ describe("expandSurvey, the layers of a survey", () => {
     expect(checkLayers({ ...resultScene(result), layers: record.layers }, [MARK]).map((finding) => finding.at)).toContain("m1");
   });
 
-  it("puts a mark on a side that shares the gap at the place of an outlet with the same numbers", () => {
+  it("puts a mark on a side that shares the gap at its part of the side, on the face in the room", () => {
     const record = survey(sides([4.02, 3, 4, 3], LEFT4), {
-      outlets: [{ id: "o", wall: "s0", offset: 4.02, height: 0.3 }],
       layers: { "mark/1": marks({ on: "wall", wall: "s0", face: "right", offset: 4.02, height: 0.3 }) },
     });
     const result = expandSurvey(record, { addOns: [MARK] });
-    const [anchor] = anchorsOf(result.layers);
-    expect(anchor).toEqual({ on: "wall", wall: "s0", face: "left", offset: result.room.outlets?.[0]?.offset, height: 0.3 });
-    expect(anchor?.on === "wall" ? anchor.offset : undefined).toBeCloseTo(4.02 * (1 - 0.02 / 8.02), 12);
+    expect(anchorsOf(result.layers)).toEqual([{ on: "wall", wall: "s0", face: "left", offset: expect.closeTo(4.02 * (1 - 0.02 / 8.02), 12), height: 0.3 }]);
     expect(checkLayers(resultScene(result), [MARK])).toEqual([]);
   });
 
@@ -1026,14 +1001,14 @@ describe("resultScene", () => {
   it("gives the scene of a result, with its name and its layers", () => {
     const record = survey(sides([4, 3, 4, 3], LEFT4), { name: "Study", objects: [box("desk", { wall: "s0" })], layers: { "mark/1": marks({ on: "object", object: "desk" }) } });
     const result = expandSurvey(record, { addOns: [MARK] });
-    expect(resultScene(result)).toEqual({ schema: "scene/1", name: "Study", room: result.room, objects: result.objects, layers: { "mark/1": marks({ on: "object", object: "desk" }) } });
+    expect(resultScene(result)).toEqual({ schema: "scene/2", name: "Study", room: result.room, objects: result.objects, layers: { "mark/1": marks({ on: "object", object: "desk" }) } });
     expect(resultScene(result).room).toBe(result.room);
   });
 
   it("gives a scene with no name and no layers for a result with none", () => {
     const result = expandSurvey(survey(sides([4, 3, 4, 3], LEFT4)));
     const scene = resultScene(result);
-    expect(scene).toEqual({ schema: "scene/1", room: result.room, objects: [] });
+    expect(scene).toEqual({ schema: "scene/2", room: result.room, objects: [] });
     expect("name" in scene).toBe(false);
     expect("layers" in scene).toBe(false);
   });
@@ -1074,16 +1049,17 @@ describe("convertSurvey, the layers of a survey", () => {
 });
 
 describe("the laws of the layers of a survey", () => {
-  it("puts a mark on a side at the place of an outlet with the same numbers, for each survey", () => {
+  it("puts a mark on a side at the place of an opening with the same offset, on the face in the room, for each survey", () => {
     const length = fc.double({ min: 0, max: 100, noNaN: true });
     fc.assert(
       fc.property(sidesArbitrary, fc.nat({ max: 12 }), length, length, fc.option(fc.double(), { nil: undefined }), (list, index, offset, height, heading) => {
         const wall = `s${index}`;
         const layer = marks({ on: "wall", wall, face: "left", offset, height });
-        const result = expandSurvey(survey(list, { heading, outlets: [{ id: "o", wall, offset, height }], layers: { "mark/1": layer } }), { addOns: [MARK] });
-        const outlet = result.room.outlets?.[0];
-        expect(outlet).toBeDefined();
-        expect(anchorsOf(result.layers)).toEqual([{ on: "wall", wall, face: outlet?.face, offset: outlet?.offset, height }]);
+        const openings = [{ id: "o", wall, kind: "gap", offset, width: 0, height: 1 }] as const;
+        const result = expandSurvey(survey(list, { heading, openings, layers: { "mark/1": layer } }), { addOns: [MARK] });
+        const opening = result.room.openings?.[0];
+        expect(opening).toBeDefined();
+        expect(anchorsOf(result.layers)).toEqual([{ on: "wall", wall, face: result.frame.face, offset: opening?.offset, height }]);
         expect(result.layerFindings).toEqual([]);
       }),
     );

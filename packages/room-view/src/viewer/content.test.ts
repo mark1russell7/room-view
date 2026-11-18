@@ -63,8 +63,8 @@ describe("createRoomContent", () => {
 
   it("has the records of the solids, with the names of the root entry", () => {
     const content = createRoomContent(SAMPLE_SCENE);
-    for (const record of ["floor:floor", "wall:south", "opening:window-east", "outlet:south-1", "object:desk", "object:node-3"]) expect(content.has(record), record).toBe(true);
-    for (const record of ["glass:window-east", "opening:door", "wall:none", "electrical/1:south-1", ""]) expect(content.has(record), record).toBe(false);
+    for (const record of ["floor:floor", "wall:south", "opening:window-east", "object:desk", "object:node-3"]) expect(content.has(record), record).toBe(true);
+    for (const record of ["glass:window-east", "opening:door", "wall:none", "mark/1:spot", ""]) expect(content.has(record), record).toBe(false);
     content.dispose();
   });
 
@@ -72,7 +72,6 @@ describe("createRoomContent", () => {
     const content = createRoomContent(SAMPLE_SCENE);
     expect(content.pickOf("wall:south")).toEqual({ solid: "wall:south:0", kind: "wall", source: "south" });
     expect(content.pickOf("opening:window-east")).toEqual({ solid: "glass:window-east", kind: "glass", source: "window-east" });
-    expect(content.pickOf("outlet:nook-2")).toEqual({ solid: "outlet:nook-2", kind: "outlet", source: "nook-2" });
     expect(content.pickOf("object:none")).toBeUndefined();
     content.dispose();
   });

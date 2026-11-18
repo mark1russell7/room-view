@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import * as addOn from "./add-on.ts";
 import * as entry from "./index.ts";
 import * as marks from "./marks.ts";
+import * as sample from "./sample.ts";
 import * as schema from "./schema.ts";
 
 /**
@@ -48,13 +49,14 @@ describe("the root entry", () => {
 });
 
 describe("the entry /schema", () => {
-  it("has the schema and the read of a layer", () => {
-    expect(Object.keys(schema).sort()).toEqual(["electricalSchema", "parseElectrical"]);
+  it("has the schema and the read of a layer, and the read of the old records of version 1", () => {
+    expect(Object.keys(schema).sort()).toEqual(["electricalSchema", "electricalV1", "parseElectrical"]);
     expect(schema.parseElectrical({ schema: entry.ELECTRICAL_SCHEMA })).toEqual({ ok: true, layer: { schema: "electrical/1" } });
   });
 
-  it("imports zod and the schema of an anchor of the core", () => {
-    expect(packages("./schema.ts")).toEqual(["@mark1russell7/room-view/schema", "zod"]);
+  it("imports zod/mini and the entry /schema of the core, not all of zod", () => {
+    const schemas = packages("./schema.ts").filter((name) => name === "zod" || name.startsWith("zod/") || name.endsWith("/schema"));
+    expect(schemas).toEqual(["@mark1russell7/room-view/schema", "zod/mini"]);
   });
 });
 
@@ -64,8 +66,12 @@ describe("the entry /add-on", () => {
     expect(addOn.electrical.schema).toBe(entry.ELECTRICAL_SCHEMA);
   });
 
-  it("reads a layer with the schema, so it imports zod", () => {
-    expect(packages("./add-on.ts")).toContain("zod");
+  it("has the read of the old records of version 1 of the core", () => {
+    expect(addOn.electrical.v1?.fields).toEqual({ room: ["outlets", "circuits"], scene: ["loads"], survey: ["outlets", "circuits"], level: ["circuits"], object: ["outlet"] });
+  });
+
+  it("reads a layer with the schema, so it imports zod/mini", () => {
+    expect(packages("./add-on.ts")).toContain("zod/mini");
   });
 });
 
@@ -77,5 +83,15 @@ describe("the entry /marks", () => {
 
   it("imports the core and Vex at run time: no zod, and the visuals package only for its types", () => {
     expect(packages("./marks.ts")).toEqual(["@mark1russell7/room-view", "@mark1russell7/vex", "@mark1russell7/vex-domains"]);
+  });
+});
+
+describe("the entry /sample", () => {
+  it("has the layers and the records of the samples", () => {
+    expect(Object.keys(sample).sort()).toEqual(["SAMPLE_ELECTRICAL_LEVEL", "SAMPLE_ELECTRICAL_SCENE", "SAMPLE_ELECTRICAL_SURVEY", "SAMPLE_SCENE_LAYER", "SAMPLE_SURVEY_LAYER"]);
+  });
+
+  it("imports only the samples of the core at run time: no zod and no Vex", () => {
+    expect(packages("./sample.ts")).toEqual(["@mark1russell7/room-view/sample"]);
   });
 });

@@ -31,8 +31,8 @@ describe("planShape", () => {
 
   it("turns the outline of an object with its turn, in the unit of the room", () => {
     const scene: Scene = {
-      schema: "scene/1",
-      room: { schema: "room/1", unit: "cm", height: 240, wallThickness: 10, walls: [] },
+      schema: "scene/2",
+      room: { schema: "room/2", unit: "cm", height: 240, wallThickness: 10, walls: [] },
       objects: [{ id: "box", kind: "box", size: [200, 100, 50], at: [300, 400], lift: 20, turn: 90 }],
     };
     const [shape] = planShapes(scene);
@@ -84,6 +84,6 @@ describe("planShapes", () => {
   });
 
   it("gives no outline for a scene with no solid", () => {
-    expect(planShapes({ schema: "scene/1", room: { schema: "room/1", unit: "m", height: 2.4, wallThickness: 0.1, walls: [] } })).toEqual([]);
+    expect(planShapes({ schema: "scene/2", room: { schema: "room/2", unit: "m", height: 2.4, wallThickness: 0.1, walls: [] } })).toEqual([]);
   });
 });

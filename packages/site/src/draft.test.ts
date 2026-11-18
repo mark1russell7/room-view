@@ -1,4 +1,6 @@
+import type { ElectricalLayer } from "@mark1russell7/electrical";
 import { ELECTRICAL_FORM } from "@mark1russell7/electrical/form";
+import { SAMPLE_ELECTRICAL_SURVEY } from "@mark1russell7/electrical/sample";
 import { checkForm, checkRoom, type LayerForm, type Survey } from "@mark1russell7/room-view";
 import { SAMPLE_SURVEY } from "@mark1russell7/room-view/sample";
 import { describe, expect, it } from "vitest";
@@ -252,7 +254,7 @@ describe("convertTyped", () => {
 describe("surveyOf", () => {
   it("makes the survey record of the example room in meters", () => {
     expect(roomSurvey(exampleDraft("m"))).toEqual({
-      schema: "survey/1",
+      schema: "survey/2",
       unit: "m",
       height: 2.4,
       wallThickness: 0.11,
@@ -385,7 +387,7 @@ describe("draftOf", () => {
 
   it("shows a record in feet as feet and inches, and a record in millimeters as centimeters", () => {
     const survey = (unit: Survey["unit"], height: number, wallThickness: number, length: number): Survey => ({
-      schema: "survey/1",
+      schema: "survey/2",
       unit,
       height,
       wallThickness,
@@ -404,7 +406,7 @@ describe("draftOf", () => {
 
   it("writes each turn that is a number as the angle inside the room", () => {
     const survey = (turns: readonly Survey["sides"][number]["turn"][]): Survey => ({
-      schema: "survey/1",
+      schema: "survey/2",
       unit: "m",
       height: 2.4,
       wallThickness: 0.1,
@@ -426,8 +428,8 @@ describe("draftOf", () => {
     expect(statusFor(draft)).toEqual({ level: "closed", title: "The room closes.", text: "The walk ends exactly at its start." });
   });
 
-  it("reads the features of each wall of the sample survey, in the sequence of their distances", () => {
-    const draft = roomDraft(SAMPLE_SURVEY);
+  it("reads the features of each wall of the sample survey with its electrical layer, in the sequence of their distances", () => {
+    const draft = roomDraft(SAMPLE_ELECTRICAL_SURVEY);
     expect(draft.sides.map((side) => side.features.map((item) => featureTag(item)))).toEqual([
       ["door", "outlet", "outlet"],
       ["outlet", "window"],
@@ -456,7 +458,7 @@ describe("draftOf", () => {
 
   it("gives the features of an id to the first side with that id", () => {
     const survey: Survey = {
-      schema: "survey/1",
+      schema: "survey/2",
       unit: "m",
       height: 2.4,
       wallThickness: 0.1,
@@ -465,7 +467,7 @@ describe("draftOf", () => {
         { id: "a", length: 3, turn: "left" },
       ],
       openings: [{ id: "door", wall: "a", kind: "gap", offset: 0, width: 1, height: 2 }],
-      outlets: [{ id: "outlet", wall: "b", offset: 1, height: 0.3 }],
+      layers: { [ELECTRICAL.layer]: { schema: ELECTRICAL.layer, outlets: [{ id: "outlet", anchor: { on: "wall", wall: "b", face: "left", offset: 1, height: 0.3 } }] } },
     };
     const draft = roomDraft(survey);
     expect(draft.sides.map((side) => side.features.map((item) => item.kind))).toEqual([["gap"], []]);
@@ -474,7 +476,7 @@ describe("draftOf", () => {
   });
 
   it("gives an empty field for a number that is not a length", () => {
-    const draft = roomDraft({ schema: "survey/1", unit: "m", height: Number.NaN, wallThickness: -1, sides: [{ id: "a", length: 0, turn: Number.POSITIVE_INFINITY }] });
+    const draft = roomDraft({ schema: "survey/2", unit: "m", height: Number.NaN, wallThickness: -1, sides: [{ id: "a", length: 0, turn: Number.POSITIVE_INFINITY }] });
     expect(draft.height).toEqual({ value: "", inches: "" });
     expect(draft.thickness).toEqual({ value: "", inches: "" });
     expect(draft.sides[0]).toEqual({ key: "s1", length: { value: "", inches: "" }, corner: "angle", angle: "", features: [], objects: [] });
@@ -483,31 +485,29 @@ describe("draftOf", () => {
 
 describe("hasMore", () => {
   const survey = roomSurvey(exampleDraft("m"));
-  /** The example room of an old file: its outlet is in the old field of the survey record, and the record has no layer. */
-  const old: Survey = { ...surveyOf(exampleDraft("m")), outlets: [{ id: "outlet-1", wall: "wall-2", offset: 1.5, height: 0.3 }] };
+  /** The outlet of the example room, on wall 2. */
+  const outlet = { id: "outlet-1", anchor: { on: "wall", wall: "wall-2", face: "left", offset: 1.5, height: 0.3 } } as const;
+  /** This function gives the example room with an electrical layer in place of its own. */
+  const wired = (layer: Omit<ElectricalLayer, "schema">): Survey => ({ ...survey, layers: { [ELECTRICAL.layer]: { schema: ELECTRICAL.layer, ...layer } } });
 
   it("is false for the record of a draft", () => {
     expect(readSurvey(survey).more).toBe(false);
     expect(readSurvey(roomSurvey(BOX)).more).toBe(false);
-    expect(readSurvey(old).more).toBe(false);
+    expect(readSurvey(wired({ outlets: [outlet] })).more).toBe(false);
   });
 
   it("is false for the records of an add-on: `levelParts` tells their data that the page does not keep", () => {
     const circuits = [{ id: "a", name: "Circuit A", limit: 1440 }];
-    const lost = [{ id: "outlet-1", wall: "hall", offset: 1, height: 0.3, circuit: "b" }];
-    expect(hasMore({ ...old, circuits })).toBe(false);
-    expect(hasMore({ ...old, circuits, outlets: lost })).toBe(false);
+    const lost = { id: "outlet-1", anchor: { ...outlet.anchor, wall: "hall", offset: 1 }, circuit: "b" };
+    expect(hasMore(wired({ circuits }))).toBe(false);
+    expect(hasMore(wired({ circuits, outlets: [lost] }))).toBe(false);
     // The limit of the circuit is not the limit of the usual breaker and voltage. The outlet is on no wall of the survey.
-    expect(readSurvey({ ...old, circuits }).more).toBe(true);
-    expect(readSurvey({ ...old, outlets: lost }).more).toBe(true);
+    expect(readSurvey(wired({ circuits, outlets: [outlet] })).more).toBe(true);
+    expect(readSurvey(wired({ outlets: [lost] })).more).toBe(true);
     const good = [{ id: "a", name: "Circuit A", breaker: 16, voltage: 230, limit: 2944 }];
-    const outlets = (old.outlets ?? []).map((outlet) => ({ ...outlet, circuit: "a" }));
-    expect(outlets).not.toEqual([]);
-    expect(readSurvey({ ...old, circuits: good, outlets }).more).toBe(false);
+    expect(readSurvey(wired({ circuits: good, outlets: [{ ...outlet, circuit: "a" }] })).more).toBe(false);
     // An outlet of a circuit that the survey does not list.
-    expect(readSurvey({ ...old, outlets }).more).toBe(true);
-    // The page reads the layer, so it does not keep the old fields next to the layer.
-    expect(readSurvey({ ...survey, circuits: good }).more).toBe(true);
+    expect(readSurvey(wired({ outlets: [{ ...outlet, circuit: "a" }] })).more).toBe(true);
   });
 
   it("tells each kind of data that a draft does not keep", () => {
@@ -517,8 +517,8 @@ describe("hasMore", () => {
       { ...survey, sides: survey.sides.map((side) => ({ ...side, thickness: 0.2 })) },
       { ...survey, openings: [{ id: "door-1", wall: "wall-1", kind: "door", offset: 1, width: 0.8, sill: 0.1, height: 2 }] },
       { ...survey, openings: [{ id: "door-1", wall: "hall", kind: "door", offset: 1, width: 0.8, height: 2 }] },
-      { ...old, outlets: [{ id: "outlet-1", wall: "wall-2", offset: 1, height: 0.3, circuit: "a" }] },
-      { ...old, outlets: [{ id: "outlet-1", wall: "hall", offset: 1, height: 0.3 }] },
+      wired({ outlets: [{ ...outlet, anchor: { ...outlet.anchor, offset: 1 }, circuit: "a" }] }),
+      wired({ outlets: [{ ...outlet, anchor: { ...outlet.anchor, wall: "hall", offset: 1 } }] }),
     ];
     for (const [index, item] of more.entries()) expect(readSurvey(item).more, String(index)).toBe(true);
   });

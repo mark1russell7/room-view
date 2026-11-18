@@ -940,29 +940,14 @@ describe("surveyParts", () => {
     expect(surveyParts([survey], undefined, "metric", [pageAddOn(GAS)])).toEqual({ lists: [], rooms: [none], more: true });
   });
 
-  it("reads the old fields of a record with the add-on of the page, when the record has no layer of the form", () => {
-    const addOn: PageAddOn = {
-      ...pageAddOn(PLUMBING),
-      fromSurvey: (survey) => (survey.name === "Old" ? { schema: P, stacks: [{ id: "main", name: "Main", size: 110, vent: "top" }] } : undefined),
-      fromLevel: (given) => (given.name === "Old" ? { schema: P, stacks: [{ id: "top", name: "Top", size: 110 }] } : undefined),
-    };
-    const survey: Survey = { ...surveyOf(box(), FORMS), name: "Old" };
-    const read = surveyParts([survey], { ...level, name: "Old" }, "metric", [addOn]);
-    expect(read.more).toBe(false);
-    expect(read.lists).toEqual(stacks(recordOf("r1", { values: { name: "Top", size: "110" } }), recordOf("r2", { values: { name: "Main", size: "110" }, records: { vent: "r1" } })));
-    // A record with no old fields gives no layer.
-    expect(surveyParts([{ ...survey, name: "New" }], { ...level, name: "New" }, "metric", [addOn])).toEqual({ lists: [], rooms: [none], more: false });
-  });
-
-  it("reads the layer before the old fields, and tells the old fields", () => {
-    const addOn: PageAddOn = { ...pageAddOn(PLUMBING), fromSurvey: () => ({ schema: P, stacks: [{ id: "old", name: "Old", size: 110 }] }), fromLevel: () => ({ schema: P, stacks: [{ id: "low", name: "Low", size: 110 }] }) };
+  it("reads the layer of each record, and a record with no layer of the form gives no record", () => {
     const given = { [P]: { schema: P, stacks: [{ id: "new", name: "New", size: 110 }] } };
+    const read = stacks(recordOf("r1", { values: { name: "New", size: "110" } }));
     const survey: Survey = { ...surveyOf(box(), FORMS), layers: given };
-    const read = surveyParts([survey], undefined, "metric", [addOn]);
-    expect(read).toEqual({ lists: stacks(recordOf("r1", { values: { name: "New", size: "110" } })), rooms: [none], more: true });
-    // The level record has the layer, and the survey has only old fields.
-    const mixed = surveyParts([surveyOf(box(), FORMS)], { ...level, layers: given }, "metric", [addOn]);
-    expect(mixed).toEqual({ lists: stacks(recordOf("r1", { values: { name: "New", size: "110" } }), recordOf("r2", { values: { name: "Old", size: "110" } })), rooms: [none], more: true });
+    expect(surveyParts([survey], undefined, "metric", [pageAddOn(PLUMBING)])).toEqual({ lists: read, rooms: [none], more: false });
+    // The level record has the layer, and the survey has none.
+    expect(surveyParts([surveyOf(box(), FORMS)], { ...level, layers: given }, "metric", [pageAddOn(PLUMBING)])).toEqual({ lists: read, rooms: [none], more: false });
+    expect(surveyParts([surveyOf(box(), FORMS)], level, "metric", [pageAddOn(PLUMBING)])).toEqual({ lists: [], rooms: [none], more: false });
   });
 
   it("gives each layer to the function `plain` of its add-on, with the system of units", () => {

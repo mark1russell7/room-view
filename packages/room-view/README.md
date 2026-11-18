@@ -20,7 +20,7 @@ A tape measure gives the length of each wall, the position of each door and the 
 import { checkRoom, roomSolids, type Room } from "@mark1russell7/room-view";
 
 const room: Room = {
-  schema: "room/1",
+  schema: "room/2",
   unit: "ft",
   height: 8,
   wallThickness: 0.4,
@@ -51,9 +51,10 @@ roomSolids(room); // => the floor, and the parts of each wall around the door
 - A **wall** is a straight line in the plan, with a thickness and a height. The field `side` tells which side of the line has the wall.
 - An **opening** is a door, a window or a gap in a wall.
 - A **floor** is one area of the plan.
-- An **outlet** is a point on a face of a wall. A **circuit** gives power to outlets, and it has a limit in watts. A circuit can also keep the rating of its breaker in amperes and its voltage. The limit does not change with them.
 
-A scene is one room with its placed objects and the loads of its circuits. A placed object is a box: a desk, a rack, a computer. An object can have a parent, and then its position is relative to the parent.
+The room record has only space. The records of a topic, for example outlets, are in a layer of an add-on. Refer to [Anchors and layers](#anchors-and-layers).
+
+A scene is one room with its placed objects and its layers. A placed object is a box: a desk, a rack, a computer. An object can have a parent, and then its position is relative to the parent.
 
 ## A survey: the room from a tape measure
 
@@ -63,7 +64,7 @@ A person with a tape measure does not know the coordinates of a corner. The pers
 import { checkRoom, expandSurvey, type Survey } from "@mark1russell7/room-view";
 
 const survey: Survey = {
-  schema: "survey/1",
+  schema: "survey/2",
   unit: "ft",
   height: 8,
   wallThickness: 0.4,
@@ -90,8 +91,8 @@ checkRoom(room); // => []
 - `expandSurvey` shares a small gap between the sides. A room with square corners keeps its square corners.
 - A walk with a mistake is not closed, for example a walk with a wrong turn. Its room has the walls of the walk and no floor, so a drawing shows the mistake.
 - A **check** is a measured distance between two corners, for example a diagonal. The result has its difference from the room record.
-- An opening and an outlet give their `offset` from the first corner of their side, as the tape measure shows it.
-- A side that shares the gap changes its length. Its openings and its outlets keep their place: each `offset` and each `width` changes in the same proportion.
+- An opening gives its `offset` from the first corner of its side, as the tape measure shows it.
+- A side that shares the gap changes its length. Its openings and the wall anchors of its layers keep their place: each `offset` and each `width` changes in the same proportion.
 
 The walk goes along the inner faces, so each wall is on the outer side of its line. A survey has one room. A wall in the middle of a room is not a side of the walk, for example the short wall of a nook. Add such a wall to the room record.
 
@@ -103,7 +104,7 @@ A person measures a desk or a rack from a wall. A survey can have these measurem
 import { checkScene, expandSurvey, type Scene, type Survey } from "@mark1russell7/room-view";
 
 const survey: Survey = {
-  schema: "survey/1",
+  schema: "survey/2",
   unit: "m",
   height: 2.5,
   wallThickness: 0.15,
@@ -122,7 +123,7 @@ const survey: Survey = {
 const { room, objects } = expandSurvey(survey);
 objects[0]; // => { id: "desk", kind: "desk", size: [1.6, 0.8, 0.75], at: [2.2, 2.6], turn: 180 }, with rounded numbers
 objects[1]; // => { id: "display", kind: "display", size: [0.6, 0.2, 0.4], at: [0, -0.2], lift: 0.75, parent: "desk" }, with rounded numbers
-const scene: Scene = { schema: "scene/1", room, objects };
+const scene: Scene = { schema: "scene/2", room, objects };
 checkScene(scene); // => []
 ```
 
@@ -132,7 +133,6 @@ checkScene(scene); // => []
 - An object with `on` is on a different object or in it. That object is its **holder**: a desk for a display, a rack for a computer.
 - With a holder, `offset` and `gap` start at the edge and the back of the holder. The holder becomes the parent of the placed object.
 - `lift` is the height of the bottom above the floor. With a holder, the default is the top of the holder.
-- `outlet` names the outlet that gives power to the object.
 - An object keeps its size on a side that shares the gap. Only its place changes.
 - An object with no place is not in the result. For example, its side is not in the survey, or a size is not above 0.
 
@@ -144,7 +144,7 @@ A survey has one room, with its own first corner. A level record has the survey 
 import { checkRoom, expandLevel, type Level, type Survey } from "@mark1russell7/room-view";
 
 const hall: Survey = {
-  schema: "survey/1",
+  schema: "survey/2",
   name: "Hall",
   unit: "m",
   height: 2.5,
@@ -158,7 +158,7 @@ const hall: Survey = {
   openings: [{ id: "to-study", wall: "east", kind: "door", offset: 0.2, width: 0.8, height: 2.05 }],
 };
 const study: Survey = {
-  schema: "survey/1",
+  schema: "survey/2",
   name: "Study",
   unit: "m",
   height: 2.5,
@@ -173,7 +173,7 @@ const study: Survey = {
 };
 
 const level: Level = {
-  schema: "level/1",
+  schema: "level/2",
   unit: "m",
   rooms: [
     { id: "hall", survey: hall },
@@ -196,7 +196,7 @@ checkRoom(room); // => []
 - A connection between two rooms that have a place examines the measurements. Its `gap` and its `turn` tell a mistake, and `fits` tells if they are in the limits.
 - A connection with a fault has the use `none` and a `fault`. For example, an end names an opening that its room does not have.
 - A room with no path of connections to the first room has the place `apart`. Its place is not known, so its group goes to the right of the groups before it.
-- The result has one room record with each room. The `id` of a wall, an opening or an outlet is the `id` of its room, then `/`, then its own `id`.
+- The result has one room record with each room. The `id` of a wall or an opening is the `id` of its room, then `/`, then its own `id`.
 - `objects` has the objects of each survey, at the place of their room. The `id` of an object has the same form.
 - Each closed room gives one floor, with the `id` and the name of the room.
 - A survey can have a different unit than the level. `convertSurvey` changes the unit of a survey.
@@ -220,8 +220,8 @@ Two rooms have one wall between them, but each survey gives the full thickness t
 
 | Level | Meaning | Examples |
 | --- | --- | --- |
-| `error` | The model cannot show the record correctly. | An opening that is longer than its wall, an outlet on a wall that the room does not have. |
-| `warning` | The record is possible, but it is probably a mistake. | Two objects that overlap, an object in a wall, an outlet in a door. |
+| `error` | The model cannot show the record correctly. | An opening that is longer than its wall, an object on an object that the scene does not have. |
+| `warning` | The record is possible, but it is probably a mistake. | Two objects that overlap, an object in a wall. |
 
 Each finding has a code, the kind and the `id` of the record, and a message with the values. `FINDING_CODES` has each code. A fault between two records also has the `id` of the second record in `other`. An example is the other object of an overlap.
 
@@ -304,12 +304,6 @@ const findings = [...result.layerFindings, ...checkLayers(resultScene(result), a
 
 `ANCHOR_CODES`, `LAYER_CODES` and `FORM_CODES` have the codes of the core. The design of the add-ons is in `docs/ADD-ONS.md` of the repository.
 
-## The loads of the circuits
-
-`circuitStates` gives the load of each circuit against its limit, with a level: `ok`, `near`, `over` or `unknown`. The loads are input data of the scene. This package does not calculate the power of a computer.
-
-`outletLevels` gives the level of the circuit of each outlet. `levelShape` gives the shape of the sign of a level. The shapes are a disc for `ok`, a triangle for `near`, a square for `over` and a ring for `unknown`. Thus a person who does not see a color reads the level from the shape. `SHAPE_OUTLINES` and `shapeRing` give the outline of each sign, so each drawing shows the same signs.
-
 ## The viewer
 
 The entry `@mark1russell7/room-view/three` shows a scene in a page with three.js. Install `three` 0.187 or later with this package. For the types, install `@types/three` too.
@@ -324,7 +318,7 @@ const viewer = createRoomViewer(container, {
 });
 
 viewer?.setTheme(DARK_THEME);
-viewer?.highlight([{ kind: "outlet", source: "nook-1" }]);
+viewer?.highlight([{ kind: "object", source: "desk" }]);
 viewer?.setView("top");
 ```
 
@@ -334,20 +328,18 @@ viewer?.setView("top");
 - A click selects the record of a solid or of a sign. `onSelect` gets the kind and the `id` of the record.
 - With the keyboard, the arrow keys turn the model, and `+` and `-` change the distance. `Home` shows the first view, and `T` shows the plan.
 - The stage and the signs come from `@mark1russell7/visuals`. Thus each viewer on that package shows the same signs.
-- Each outlet has a sign with the color and the shape of the level of its circuit. A sign keeps its size in the picture.
-- A sign behind a wall or a machine stays in the picture, and it is less clear.
+- The signs are the marks of the layers, from the option `marks`. With no marks, the picture has only the solids.
+- A sign keeps its size in the picture. A sign behind a wall or a machine stays in the picture, and it is less clear.
 - The pointer finds a sign before each solid, also behind a solid. `onHover` and `onSelect` get its mark as their second parameter.
-- `highlight` and `select` mark records from your page: the outlets of a circuit, or the row of a table.
-- A marked outlet or object shows a line from the outlet to each object that takes its power from it.
-- The option `loads` has the options of `circuitStates`, for example the part of the limit where the level `near` starts.
+- `highlight` and `select` mark records from your page, for example the record of the row of a table.
 - The viewer draws a frame only after a change.
 - `createRoomViewer` gives `undefined` in a browser with no WebGL 2. It does not throw.
 
-`LIGHT_THEME` and `DARK_THEME` are the colors, and a theme is plain data. The field `levels` of a theme has the color of each level. `solidGeometry` gives the three.js geometry of one solid, for your own three.js scene.
+`LIGHT_THEME` and `DARK_THEME` are the colors, and a theme is plain data. The field `levels` of a theme has the color of each level of a mark. `solidGeometry` gives the three.js geometry of one solid, for your own three.js scene.
 
 ### The marks of the add-ons
 
-The option `marks` gives the marks of a scene to the viewer. The viewer draws them in place of the signs of the outlets:
+The option `marks` gives the marks of a scene to the viewer. The viewer draws them as signs:
 
 ```ts
 import { layerMarks } from "@mark1russell7/room-view/marks";
@@ -380,8 +372,8 @@ The option `cut` gives a floor plan: the plan keeps only the solids that start b
 
 | Entry | What it has |
 | --- | --- |
-| `@mark1russell7/room-view` | The record types, the model, the plan, the checks, the loads, the survey and the level. It has no schema library. |
-| `@mark1russell7/room-view/schema` | `roomSchema`, `sceneSchema`, `surveySchema`, `levelSchema` and `anchorSchema`: the zod schemas that examine the form of a JSON record. |
+| `@mark1russell7/room-view` | The record types, the model, the plan, the checks, the survey, the level, the anchors and the layers. It has no schema library. |
+| `@mark1russell7/room-view/schema` | `readRecord`, the schemas of the records and of an anchor in `zod/mini`, and `READ_CONTEXT`: the read of a JSON record. |
 | `@mark1russell7/room-view/sample` | `SAMPLE_ROOM`, `SAMPLE_SCENE`, `SAMPLE_SURVEY` and `SAMPLE_LEVEL`: a room with a rack and an apartment of four rooms, for demos and tests. |
 | `@mark1russell7/room-view/marks` | `layerMarks` and the type `AddOnMarks`: the marks of the layers of a scene, as plain data for a viewer. |
 | `@mark1russell7/room-view/three` | `createRoomViewer`, the themes and `solidGeometry`: the viewer in a page. It needs the package `three`. |
@@ -390,11 +382,21 @@ The schemas examine the form of a record: the fields and their types. The checks
 
 ```ts
 import { checkScene } from "@mark1russell7/room-view";
-import { sceneSchema } from "@mark1russell7/room-view/schema";
+import { readRecord } from "@mark1russell7/room-view/schema";
 
-const scene = sceneSchema.parse(JSON.parse(text));
-const errors = checkScene(scene).filter((finding) => finding.level === "error");
+const read = readRecord(JSON.parse(text), addOns);
+if (read.ok && read.kind === "scene") {
+  const errors = checkScene(read.record).filter((finding) => finding.level === "error");
+}
 ```
+
+- `readRecord` reads a room, a scene, a survey or a level, in version 1 or in version 2. It gives the record in version 2, its kind and the version of the file.
+- A record of version 1 kept the records of some topics in fields of its own. An add-on with the read `v1` moves its fields to its layer.
+- A field of version 1 that no add-on of the list moves is a fault. `readRecord` does not throw.
+- A record with a layer and the old fields of the same add-on keeps the layer. The finding `read-both` tells it.
+- A `room/1` with old records becomes a `scene/2`, because a room record has no layers.
+
+The schemas use `zod/mini`, so a page gets only the parts of zod that the schemas use. `READ_CONTEXT` gives the English messages of zod to each read. An add-on gives it to the read of its layer too.
 
 ## The geometry
 

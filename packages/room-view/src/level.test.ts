@@ -19,6 +19,7 @@ import {
 import type { Opening, PlanPoint, Room } from "./room.ts";
 import { SAMPLE_LEVEL, SAMPLE_SURVEY } from "./sample.ts";
 import { expandSurvey, resultScene, type Survey, type SurveyObject, type SurveySide, type SurveyTurn } from "./survey.ts";
+import { unitsPer } from "./units.ts";
 
 /** The sides `s0`, `s1` and so on, from a list of lengths and a list of turns. */
 function sides(lengths: readonly number[], turns: readonly SurveyTurn[]): SurveySide[] {
@@ -27,7 +28,7 @@ function sides(lengths: readonly number[], turns: readonly SurveyTurn[]): Survey
 
 /** A survey in meters with the sides of the argument, and a change. */
 function survey(list: readonly SurveySide[], change: Partial<Survey> = {}): Survey {
-  return { schema: "survey/1", unit: "m", height: 2.5, wallThickness: 0.15, sides: list, ...change };
+  return { schema: "survey/2", unit: "m", height: 2.5, wallThickness: 0.15, sides: list, ...change };
 }
 
 const LEFT4: readonly SurveyTurn[] = ["left", "left", "left", "left"];
@@ -44,7 +45,7 @@ function connection(id: string, from: readonly [string, string], to: readonly [s
 
 /** A level in meters. */
 function level(rooms: readonly LevelRoom[], connections: readonly LevelConnection[] = [], change: Partial<Level> = {}): Level {
-  return { schema: "level/1", unit: "m", rooms, connections, ...change };
+  return { schema: "level/2", unit: "m", rooms, connections, ...change };
 }
 
 /** Room A is 4 m by 3 m, with a door on its east wall. The center of the door is 1.45 m from the south wall. */
@@ -116,7 +117,7 @@ function numbersOf(result: LevelResult): number[] {
 
 describe("expandLevel, one room", () => {
   it("has the names of the format", () => {
-    expect(LEVEL_SCHEMA).toBe("level/1");
+    expect(LEVEL_SCHEMA).toBe("level/2");
     expect(ROOM_PLACES).toEqual(["first", "connection", "apart"]);
     expect(CONNECTION_USES).toEqual(["place", "check", "none"]);
     expect(CONNECTION_FAULTS).toEqual(["room", "opening", "one-room"]);
@@ -124,14 +125,14 @@ describe("expandLevel, one room", () => {
   });
 
   it("gives a room record with no wall for a level with no room", () => {
-    expect(expandLevel({ schema: "level/1", unit: "m", rooms: [] })).toEqual({
-      room: { schema: "room/1", unit: "m", height: 1, wallThickness: 1, walls: [] },
+    expect(expandLevel({ schema: "level/2", unit: "m", rooms: [] })).toEqual({
+      room: { schema: "room/2", unit: "m", height: 1, wallThickness: 1, walls: [] },
       rooms: [],
       connections: [],
       objects: [],
       layerFindings: [],
     });
-    expect(expandLevel({ schema: "level/1", name: "Home", unit: "ft", rooms: [] }).room).toEqual({ schema: "room/1", name: "Home", unit: "ft", height: 1, wallThickness: 1, walls: [] });
+    expect(expandLevel({ schema: "level/2", name: "Home", unit: "ft", rooms: [] }).room).toEqual({ schema: "room/2", name: "Home", unit: "ft", height: 1, wallThickness: 1, walls: [] });
   });
 
   it("gives the room of the survey, with the `id` of the room before each `id`", () => {
@@ -141,7 +142,7 @@ describe("expandLevel, one room", () => {
     expect(result.connections).toEqual([]);
     expect(result.rooms[0]?.result.room).toEqual(own);
     expect(result.room).toEqual({
-      schema: "room/1",
+      schema: "room/2",
       name: "Home",
       unit: "m",
       height: 2.5,
@@ -149,8 +150,6 @@ describe("expandLevel, one room", () => {
       walls: own.walls.map((wall) => ({ ...wall, id: `living/${wall.id}` })),
       openings: own.openings?.map((opening) => ({ ...opening, id: `living/${opening.id}`, wall: `living/${opening.wall}` })),
       floors: [{ id: "living", name: "Sample room", ring: own.floors?.[0]?.ring }],
-      outlets: own.outlets?.map((outlet) => ({ ...outlet, id: `living/${outlet.id}`, wall: `living/${outlet.wall}` })),
-      circuits: own.circuits,
     });
     expect(checkRoom(result.room)).toEqual([]);
   });
@@ -504,46 +503,6 @@ describe("expandLevel, the records of a level", () => {
     expect(checkRoom(result.room)).toEqual([]);
   });
 
-  it("joins the circuits of the level and of the surveys: the first circuit of an `id` stays", () => {
-    const first = { ...A, circuits: [{ id: "a", limit: 1440 }, { id: "b", name: "B of the first room", limit: 1800 }] };
-    const second = { ...B, circuits: [{ id: "b", limit: 99 }, { id: "c", limit: 2400 }] };
-    const result = expandLevel(
-      level(
-        [
-          { id: "a", survey: first },
-          { id: "b", survey: second },
-        ],
-        [AB],
-        { circuits: [{ id: "a", name: "A of the level", limit: 1000 }] },
-      ),
-    );
-    expect(result.room.circuits).toEqual([
-      { id: "a", name: "A of the level", limit: 1000 },
-      { id: "b", name: "B of the first room", limit: 1800 },
-      { id: "c", limit: 2400 },
-    ]);
-  });
-
-  it("keeps the circuit of an outlet, and puts the `id` of the room before the `id` of its wall", () => {
-    const first = { ...A, outlets: [{ id: "o", wall: "s0", offset: 1, height: 0.3, circuit: "x" }] };
-    const second = { ...B, outlets: [{ id: "o", wall: "s1", offset: 2, height: 0.3 }] };
-    const result = expandLevel(
-      level(
-        [
-          { id: "a", survey: first },
-          { id: "b", survey: second },
-        ],
-        [AB],
-      ),
-    );
-    expect(result.room.outlets).toEqual([
-      { id: "a/o", wall: "a/s0", face: "left", offset: 1, height: 0.3, circuit: "x" },
-      { id: "b/o", wall: "b/s1", face: "left", offset: 2, height: 0.3 },
-    ]);
-    // The circuit "x" is not in the level, and the checks tell it.
-    expect(codes(result.room).length).toBeGreaterThan(0);
-  });
-
   it("does not change the level record", () => {
     const text = JSON.stringify(TWO);
     expandLevel(TWO);
@@ -638,7 +597,7 @@ describe("expandLevel, the objects of a level", () => {
       level(
         [
           { id: "a", survey: { ...A, objects: [desk, lamp] } },
-          { id: "b", survey: { ...B, outlets: [{ id: "o", wall: "s0", offset: 1, height: 0.3 }], objects: [{ ...desk, name: "Desk", outlet: "o" }] } },
+          { id: "b", survey: { ...B, objects: [{ ...desk, name: "Desk" }] } },
         ],
         [AB],
       ),
@@ -649,10 +608,10 @@ describe("expandLevel, the objects of a level", () => {
     ]);
     // Room B starts at (4.15, -0.45). Its object has the same `id` in its survey as the object of room A.
     const third = result.objects[2];
-    expect({ ...third, at: undefined }).toEqual({ id: "b/desk", kind: "desk", name: "Desk", size: [1, 0.5, 0.8], at: undefined, outlet: "b/o" });
+    expect({ ...third, at: undefined }).toEqual({ id: "b/desk", kind: "desk", name: "Desk", size: [1, 0.5, 0.8], at: undefined });
     expectPoint(third?.at, 5.15, -0.2, 12);
     expect(result.objects).toHaveLength(3);
-    expect(checkScene({ schema: "scene/1", room: result.room, objects: result.objects })).toEqual([]);
+    expect(checkScene({ schema: "scene/2", room: result.room, objects: result.objects })).toEqual([]);
   });
 
   it("gives the objects of the expansion of each survey, in the sequence of the rooms", () => {
@@ -662,7 +621,6 @@ describe("expandLevel, the objects of a level", () => {
         ...object,
         id: `${room.id}/${object.id}`,
         ...(object.parent === undefined ? {} : { parent: `${room.id}/${object.parent}` }),
-        ...(object.outlet === undefined ? {} : { outlet: `${room.id}/${object.outlet}` }),
       })),
     );
     expect(result.objects).toEqual(own);
@@ -854,7 +812,7 @@ describe("expandLevel, the layers of a level", () => {
     expect(JSON.stringify(record)).toBe(text);
   });
 
-  it("puts a mark of a room at the place of an outlet with the same numbers, for each room and each unit", () => {
+  it("puts a mark of a room on the face in the room, in the unit of the level, for each room and each unit", () => {
     const size = fc.double({ min: 2, max: 12, noNaN: true });
     const part = fc.double({ min: 0, max: 1, noNaN: true });
     const unit = fc.constantFrom("m", "ft", "cm");
@@ -866,7 +824,6 @@ describe("expandLevel, the layers of a level", () => {
         const height = up * 2;
         const b = survey(sides([width, depth, width, depth], [turn, turn, turn, turn]), {
           unit: own,
-          outlets: [{ id: "o", wall, offset, height }],
           layers: { "mark/1": marks({ on: "wall", wall, face: "left", offset, height }) },
         });
         const result = expandLevel(
@@ -880,9 +837,10 @@ describe("expandLevel, the layers of a level", () => {
           ),
           { addOns: [MARK] },
         );
-        const outlet = result.room.outlets?.find((item) => item.id === "b/o");
-        expect(outlet).toBeDefined();
-        expect(marksOf(result)).toEqual([{ id: "b/m0", anchor: { on: "wall", wall: outlet?.wall, face: outlet?.face, offset: outlet?.offset, height: outlet?.height }, size: 1 }]);
+        // The sides close with no error, so the offset keeps its proportion of the side. The face in the survey has no effect.
+        const scale = unitsPer(own, of);
+        const anchor = { on: "wall", wall: `b/${wall}`, face: turn, offset: expect.closeTo(offset * scale, 9), height: expect.closeTo(height * scale, 9) };
+        expect(marksOf(result)).toEqual([{ id: "b/m0", anchor, size: 1 }]);
         expect(result.layerFindings).toEqual([]);
       }),
     );

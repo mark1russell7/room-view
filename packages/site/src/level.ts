@@ -11,6 +11,7 @@ import {
   type Room,
   type Survey,
 } from "@mark1russell7/room-view";
+import type { RecordRead } from "@mark1russell7/room-view/schema";
 import {
   draftKeys,
   FEATURE_NAMES,
@@ -134,6 +135,27 @@ export function draftsOf(level: Level): LevelDrafts {
     connections.length < given.length ||
     level.rooms.some((room) => hasMore(room.survey));
   return { rooms, connections, lists: parts.lists, more };
+}
+
+/** The rooms of a file of measurements, and the kind of the file: one room, or rooms with the doors between them. */
+export interface FileDrafts {
+  readonly kind: "survey" | "level";
+  readonly drafts: LevelDrafts;
+}
+
+/**
+ * This function gives the rooms of a file of measurements from its read by `readRecord` of the core.
+ * A survey gives one room, and a level gives its rooms. Each other read gives `undefined`: a fault, a different kind of record, or a level with no room.
+ *
+ * A finding of the read tells data that the page does not keep, for example the old fields of a file next to their layer.
+ */
+export function fileDrafts(read: RecordRead): FileDrafts | undefined {
+  if (!read.ok) return undefined;
+  const lost = read.findings.length > 0;
+  const kept = (drafts: LevelDrafts): LevelDrafts => (lost ? { ...drafts, more: true } : drafts);
+  if (read.kind === "survey") return { kind: "survey", drafts: kept(surveyDrafts(read.record)) };
+  if (read.kind === "level" && read.record.rooms.length > 0) return { kind: "level", drafts: kept(draftsOf(read.record)) };
+  return undefined;
 }
 
 /** A feature of a different room that a door can go to. */

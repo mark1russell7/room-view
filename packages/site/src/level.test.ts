@@ -1,6 +1,8 @@
-import type { ElectricalLayer } from "@mark1russell7/electrical";
+import { ELECTRICAL_SCHEMA, type Circuit, type ElectricalLayer } from "@mark1russell7/electrical";
 import { LEVEL_SCHEMA, type Level, type LevelResult } from "@mark1russell7/room-view";
-import { SAMPLE_LEVEL, SAMPLE_SURVEY } from "@mark1russell7/room-view/sample";
+import { SAMPLE_ELECTRICAL_LEVEL, SAMPLE_ELECTRICAL_SURVEY } from "@mark1russell7/electrical/sample";
+import { SAMPLE_LEVEL, SAMPLE_SCENE, SAMPLE_SURVEY } from "@mark1russell7/room-view/sample";
+import { readRecord } from "@mark1russell7/room-view/schema";
 import { describe, expect, it } from "vitest";
 import {
   emptyDraft,
@@ -25,7 +27,8 @@ import {
 import { circuitOf, circuitsOf as storeCircuits, withCircuit, withNewCircuit, withOutletCircuit, wiring, type DraftCircuit } from "./electrical.fixture.ts";
 import { ELECTRICAL } from "./electrical.ts";
 import { levelResult, roomResult, roomSurvey, shownLayers, storeLists, storeSystem } from "./layers.ts";
-import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, roomIds, shownLevel, shownLevelObjects, surveyDrafts, type Joint } from "./level.ts";
+import { CORE_ADD_ONS } from "./add-ons.ts";
+import { apartNote, apartRooms, draftsOf, fileDrafts, joinChoices, jointsOf, levelOf, levelStatus, roomIds, shownLevel, shownLevelObjects, surveyDrafts, type Joint } from "./level.ts";
 
 const typed = (text: string): TypedLength => ({ value: text, inches: "" });
 
@@ -186,7 +189,7 @@ describe("levelOf", () => {
 
 describe("draftsOf", () => {
   it("makes the rooms and the connections of the sample apartment", () => {
-    const drafts = draftsOf(SAMPLE_LEVEL);
+    const drafts = draftsOf(SAMPLE_ELECTRICAL_LEVEL);
     expect(drafts.rooms.map((room) => room.name)).toEqual(["Living room", "Hall", "Bathroom", "Bedroom"]);
     expect(drafts.connections).toHaveLength(3);
     // The sample has a name and connections with a thickness. The page keeps its circuits.
@@ -244,7 +247,7 @@ describe("draftsOf", () => {
   });
 
   it("gives rooms that fit together", () => {
-    const drafts = draftsOf(SAMPLE_LEVEL);
+    const drafts = draftsOf(SAMPLE_ELECTRICAL_LEVEL);
     const store = withNewRooms(storeOf([exampleDraft("m")]), drafts.rooms, drafts.connections, true);
     expect(store.rooms).toHaveLength(4);
     expect(roomIds(store.rooms)).toEqual(["living-room", "hall", "bathroom", "bedroom"]);
@@ -259,7 +262,7 @@ describe("draftsOf", () => {
   });
 
   it("keeps the objects of each room", () => {
-    const drafts = draftsOf(SAMPLE_LEVEL);
+    const drafts = draftsOf(SAMPLE_ELECTRICAL_LEVEL);
     expect(drafts.rooms.map((room) => listedObjects(room).length)).toEqual([9, 1, 1, 2]);
     const store = withNewRooms(storeOf([exampleDraft("m")]), drafts.rooms, drafts.connections, true);
     const result = expand(store);
@@ -302,15 +305,52 @@ describe("draftsOf", () => {
     expect(draftsOf(level).more).toBe(false);
     expect(draftsOf({ ...level, name: "Home" }).more).toBe(true);
     // A circuit with no breaker and no voltage gets 16 A at 230 V in meters, so its limit is 2944 W, not 1440 W.
-    expect(draftsOf({ ...level, circuits: [{ id: "c", limit: 1440 }] }).more).toBe(true);
-    expect(draftsOf({ ...level, circuits: [{ id: "c", breaker: 16, voltage: 230, limit: 2944 }] }).more).toBe(false);
+    const circuits = (circuit: Circuit): Level => ({ ...level, layers: { [ELECTRICAL_SCHEMA]: { schema: ELECTRICAL_SCHEMA, circuits: [circuit] } } });
+    expect(draftsOf(circuits({ id: "c", limit: 1440 })).more).toBe(true);
+    expect(draftsOf(circuits({ id: "c", breaker: 16, voltage: 230, limit: 2944 })).more).toBe(false);
     expect(draftsOf({ ...level, connections: (level.connections ?? []).map((item) => ({ ...item, thickness: 0.2 })) }).more).toBe(true);
+  });
+});
+
+describe("fileDrafts", () => {
+  // A survey of version 1, with the electrical fields of that version: one outlet on the south wall and its circuit.
+  // An outlet of version 1 has no face, and a circuit of version 1 has its limit.
+  const oldOutlet = { id: "o", wall: "south", offset: 1, height: 0.3, circuit: "a" };
+  const oldCircuit = { id: "a", name: "Kitchen", breaker: 20, voltage: 230, limit: 4600 };
+  const old = { ...SAMPLE_SURVEY, schema: "survey/1", outlets: [oldOutlet], circuits: [oldCircuit] };
+  const layer: ElectricalLayer = {
+    schema: ELECTRICAL_SCHEMA,
+    outlets: [{ id: "o", anchor: { on: "wall", wall: "south", face: "left", offset: 1, height: 0.3 }, circuit: "a" }],
+    circuits: [oldCircuit],
+  };
+
+  it("reads a survey and a level of version 2", () => {
+    expect(fileDrafts(readRecord(SAMPLE_ELECTRICAL_SURVEY, CORE_ADD_ONS))).toEqual({ kind: "survey", drafts: surveyDrafts(SAMPLE_ELECTRICAL_SURVEY) });
+    expect(fileDrafts(readRecord(SAMPLE_ELECTRICAL_LEVEL, CORE_ADD_ONS))).toEqual({ kind: "level", drafts: draftsOf(SAMPLE_ELECTRICAL_LEVEL) });
+  });
+
+  it("reads the old fields of a survey of version 1 as the layer of their add-on", () => {
+    const read = fileDrafts(readRecord(old, CORE_ADD_ONS));
+    expect(read).toEqual({ kind: "survey", drafts: surveyDrafts({ ...SAMPLE_SURVEY, layers: { [ELECTRICAL_SCHEMA]: layer } }) });
+    expect(read === undefined ? [] : listed(read.drafts)).toEqual([{ key: "r1", name: "Kitchen", breaker: "20", voltage: "230" }]);
+  });
+
+  it("tells that the page does not keep the old fields of a record that also has their layer", () => {
+    const both = { ...old, layers: { [ELECTRICAL_SCHEMA]: layer } };
+    expect(fileDrafts(readRecord(both, CORE_ADD_ONS))?.drafts.more).toBe(true);
+  });
+
+  it("gives no drafts for a level with no room, a room record, and a record with a fault", () => {
+    expect(fileDrafts(readRecord({ ...SAMPLE_LEVEL, rooms: [] }, CORE_ADD_ONS))).toBeUndefined();
+    expect(fileDrafts(readRecord(SAMPLE_SCENE.room, CORE_ADD_ONS))).toBeUndefined();
+    expect(fileDrafts(readRecord({ schema: "survey/9" }, CORE_ADD_ONS))).toBeUndefined();
+    expect(fileDrafts(readRecord("text", CORE_ADD_ONS))).toBeUndefined();
   });
 });
 
 describe("surveyDrafts", () => {
   it("makes one room with the circuits of a survey record", () => {
-    const drafts = surveyDrafts(SAMPLE_SURVEY);
+    const drafts = surveyDrafts(SAMPLE_ELECTRICAL_SURVEY);
     expect(drafts.rooms.map((room) => room.name)).toEqual(["Sample room"]);
     expect(drafts.connections).toEqual([]);
     expect(listed(drafts)).toEqual([

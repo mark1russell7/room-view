@@ -5,10 +5,10 @@ import type { LengthUnit } from "./units.ts";
 export type PlanPoint = readonly [number, number];
 
 /** The name of the format of a room record. */
-export const ROOM_SCHEMA = "room/1";
+export const ROOM_SCHEMA = "room/2";
 
 /** The name of the format of a scene record. */
-export const SCENE_SCHEMA = "scene/1";
+export const SCENE_SCHEMA = "scene/2";
 
 /**
  * This function tells if a text is the name of a layer: a word, a slash and a version, for example `electrical/1`.
@@ -76,37 +76,7 @@ export interface Floor {
   readonly ring: Ring;
 }
 
-/** An outlet: a point on a face of a wall. */
-export interface Outlet {
-  readonly id: string;
-  /** The `id` of the wall. */
-  readonly wall: string;
-  /** The face of the wall that has the outlet. */
-  readonly face: WallFace;
-  /** The distance along the line of the wall, from `from` to the center of the outlet. */
-  readonly offset: number;
-  /** The height of the center of the outlet above the floor. */
-  readonly height: number;
-  /** The `id` of the circuit of the outlet. */
-  readonly circuit?: string | undefined;
-}
-
-/** A circuit: it gives power to outlets, and it has a limit. */
-export interface Circuit {
-  readonly id: string;
-  readonly name?: string | undefined;
-  /** The rating of the breaker of the circuit, in amperes, for example 15. The record keeps it as a fact. The limit does not change with it. */
-  readonly breaker?: number | undefined;
-  /** The voltage of the circuit, in volts, for example 120. The record keeps it as a fact. The limit does not change with it. */
-  readonly voltage?: number | undefined;
-  /**
-   * The largest continuous load, in watts.
-   * For example, a breaker of 15 A at 120 V carries 1800 W, and 80% of that for a continuous load is 1440 W.
-   */
-  readonly limit: number;
-}
-
-/** A room: the walls, the openings, the floors, the outlets and the circuits of one room or one apartment. */
+/** A room: the walls, the openings and the floors of one room or one apartment. */
 export interface Room {
   readonly schema: typeof ROOM_SCHEMA;
   readonly name?: string | undefined;
@@ -119,8 +89,6 @@ export interface Room {
   readonly walls: readonly Wall[];
   readonly openings?: readonly Opening[] | undefined;
   readonly floors?: readonly Floor[] | undefined;
-  readonly outlets?: readonly Outlet[] | undefined;
-  readonly circuits?: readonly Circuit[] | undefined;
 }
 
 /**
@@ -142,24 +110,14 @@ export interface PlacedObject {
   readonly turn?: number | undefined;
   /** The `id` of the object that holds this object. */
   readonly parent?: string | undefined;
-  /** The `id` of the outlet that gives power to the object. */
-  readonly outlet?: string | undefined;
 }
 
-/** A load on a circuit, in watts. A circuit can have many loads: their sum is the load of the circuit. */
-export interface CircuitLoad {
-  /** The `id` of the circuit. */
-  readonly circuit: string;
-  readonly watts: number;
-}
-
-/** A scene: one room with its placed objects and the loads of its circuits. Two scenes of one room can be compared. */
+/** A scene: one room with its placed objects and the records of its add-ons. Two scenes of one room can be compared. */
 export interface Scene {
   readonly schema: typeof SCENE_SCHEMA;
   readonly name?: string | undefined;
   readonly room: Room;
   readonly objects?: readonly PlacedObject[] | undefined;
-  readonly loads?: readonly CircuitLoad[] | undefined;
   /**
    * The records of each add-on, by the name of its layer, for example `electrical/1`. `isLayerName` tells the form of a name.
    * The core keeps each layer and does not read it. `checkLayers` examines the layers with a list of add-ons.

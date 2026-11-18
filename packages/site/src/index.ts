@@ -1,16 +1,26 @@
-import { DEFAULT_NEAR_LOAD, fromSceneV1 } from "@mark1russell7/electrical";
-import { levelShape } from "@mark1russell7/room-view";
-import { SAMPLE_SCENE } from "@mark1russell7/room-view/sample";
-import type { ViewerPick, ViewerTheme } from "@mark1russell7/room-view/three";
+import { DEFAULT_NEAR_LOAD, ELECTRICAL_SCHEMA } from "@mark1russell7/electrical";
+import { SAMPLE_ELECTRICAL_SCENE, SAMPLE_SCENE_LAYER } from "@mark1russell7/electrical/sample";
+import { recordName, sceneSpace } from "@mark1russell7/room-view";
+import type { ViewerPick, ViewerRecord, ViewerTheme } from "@mark1russell7/room-view/three";
+import { levelShape, type Mark } from "@mark1russell7/visuals/marks";
 import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome";
 import { isDark, onThemeChange } from "./dark.ts";
 import { circuitRows, detailsOf, legendRows, partGroups, partKey, partName, roomDetails, type PartRecord } from "./details.ts";
 import { createPlanView, type RoomStage } from "./plan.ts";
 
-const scene = SAMPLE_SCENE;
-// The sample keeps its outlets and circuits in its `scene/1`, so the page moves them to a layer of the electrical add-on.
-const electrical = fromSceneV1(scene);
+// The sample room of the core, with the electrical layer of the add-on: its outlets, its circuits and its feeds.
+const scene = SAMPLE_ELECTRICAL_SCENE;
+const electrical = SAMPLE_SCENE_LAYER;
 const circuits = circuitRows(electrical);
+
+/** The part of each mark of the electrical add-on: an outlet gives its outlet, and a feed gives the object that it feeds. */
+const markParts = new Map<string, PartRecord>([
+  ...(electrical.outlets ?? []).map((outlet) => [recordName(ELECTRICAL_SCHEMA, outlet.id), { kind: "outlet", source: outlet.id }] as const),
+  ...(electrical.feeds ?? []).map((feed) => [recordName(ELECTRICAL_SCHEMA, feed.id), { kind: "object", source: feed.object }] as const),
+]);
+
+/** This function gives the record of a part for the viewer. An outlet gives the name of its mark, and a part of the scene gives its solids. */
+const stageRecord = (record: PartRecord): ViewerRecord | string => (record.kind === "outlet" ? recordName(ELECTRICAL_SCHEMA, record.source) : { kind: record.kind, source: record.source });
 
 const viewerBox = byId("viewer");
 const detailsBox = byId("details");
@@ -38,14 +48,14 @@ function showTheme(): void {
 /** This function shows the marks: the parts under the pointer, else the parts of the selected circuit. */
 function showMarks(): void {
   const marked = pointed.length > 0 ? pointed : (circuits.find((row) => row.id === pinned)?.records ?? []);
-  stage?.highlight(marked);
+  stage?.highlight(marked.map(stageRecord));
   const [only] = pointed.length === 1 ? pointed : selected === undefined ? [] : [selected];
-  readout.textContent = only === undefined ? "" : partName(scene, only);
+  readout.textContent = only === undefined ? "" : partName(scene, electrical, only);
 }
 
 function showDetails(): void {
-  const found = selected === undefined ? undefined : detailsOf(scene, selected);
-  const details = found ?? roomDetails(scene);
+  const found = selected === undefined ? undefined : detailsOf(scene, electrical, selected);
+  const details = found ?? roomDetails(scene, electrical);
   const clear = h("button", { class: "tool", type: "button" }, "Clear the selection");
   clear.addEventListener("click", () => {
     select(undefined);
@@ -62,7 +72,7 @@ function showDetails(): void {
 
 function select(record: PartRecord | undefined): void {
   selected = record;
-  stage?.select(record);
+  stage?.select(record === undefined ? undefined : stageRecord(record));
   const key = record === undefined ? undefined : partKey(record);
   for (const [name, button] of partButtons) button.setAttribute("aria-pressed", String(name === key));
   showDetails();
@@ -130,7 +140,7 @@ function showLegend(): void {
 
 function showParts(): void {
   const box = byId("parts");
-  for (const group of partGroups(scene)) {
+  for (const group of partGroups(scene, electrical)) {
     const chips = h("ul", { class: "chips" });
     for (const part of group.parts) {
       const key = partKey(part.record);
@@ -146,22 +156,27 @@ function showParts(): void {
   }
 }
 
-const recordOf = (pick: ViewerPick | undefined): PartRecord | undefined => (pick === undefined ? undefined : { kind: pick.kind, source: pick.source });
+/** This function gives the part under the pointer: the part of a mark, else the part of a solid. */
+function recordOf(pick: ViewerPick | undefined, mark: Mark | undefined): PartRecord | undefined {
+  if (mark !== undefined) return markParts.get(mark.record);
+  return pick === undefined ? undefined : { kind: pick.kind, source: pick.source };
+}
 
-/** This function loads the code of the viewer and shows the room. The first paint of the page does not wait for it. */
+/** This function loads the code of the viewer and the marks, and shows the room. The first paint of the page does not wait for them. */
 async function showRoom(): Promise<void> {
-  const three = await import("@mark1russell7/room-view/three");
+  const [three, { electricalMarks }] = await Promise.all([import("@mark1russell7/room-view/three"), import("@mark1russell7/electrical/marks")]);
   themes = { light: three.LIGHT_THEME, dark: three.DARK_THEME };
   const options = {
     scene,
+    marks: electricalMarks(electrical, sceneSpace(scene)),
     theme: isDark() ? themes.dark : themes.light,
     label: "3D model of the sample room",
-    onHover: (pick: ViewerPick | undefined): void => {
-      const record = recordOf(pick);
+    onHover: (pick: ViewerPick | undefined, mark?: Mark): void => {
+      const record = recordOf(pick, mark);
       point(record === undefined ? [] : [record]);
     },
-    onSelect: (pick: ViewerPick | undefined): void => {
-      select(recordOf(pick));
+    onSelect: (pick: ViewerPick | undefined, mark?: Mark): void => {
+      select(recordOf(pick, mark));
     },
   };
   const viewer = three.createRoomViewer(viewerBox, options);
@@ -179,7 +194,7 @@ async function showRoom(): Promise<void> {
       viewer.setView("top");
     });
   }
-  stage.select(selected);
+  stage.select(selected === undefined ? undefined : stageRecord(selected));
   showMarks();
 }
 

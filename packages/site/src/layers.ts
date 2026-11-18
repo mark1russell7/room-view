@@ -614,7 +614,7 @@ function layerIn(layers: Readonly<Record<string, unknown>> | undefined, name: st
  * This function gives the records of the add-ons of survey records, for the rooms of a store. `level` is the level record of the surveys.
  *
  * The add-on of the core reads the layer of each form in the level record and in each survey. Then the form reads the records of the layer.
- * A record of the time before the layers has no layer: it has fields of its own. The add-on of the page gives the layer of those fields.
+ * A file of version 1 has no layers. `readRecord` of the core moves its old fields to layers before this function reads the records.
  *
  * A record of a list can be in the layer of the level record and in the layer of a survey. `levelParts` makes one list of them.
  * A record of a layer can name a record of a list of a different layer. For example, an outlet of a room names a circuit of the level record.
@@ -623,7 +623,6 @@ function layerIn(layers: Readonly<Record<string, unknown>> | undefined, name: st
  * The page does not keep these data, and `more` tells them:
  *
  * - a layer of no add-on of the page, and a layer with a fault in its form
- * - the old fields of a record that also has the layer of their form
  * - each part of a layer that its form does not keep, as `formRecords` tells it
  * - each record that `levelParts` does not keep
  */
@@ -639,23 +638,18 @@ export function surveyParts(surveys: readonly Survey[], level: Level | undefined
     const { form } = addOn;
     if (seen.has(form.schema)) continue;
     seen.add(form.schema);
-    /** This function gives the layer of a record: its layer of the form, or the layer of its old fields. `old` gives the second one. */
-    const layerOf = (given: unknown, old: () => unknown): unknown => {
-      let layer: unknown;
-      if (given === undefined) layer = old();
-      else {
-        const read = addOn.core.parse(given);
-        // The layer comes before the old fields. A layer with a fault in its form has no record for the page.
-        if (!read.ok || old() !== undefined) more = true;
-        layer = read.ok ? read.layer : undefined;
+    /** This function gives the layer of the form in a record. A layer with a fault in its form has no record for the page. */
+    const layerOf = (given: unknown): unknown => {
+      if (given === undefined) return undefined;
+      const read = addOn.core.parse(given);
+      if (!read.ok) {
+        more = true;
+        return undefined;
       }
-      return layer === undefined || addOn.plain === undefined ? layer : addOn.plain(layer, system);
+      return addOn.plain === undefined ? read.layer : addOn.plain(read.layer, system);
     };
     // The layer of the level record comes first, then the layer of each survey.
-    const given = [
-      level === undefined ? undefined : layerOf(layerIn(level.layers, form.schema), () => addOn.fromLevel?.(level)),
-      ...surveys.map((survey) => layerOf(layerIn(survey.layers, form.schema), () => addOn.fromSurvey?.(survey))),
-    ];
+    const given = [level === undefined ? undefined : layerOf(layerIn(level.layers, form.schema)), ...surveys.map((survey) => layerOf(layerIn(survey.layers, form.schema)))];
     const listNames = new Set(form.collections.filter((collection) => placeOf(collection) === "list").map((collection) => collection.name));
     const outside = new Map<string, Set<string>>();
     for (const name of listNames) outside.set(name, new Set());

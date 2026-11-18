@@ -126,7 +126,7 @@ import {
   type TextInput,
 } from "./inputs.ts";
 import { levelResult, roomResult, roomSurvey, shownLayers, storeLists, storeSystem, type TypedFields } from "./layers.ts";
-import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, shownLevel, shownLevelObjects, surveyDrafts, type Joint, type JointState, type LevelDrafts } from "./level.ts";
+import { apartNote, apartRooms, draftsOf, fileDrafts, joinChoices, jointsOf, levelOf, levelStatus, shownLevel, shownLevelObjects, type Joint, type JointState, type LevelDrafts } from "./level.ts";
 import type { PageAddOn } from "./page-add-on.ts";
 import { svg } from "./plan.ts";
 import { drawWalk, pathOf, type PictureSize, type Pixel, type WalkFeature, type WalkObject } from "./walk.ts";
@@ -2054,29 +2054,27 @@ async function openFile(file: File): Promise<void> {
     keepNote.textContent = refuse;
     return;
   }
-  const { levelSchema, surveySchema } = await import("@mark1russell7/room-view/schema");
-  const survey = surveySchema.safeParse(value);
-  if (survey.success) {
-    const drafts = surveyDrafts(survey.data);
-    if (!addRooms(drafts, FULL_FOR_FILE)) return;
+  // The read of the core accepts a file of each version. The add-ons move the old fields of a file of version 1 to their layers.
+  const { readRecord } = await import("@mark1russell7/room-view/schema");
+  const read = fileDrafts(readRecord(value, CORE_ADD_ONS));
+  if (read === undefined) {
+    keepNote.textContent = refuse;
+    return;
+  }
+  const { drafts } = read;
+  if (!addRooms(drafts, FULL_FOR_FILE)) return;
+  if (read.kind === "survey") {
     keepNote.textContent = drafts.more ? filePartsText(ADD_ONS) : "The page shows the room of the file.";
     return;
   }
   // A file from the rooms together has each room and the doors between them.
-  const level = levelSchema.safeParse(value);
-  if (!level.success || level.data.rooms.length === 0) {
-    keepNote.textContent = refuse;
-    return;
-  }
-  const drafts = draftsOf(level.data);
-  if (!addRooms(drafts, FULL_FOR_FILE)) return;
   keepNote.textContent = drafts.more ? "The page shows the rooms of the file and the doors between them. It does not keep the other data of the file yet." : "The page shows the rooms of the file.";
 }
 
 /** This function adds the example apartment to the rooms of the page: four rooms with the doors between them. */
 async function openExample(): Promise<void> {
-  const { SAMPLE_LEVEL } = await import("@mark1russell7/room-view/sample");
-  if (!addRooms(draftsOf(SAMPLE_LEVEL), "Remove rooms, then select the example again.")) return;
+  const { SAMPLE_ELECTRICAL_LEVEL } = await import("@mark1russell7/electrical/sample");
+  if (!addRooms(draftsOf(SAMPLE_ELECTRICAL_LEVEL), "Remove rooms, then select the example again.")) return;
   keepNote.textContent = "The page shows the example apartment. Select a room to see its numbers.";
   roomList.querySelector<HTMLElement>('button[aria-current="true"]')?.focus();
 }

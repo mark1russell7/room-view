@@ -1,13 +1,16 @@
+import type { Circuit } from "@mark1russell7/electrical";
 import { electrical } from "@mark1russell7/electrical/add-on";
 import { ELECTRICAL_FORM } from "@mark1russell7/electrical/form";
-import { checkForm, LEVEL_SCHEMA, SURVEY_SCHEMA, type Circuit, type FormSystem, type Level, type Survey, type SurveyObject } from "@mark1russell7/room-view";
+import { checkForm, LEVEL_SCHEMA, SURVEY_SCHEMA, type FormSystem, type Level, type Survey, type SurveyObject } from "@mark1russell7/room-view";
+import { readRecord } from "@mark1russell7/room-view/schema";
 import { describe, expect, it } from "vitest";
+import { CORE_ADD_ONS } from "./add-ons.ts";
 import { emptyDraft, listedObjects, storeOf, withNewRooms, type DraftList, type LengthMode, type Store } from "./draft.ts";
 import { circuitLists, circuitOf, isOutlet, outletOf, type DraftCircuit } from "./electrical.fixture.ts";
 import { circuitLimit, ELECTRICAL, ELECTRICAL_ADD_ON, wattText } from "./electrical.ts";
 import { addFeatureText, addText, featuresLabel, filePartsText, listSections, moreText, ownedSections, pointSteps, wallPartsText } from "./inputs.ts";
 import { levelResult, readSurvey, roomResult, roomSurvey, storeLists, surveyParts } from "./layers.ts";
-import { draftsOf, levelOf, surveyDrafts, type LevelDrafts } from "./level.ts";
+import { draftsOf, fileDrafts, levelOf, surveyDrafts, type LevelDrafts } from "./level.ts";
 
 const DESK: SurveyObject = { id: "desk-1", kind: "desk", wall: "wall-1", offset: 1, width: 1.2, depth: 0.6, height: 0.75 };
 const LAMP: SurveyObject = { id: "lamp-1", kind: "lamp", on: "desk-1", offset: 0.1, width: 0.2, depth: 0.2, height: 0.4 };
@@ -32,9 +35,29 @@ const LEVEL: Level = { schema: LEVEL_SCHEMA, unit: "m", rooms: [{ id: "a", surve
 const KITCHEN: Circuit = { id: "kitchen", name: "Kitchen", breaker: 20, voltage: 120, limit: 1920 };
 const BARE: Circuit = { id: "bare", breaker: 15, voltage: 120, limit: 1440 };
 
-/** The room `SURVEY` with two outlets, two circuits and the outlet of each object, in the fields of an old file. */
-const OLD: Survey = {
+/** This function gives a record with an electrical layer of these circuits. */
+function wired<Given extends Survey | Level>(record: Given, circuits: readonly Circuit[]): Given {
+  return { ...record, layers: { [ELECTRICAL.layer]: { schema: ELECTRICAL.layer, circuits } } };
+}
+
+/** This function reads a survey of an old file as the page does: `readRecord` of the core moves the old fields to a layer. */
+function oldSurvey(value: unknown): Survey {
+  const read = readRecord(value, CORE_ADD_ONS);
+  if (!read.ok || read.kind !== "survey") throw new Error("The record is not a survey.");
+  return read.record;
+}
+
+/** This function reads a level of an old file as the page does. */
+function oldLevel(value: unknown): Level {
+  const read = readRecord(value, CORE_ADD_ONS);
+  if (!read.ok || read.kind !== "level") throw new Error("The record is not a level.");
+  return read.record;
+}
+
+/** The room `SURVEY` with two outlets, two circuits and the outlet of each object, in the fields of a file of version 1. */
+const OLD = {
   ...SURVEY,
+  schema: "survey/1",
   outlets: [
     { id: "outlet-1", wall: "wall-1", offset: 1, height: 0.3, circuit: "kitchen" },
     { id: "outlet-2", wall: "wall-3", offset: 2, height: 1.1 },
@@ -90,11 +113,11 @@ describe("the names of the electrical layer", () => {
     expect(electrical.schema).toBe(ELECTRICAL.layer);
   });
 
-  it("reads no layer from a record with no electrical field", () => {
-    expect(ELECTRICAL_ADD_ON.fromSurvey?.(SURVEY)).toBeUndefined();
-    expect(ELECTRICAL_ADD_ON.fromSurvey?.({ ...SURVEY, outlets: [], circuits: [] })).toBeUndefined();
-    expect(ELECTRICAL_ADD_ON.fromLevel?.(LEVEL)).toBeUndefined();
-    expect(ELECTRICAL_ADD_ON.fromLevel?.({ ...LEVEL, circuits: [] })).toBeUndefined();
+  it("reads no layer from an old record with no electrical field", () => {
+    expect(oldSurvey({ ...SURVEY, schema: "survey/1" }).layers).toBeUndefined();
+    expect(oldSurvey({ ...SURVEY, schema: "survey/1", outlets: [], circuits: [] }).layers).toBeUndefined();
+    expect(oldLevel({ ...LEVEL, schema: "level/1" }).layers).toBeUndefined();
+    expect(oldLevel({ ...LEVEL, schema: "level/1", circuits: [] }).layers).toBeUndefined();
   });
 });
 
@@ -192,7 +215,7 @@ describe("circuitLimit", () => {
 
 describe("the electrical layer of a file", () => {
   it("reads the electrical fields of an old file into the store", () => {
-    const old = surveyDrafts(OLD);
+    const old = surveyDrafts(oldSurvey(OLD));
     expect(old.more).toBe(false);
     const store = storeFrom(old);
     expect(store.lists).toEqual(circuitLists([circuit("r1", "Kitchen", "20", "120"), circuit("r2", "", "15", "120")]));
@@ -206,7 +229,7 @@ describe("the electrical layer of a file", () => {
   });
 
   it("writes the electrical records of a room as one layer, with no electrical field of an old file", () => {
-    const survey = fileOf(storeFrom(surveyDrafts(OLD)));
+    const survey = fileOf(storeFrom(surveyDrafts(oldSurvey(OLD))));
     expect(survey.layers).toEqual({ [ELECTRICAL.layer]: LAYER });
     expect(survey).not.toHaveProperty("outlets");
     expect(survey).not.toHaveProperty("circuits");
@@ -219,7 +242,7 @@ describe("the electrical layer of a file", () => {
   });
 
   it("reads an old file and a new file of a room as the same store, and loses no number", () => {
-    const store = storeFrom(surveyDrafts(OLD));
+    const store = storeFrom(surveyDrafts(oldSurvey(OLD)));
     const survey = fileOf(store);
     const again = surveyDrafts(survey);
     expect(again.more).toBe(false);
@@ -228,14 +251,15 @@ describe("the electrical layer of a file", () => {
   });
 
   it("reads an old file and a new file of a level as the same store, and loses no number", () => {
-    const level: Level = {
+    const level = oldLevel({
       ...LEVEL,
+      schema: "level/1",
       rooms: [
         { id: "a", survey: { ...OLD, circuits: [BARE] } },
-        { id: "b", survey: SURVEY },
+        { id: "b", survey: { ...SURVEY, schema: "survey/1" } },
       ],
       circuits: [KITCHEN],
-    };
+    });
     const old = draftsOf(level);
     expect(old.more).toBe(false);
     const store = storeFrom(old);
@@ -254,14 +278,16 @@ describe("the electrical layer of a file", () => {
   });
 
   it("tells the electrical fields of an old file next to a layer", () => {
-    const survey = fileOf(storeFrom(surveyDrafts(OLD)));
-    expect(surveyDrafts({ ...survey, outlets: OLD.outlets ?? [] }).more).toBe(true);
-    expect(surveyDrafts({ ...survey, objects: OLD.objects ?? [] }).more).toBe(true);
+    const survey = fileOf(storeFrom(surveyDrafts(oldSurvey(OLD))));
+    const more = (value: unknown): boolean | undefined => fileDrafts(readRecord(value, CORE_ADD_ONS))?.drafts.more;
+    expect(more({ ...survey, schema: "survey/1" })).toBe(false);
+    expect(more({ ...survey, schema: "survey/1", outlets: OLD.outlets })).toBe(true);
+    expect(more({ ...survey, schema: "survey/1", objects: OLD.objects })).toBe(true);
   });
 });
 
-describe("the limit of a circuit of an old file", () => {
-  const more = (circuit: Circuit, system: FormSystem = "imperial"): boolean => surveyParts([{ ...SURVEY, circuits: [circuit] }], undefined, system).more;
+describe("the limit of a circuit of a layer", () => {
+  const more = (circuit: Circuit, system: FormSystem = "imperial"): boolean => surveyParts([wired(SURVEY, [circuit])], undefined, system).more;
 
   it("tells a limit that is not the limit of the breaker and the voltage", () => {
     expect(more(BARE)).toBe(false);
@@ -286,9 +312,9 @@ describe("the limit of a circuit of an old file", () => {
   });
 
   it("tells a wrong limit of a circuit of the level", () => {
-    expect(surveyParts([SURVEY], { ...LEVEL, circuits: [KITCHEN] }, "imperial").more).toBe(false);
-    expect(surveyParts([SURVEY], { ...LEVEL, circuits: [{ ...KITCHEN, limit: 1 }] }, "imperial").more).toBe(true);
-    expect(surveyParts([SURVEY, { ...SURVEY, circuits: [{ ...BARE, limit: 1 }] }], LEVEL, "imperial").more).toBe(true);
+    expect(surveyParts([SURVEY], wired(LEVEL, [KITCHEN]), "imperial").more).toBe(false);
+    expect(surveyParts([SURVEY], wired(LEVEL, [{ ...KITCHEN, limit: 1 }]), "imperial").more).toBe(true);
+    expect(surveyParts([SURVEY, wired(SURVEY, [{ ...BARE, limit: 1 }])], LEVEL, "imperial").more).toBe(true);
   });
 });
 
@@ -333,10 +359,10 @@ describe("the circuits of a store", () => {
 describe("the circuits of a file", () => {
   /** This function gives a circuit record of 15 A at 120 V. */
   const record = (id: string, more: Partial<Circuit> = {}): Circuit => ({ id, breaker: 15, voltage: 120, limit: 1440, ...more });
-  /** This function reads the circuits of the survey records of an old file for a store. */
+  /** This function reads the circuits of the layers of the survey records for a store. */
   const read = (...surveys: readonly (readonly Circuit[])[]): { readonly lists: readonly DraftList[]; readonly more: boolean } => {
     const parts = surveyParts(
-      surveys.map((circuits) => ({ ...SURVEY, circuits })),
+      surveys.map((circuits) => wired(SURVEY, circuits)),
       undefined,
       "imperial",
     );
@@ -344,10 +370,10 @@ describe("the circuits of a file", () => {
   };
 
   it("reads a circuit with no numbers with the usual numbers of the units of its survey", () => {
-    const feet: Survey = { schema: SURVEY_SCHEMA, unit: "ft", height: 8, wallThickness: 0.5, sides: SURVEY.sides, circuits: [{ id: "a", limit: 1440 }] };
-    expect(readSurvey(feet).more).toBe(false);
-    expect(readSurvey({ ...feet, unit: "m" }).more).toBe(true);
-    expect(readSurvey({ ...feet, unit: "m", circuits: [{ id: "a", limit: 2944 }] }).more).toBe(false);
+    const feet: Survey = { schema: SURVEY_SCHEMA, unit: "ft", height: 8, wallThickness: 0.5, sides: SURVEY.sides };
+    expect(readSurvey(wired(feet, [{ id: "a", limit: 1440 }])).more).toBe(false);
+    expect(readSurvey(wired({ ...feet, unit: "m" }, [{ id: "a", limit: 1440 }])).more).toBe(true);
+    expect(readSurvey(wired({ ...feet, unit: "m" }, [{ id: "a", limit: 2944 }])).more).toBe(false);
   });
 
   it("gives the circuits of the records, with a text for each number", () => {
@@ -358,12 +384,9 @@ describe("the circuits of a file", () => {
     expect(read([])).toEqual({ lists: [], more: false });
   });
 
-  it("keeps each circuit of one survey, also two circuits with one id", () => {
-    expect(read([record("a"), record("a")])).toEqual({ lists: circuitLists([circuit("r1", "", "15", "120"), circuit("r2", "", "15", "120")]), more: false });
-    expect(read([record("a", { name: "One" }), record("a", { name: "Two" })])).toEqual({
-      lists: circuitLists([circuit("r1", "One", "15", "120"), circuit("r2", "Two", "15", "120")]),
-      more: false,
-    });
+  it("keeps the first circuit of an id in one layer, and tells a second one", () => {
+    expect(read([record("a"), record("a")])).toEqual({ lists: circuitLists([circuit("r1", "", "15", "120")]), more: true });
+    expect(read([record("a", { name: "One" }), record("a", { name: "Two" })])).toEqual({ lists: circuitLists([circuit("r1", "One", "15", "120")]), more: true });
   });
 
   it("keeps the first circuit of an id in two surveys, and tells a different second one", () => {
@@ -373,8 +396,8 @@ describe("the circuits of a file", () => {
 
   it("gives no text for a number that the record does not have", () => {
     expect(read([{ id: "a", limit: 1440 }])).toEqual({ lists: circuitLists([circuit("r1")]), more: false });
-    expect(surveyParts([{ ...SURVEY, circuits: [{ id: "a", limit: 1440 }] }], undefined, "metric").more).toBe(true);
-    const metric = surveyParts([{ ...SURVEY, circuits: [{ id: "a", limit: 2944 }] }], undefined, "metric");
+    expect(surveyParts([wired(SURVEY, [{ id: "a", limit: 1440 }])], undefined, "metric").more).toBe(true);
+    const metric = surveyParts([wired(SURVEY, [{ id: "a", limit: 2944 }])], undefined, "metric");
     expect({ lists: metric.lists, more: metric.more }).toEqual({ lists: circuitLists([circuit("r1")]), more: false });
   });
 
@@ -383,7 +406,7 @@ describe("the circuits of a file", () => {
   });
 
   it("reads the circuits of a level and of a survey", () => {
-    const parts = surveyParts([{ ...SURVEY, circuits: [record("b", { name: "B" })] }], { ...LEVEL, circuits: [record("a", { name: "A" })] }, "imperial");
+    const parts = surveyParts([wired(SURVEY, [record("b", { name: "B" })])], wired(LEVEL, [record("a", { name: "A" })]), "imperial");
     expect(parts.lists).toEqual(circuitLists([circuit("r1", "A", "15", "120"), circuit("r2", "B", "15", "120")]));
     expect(parts.more).toBe(false);
   });
