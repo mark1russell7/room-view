@@ -1,7 +1,7 @@
 import { readFormRecord, type FormCollection, type FormField, type FormSystem, type FormValue, type LayerForm } from "@mark1russell7/room-view";
 import { countOf, listOf } from "@mark1russell7/text/english";
 import { collectionOf } from "./add-ons.ts";
-import type { ListTexts, PageAddOn } from "./bridge.ts";
+import type { ListTexts, PageAddOn } from "./page-add-on.ts";
 import { featureLabel, listRecords, nameWords, placedFeatures, recordUse, textOf, type Draft, type DraftRecord, type OwnedChange, type Store } from "./draft.ts";
 import { numberFrom, placeOf, type LayerLists, type TypedFields } from "./layers.ts";
 
@@ -137,11 +137,6 @@ function stateOf(collection: FormCollection, field: FormField, value: FormValue 
   return readFormRecord({ name, word, label, title, fields: [field] }, { id: name, values: Object.fromEntries(value === undefined ? [] : [[field.name, value]]) }, system).state;
 }
 
-/** This function gives the fields of a collection that the page does not show. */
-export function hiddenOf(addOn: PageAddOn, collection: string): readonly string[] {
-  return addOn.hidden !== undefined && Object.hasOwn(addOn.hidden, collection) ? (addOn.hidden[collection] ?? []) : [];
-}
-
 /**
  * This function gives the inputs of a record of a collection, in the sequence of the fields of the form.
  *
@@ -149,12 +144,12 @@ export function hiddenOf(addOn: PageAddOn, collection: string): readonly string[
  * - A field that names a record of a list is a choice of the records of that list.
  * - A field that names a point is a choice of the points of the room. A record of a list names no point, so it has no such input.
  * - A field of the kind `object` has no input: the page knows the object that owns a record.
- * - A field that names a record of an object has no input, and a field in `hidden` has none.
+ * - A field that names a record of an object has no input.
  */
-export function recordInputs(form: LayerForm, collection: FormCollection, fields: TypedFields, system: FormSystem, choices: Choices, hidden: readonly string[] = []): readonly RecordInput[] {
+export function recordInputs(form: LayerForm, collection: FormCollection, fields: TypedFields, system: FormSystem, choices: Choices): readonly RecordInput[] {
   const place = placeOf(collection);
   return collection.fields.flatMap((field): RecordInput[] => {
-    if (field.kind === "object" || hidden.includes(field.name)) return [];
+    if (field.kind === "object") return [];
     const part: InputPart = { name: field.name, label: field.label, needed: field.needed === true };
     if (field.kind === "text") {
       const text = textOf(fields.values, field.name) ?? "";
@@ -249,7 +244,7 @@ export function listItems(addOn: PageAddOn, collection: FormCollection, store: S
   const choices = layerChoices(form, store, undefined, forms);
   const typed = Object.hasOwn(lists.records, collection.name) ? (lists.records[collection.name] ?? []) : [];
   return listRecords(store, form.schema, collection.name).map((record, index): ListItem => {
-    const inputs = recordInputs(form, collection, record, lists.system, choices, hiddenOf(addOn, collection.name));
+    const inputs = recordInputs(form, collection, record, lists.system, choices);
     const title = `${collection.label} ${String(index + 1)}`;
     const problem = recordProblem(collection, inputs);
     if (problem !== undefined) return { key: record.key, title, inputs, note: problem };

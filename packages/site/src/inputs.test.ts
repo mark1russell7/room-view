@@ -1,6 +1,5 @@
 import { checkForm, type FormCollection, type LayerForm } from "@mark1russell7/room-view";
 import { describe, expect, it } from "vitest";
-import type { PageAddOn } from "./bridge.ts";
 import { emptyDraft, ownedOf, recordOf, storeOf, type Draft, type DraftFeature, type DraftObject, type DraftOwned, type OwnedChange, type Store, type TypedLength } from "./draft.ts";
 import {
   addFeatureText,
@@ -8,7 +7,6 @@ import {
   changeOf,
   featuresLabel,
   filePartsText,
-  hiddenOf,
   INPUT_GROUPS,
   layerChoices,
   listCounts,
@@ -27,7 +25,9 @@ import {
   type Choice,
   type RecordInput,
 } from "./inputs.ts";
+import { formAddOn, pageAddOn } from "./form-add-on.fixture.ts";
 import { storeLists, type LayerLists } from "./layers.ts";
+import type { PageAddOn } from "./page-add-on.ts";
 
 /**
  * A false add-on for the tests. The page has no code for it.
@@ -98,12 +98,12 @@ const FORMS: readonly LayerForm[] = [HEAT, AIR];
 /** The add-on of the first form, with each text that an add-on can give to the page. */
 const HEAT_ADD_ON: PageAddOn = {
   form: HEAT,
-  hidden: { panels: ["watts"] },
+  core: formAddOn(HEAT),
   lists: { loops: { aid: "A loop is one pipe of the floor.", add: "Add a loop" } },
   steps: ["Find each loop at the manifold."],
   note: (collection, values) => (collection === "loops" && typeof values["flow"] === "number" ? `The flow is ${String(values["flow"])}.` : undefined),
 };
-const AIR_ADD_ON: PageAddOn = { form: AIR };
+const AIR_ADD_ON: PageAddOn = pageAddOn(AIR);
 const ADD_ONS: readonly PageAddOn[] = [HEAT_ADD_ON, AIR_ADD_ON];
 
 /** This function gives a collection of a form. */
@@ -306,18 +306,6 @@ describe("layerChoices", () => {
   });
 });
 
-describe("hiddenOf", () => {
-  it("gives the hidden fields of a collection", () => {
-    expect(hiddenOf(HEAT_ADD_ON, "panels")).toEqual(["watts"]);
-  });
-
-  it("gives no field for a different collection, and for an add-on with no hidden field", () => {
-    expect(hiddenOf(HEAT_ADD_ON, "loops")).toEqual([]);
-    expect(hiddenOf(HEAT_ADD_ON, "toString")).toEqual([]);
-    expect(hiddenOf(AIR_ADD_ON, "panels")).toEqual([]);
-  });
-});
-
 describe("recordInputs", () => {
   it("gives the inputs of a record of a list, in the sequence of the form", () => {
     expect(recordInputs(HEAT, LOOPS, { values: { name: " Floor ", flow: "12", tag: "A" }, records: {} }, "metric", CHOICES)).toEqual([
@@ -404,11 +392,6 @@ describe("recordInputs", () => {
       { kind: "number", name: "watts", label: "Power", needed: false, group: "values", text: "600", unit: "W", usual: undefined, fault: 'Type a number for "Power".', state: "ok" },
       { kind: "choice", name: "loop", label: "Loop", needed: false, group: "records", key: "r1", none: "None", choices: LOOP_CHOICES, aid: undefined, state: "ok" },
     ]);
-  });
-
-  it("gives no input for a hidden field", () => {
-    expect(recordInputs(HEAT, PANELS, PANEL, "metric", CHOICES, ["watts"]).map((item) => item.name)).toEqual(["valve", "loop"]);
-    expect(recordInputs(HEAT, PANELS, PANEL, "metric", CHOICES, ["valve", "loop", "other"]).map((item) => item.name)).toEqual(["watts"]);
   });
 
   it("tells a choice that the form needs and that names no record", () => {
@@ -532,17 +515,12 @@ describe("listItems", () => {
   });
 
   it("gives only the use for an add-on with no sentence, and no text for a list that no record names", () => {
-    const plain = listItems({ form: HEAT }, LOOPS, STORE, listsOf(STORE), FORMS);
+    const plain = listItems(pageAddOn(HEAT), LOOPS, STORE, listsOf(STORE), FORMS);
     expect(plain[0]?.note.text).toBe("2 wall valves and 1 panel in 2 rooms use this loop.");
     const lists = storeLists(STORE, ADD_ONS).get(AIR.schema);
     expect(lists === undefined ? undefined : listItems(AIR_ADD_ON, DUCTS, STORE, lists, FORMS)).toEqual([
       { key: "k1", title: "Duct 1", inputs: [{ kind: "text", name: "name", label: "Name", needed: false, group: "values", text: "Main", state: "ok" }], note: { level: "note", field: undefined, text: "" } },
     ]);
-  });
-
-  it("does not show a hidden field", () => {
-    const hidden = listItems({ ...HEAT_ADD_ON, hidden: { loops: ["drop", "after"] } }, LOOPS, STORE, listsOf(STORE), FORMS);
-    expect(hidden[0]?.inputs.map((item) => item.name)).toEqual(["name", "flow", "tag"]);
   });
 
   it("gives no record for a store with no record in the list", () => {
@@ -561,9 +539,10 @@ describe("the sections of the page", () => {
     ]);
     expect(listSections([])).toEqual([]);
     // A name that each object has is not a text of an add-on.
-    expect(listSections([{ form: { ...AIR, collections: [{ ...DUCTS, name: "constructor" }] }, lists: {} }])[0]?.texts).toEqual({});
+    expect(listSections([{ ...pageAddOn({ ...AIR, collections: [{ ...DUCTS, name: "constructor" }] }), lists: {} }])[0]?.texts).toEqual({});
     // A text of a different collection is not a text of the list.
-    expect(listSections([{ form: HEAT, lists: { valves: { add: "Add a valve" } } }])).toEqual([{ addOn: { form: HEAT, lists: { valves: { add: "Add a valve" } } }, collection: LOOPS, texts: {} }]);
+    const valves: PageAddOn = { ...pageAddOn(HEAT), lists: { valves: { add: "Add a valve" } } };
+    expect(listSections([valves])).toEqual([{ addOn: valves, collection: LOOPS, texts: {} }]);
   });
 
   it("has the collections with records of an object", () => {
@@ -574,7 +553,7 @@ describe("the sections of the page", () => {
   it("gives the text of the button that adds a record", () => {
     expect(sections.map(addText)).toEqual(["Add a loop", "New duct"]);
     expect(addText({ addOn: AIR_ADD_ON, collection: { ...DUCTS, word: "" }, texts: {} })).toBe("New record");
-    expect(addText({ addOn: { form: HEAT }, collection: VALVES, texts: {} })).toBe("New wall valve");
+    expect(addText({ addOn: pageAddOn(HEAT), collection: VALVES, texts: {} })).toBe("New wall valve");
   });
 });
 

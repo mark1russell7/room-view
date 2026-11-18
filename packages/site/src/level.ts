@@ -23,7 +23,6 @@ import {
   modeOf,
   placedFeatures,
   roomName,
-  shownObjects,
   systemOf,
   unitOf,
   validConnections,
@@ -344,34 +343,29 @@ export function levelStatus(rooms: readonly Draft[], statuses: readonly Status[]
 
 /**
  * This function gives the room record of a level that the page shows and saves.
- * It has no wall, no opening and no outlet of a room that does not close.
- * It has no opening and no outlet that has an error.
+ * It has no wall and no opening of a room that does not close, and it has no opening that has an error.
  * Thus one room that is not ready does not stop the model of the other rooms.
+ * A point is a record of a layer. `shownLayers` removes each point that is not on a wall of this record.
  */
 export function shownLevel(result: LevelResult): Room {
   const open = result.rooms.filter((room) => !room.result.closure.closed).map((room) => `${room.id}/`);
   const bad = new Set(
     checkRoom(result.room)
-      .filter((finding) => finding.level === "error" && (finding.record === "opening" || finding.record === "outlet"))
+      .filter((finding) => finding.level === "error" && finding.record === "opening")
       .map((finding) => finding.at),
   );
   if (open.length === 0 && bad.size === 0) return result.room;
   const stays = (id: string): boolean => !bad.has(id) && !open.some((prefix) => id.startsWith(prefix));
-  const { walls, openings, outlets, ...rest } = result.room;
+  const { walls, openings, ...rest } = result.room;
   return {
     ...rest,
     walls: walls.filter((wall) => stays(wall.id)),
     ...(openings === undefined ? {} : { openings: openings.filter((item) => stays(item.id)) }),
-    ...(outlets === undefined ? {} : { outlets: outlets.filter((item) => stays(item.id)) }),
   };
 }
 
-/**
- * This function gives the objects of a level that the page shows and saves. `room` is the result of `shownLevel`.
- * It has no object of a room that does not close. An object does not keep an outlet that `room` does not have.
- */
-export function shownLevelObjects(result: LevelResult, room: Room): readonly PlacedObject[] {
+/** This function gives the objects of a level that the page shows and saves. It has no object of a room that does not close. */
+export function shownLevelObjects(result: LevelResult): readonly PlacedObject[] {
   const open = result.rooms.filter((item) => !item.result.closure.closed).map((item) => `${item.id}/`);
-  const objects = open.length === 0 ? result.objects : result.objects.filter((object) => !open.some((prefix) => object.id.startsWith(prefix)));
-  return shownObjects(room, objects);
+  return open.length === 0 ? result.objects : result.objects.filter((object) => !open.some((prefix) => object.id.startsWith(prefix)));
 }

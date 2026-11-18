@@ -1,9 +1,9 @@
 import { rectInRegion, regionArea, regionHitsRect, type Region } from "@mark1russell7/layout-contract";
-import { expandLevel, expandSurvey, SCENE_SCHEMA, type FormCollection, type LevelResult, type Room, type Scene, type SurveyResult } from "@mark1russell7/room-view";
+import { SCENE_SCHEMA, type FormCollection, type LevelResult, type PlacedObject, type Room, type Scene, type SurveyResult } from "@mark1russell7/room-view";
+import type { layerMarks } from "@mark1russell7/room-view/marks";
 import type { RoomViewer, ViewerTheme } from "@mark1russell7/room-view/three";
 import { byId, copyText, h, setupTheme } from "@mark1russell7/site-pages/chrome";
-import { ADD_ONS, addOnOf, collectionOf, FORMS } from "./add-ons.ts";
-import type { PageAddOn } from "./bridge.ts";
+import { ADD_ONS, addOnOf, collectionOf, CORE_ADD_ONS, FORMS } from "./add-ons.ts";
 import { isDark, onThemeChange } from "./dark.ts";
 import {
   areaText,
@@ -47,7 +47,6 @@ import {
   roomName,
   roomState,
   sameDraft,
-  shownObjects,
   shownRoom,
   statusOf,
   storeOf,
@@ -106,7 +105,6 @@ import {
   changeOf,
   featuresLabel,
   filePartsText,
-  hiddenOf,
   INPUT_GROUPS,
   layerChoices,
   listCounts,
@@ -127,8 +125,9 @@ import {
   type RecordNote,
   type TextInput,
 } from "./inputs.ts";
-import { roomSurvey, storeLists, storeSystem, type TypedFields } from "./layers.ts";
+import { levelResult, roomResult, roomSurvey, shownLayers, storeLists, storeSystem, type TypedFields } from "./layers.ts";
 import { apartNote, apartRooms, draftsOf, joinChoices, jointsOf, levelOf, levelStatus, shownLevel, shownLevelObjects, surveyDrafts, type Joint, type JointState, type LevelDrafts } from "./level.ts";
+import type { PageAddOn } from "./page-add-on.ts";
 import { svg } from "./plan.ts";
 import { drawWalk, pathOf, type PictureSize, type Pixel, type WalkFeature, type WalkObject } from "./walk.ts";
 
@@ -162,7 +161,7 @@ let draft: Draft = store.rooms[store.active] ?? exampleDraft("m");
  * Thus the first units show the typed numbers again, with no error from a second conversion.
  */
 let typed: Draft = draft;
-let result: SurveyResult = expandSurvey(roomSurvey(draft));
+let result: SurveyResult = roomResult(roomSurvey(draft));
 /** The faults of the doors, the windows, the openings and the points. */
 let faults: readonly FeatureFault[] = featureFaults(draft, result);
 /** The faults of the furniture and the equipment. */
@@ -171,7 +170,7 @@ let status: Status = statusOf(draft, result, faults, objectList);
 
 /** This function gives the status of a room that the page does not show. */
 function statusFor(room: Draft): Status {
-  return statusOf(room, expandSurvey(roomSurvey(room)));
+  return statusOf(room, roomResult(roomSurvey(room)));
 }
 
 /** The status of each room of the store. A change of a room calculates only the status of that room. */
@@ -207,6 +206,8 @@ const moreBoxes = new Map<string, boolean>();
 let view: "plan" | "room" = "plan";
 let viewer: RoomViewer | undefined;
 let themes: { readonly light: ViewerTheme; readonly dark: ViewerTheme } | undefined;
+/** This function gives the marks of the layers of a scene for the 3D view. The page has it when the code of the viewer is there. */
+let marksOf: ((scene: Scene) => ReturnType<typeof layerMarks>) | undefined;
 /** A browser with no WebGL 2 shows only the drawing. */
 let noWebGl = false;
 /** The level of the status at the last drawing. The floor of a room appears with a short motion when the walk closes. */
@@ -472,7 +473,7 @@ function inputRow(input: RecordInput, title: string, aid: string, must: boolean)
 
 /** This function gives the inputs of a record of an add-on in the room of the page. The record is a point, or an object owns it. */
 function roomInputs(addOn: PageAddOn, collection: FormCollection, fields: TypedFields): readonly RecordInput[] {
-  return recordInputs(addOn.form, collection, fields, storeSystem(store), layerChoices(addOn.form, store, draft, FORMS), hiddenOf(addOn, collection.name));
+  return recordInputs(addOn.form, collection, fields, storeSystem(store), layerChoices(addOn.form, store, draft, FORMS));
 }
 
 /**
@@ -1054,7 +1055,8 @@ function levelPicture(level: Whole, size: PictureSize): SVGSVGElement {
     const placed = level.result.rooms[index];
     const name = roomName(room, index);
     if (placed === undefined) return { name, spans: [], marks: [] };
-    return { name, spans: featureSpans(room, featureFaults(room, placed.result)), marks: objectMarks(room, objectFaults(room, placed.result)) };
+    // The result of a room of a level has no layer, so the faults of the points come from the expansion of the room alone.
+    return { name, spans: featureSpans(room, featureFaults(room, roomResult(roomSurvey(room)))), marks: objectMarks(room, objectFaults(room, placed.result)) };
   });
   const drawing = drawLevel(level.result, size, inputs, level.joints);
   const picture = svg("svg", { class: "walk", viewBox: `0 0 ${String(size.width)} ${String(size.height)}`, width: String(size.width), height: String(size.height), role: "img" });
@@ -1175,25 +1177,42 @@ planBox.addEventListener("click", (event) => {
 });
 
 /**
- * This function gives the room record that the page shows and saves. It has no feature that has an error.
- * For the rooms together, it has each room that closes. The record has the records of the lists of the store, and each outlet names its circuit.
+ * This function gives the room record that the page shows and saves. It has no opening that has an error.
+ * For the rooms together, it has each room that closes.
  */
 function roomOf(): Room {
   const level = shownWhole();
-  if (level !== undefined) return shownLevel(level.result);
-  // The checks of the room run with no list of the store, so the record gets the records of the lists only here.
-  return shownRoom(store.lists.length === 0 ? result.room : expandSurvey(roomSurvey(draft, storeLists(store), true)).room, faults);
+  return level === undefined ? shownRoom(result.room, faults) : shownLevel(level.result);
 }
 
 /**
- * This function gives the scene that the page shows in 3D: the room record with its furniture.
- * An object does not keep an outlet that the room record does not have. The rooms together have no object of a room that does not close.
+ * This function gives the scene that the page shows in 3D and saves: the room record with its furniture and the layers of the add-ons.
+ * The rooms together have no object of a room that does not close.
+ *
+ * A layer has the records of the lists of the store, so a record of a room names them. For example, each outlet names its circuit.
+ * A layer has no record with an error of its place, and no record of an object that the scene does not have.
  */
 function sceneOf(): Scene {
   const level = shownWhole();
   const room = roomOf();
-  const objects = level === undefined ? (result.closure.closed ? shownObjects(room, result.objects) : []) : shownLevelObjects(level.result, room);
-  return objects.length === 0 ? { schema: SCENE_SCHEMA, room } : { schema: SCENE_SCHEMA, room, objects };
+  let objects: readonly PlacedObject[];
+  let layers: Readonly<Record<string, unknown>> | undefined;
+  if (level === undefined) {
+    objects = result.closure.closed ? result.objects : [];
+    // The examination of the room has no list of the store, so the layers get the records of the lists only here.
+    layers = store.lists.length === 0 ? result.layers : roomResult(roomSurvey(draft, storeLists(store), true)).layers;
+  } else {
+    objects = shownLevelObjects(level.result);
+    layers = level.result.layers;
+  }
+  const shown = shownLayers(room, objects, layers, storeSystem(store));
+  return { schema: SCENE_SCHEMA, room, ...(objects.length === 0 ? {} : { objects }), ...(shown === undefined ? {} : { layers: shown }) };
+}
+
+/** This function shows a scene in the viewer, with the marks of its layers. */
+function showScene(): void {
+  const scene = sceneOf();
+  viewer?.setScene(scene, marksOf?.(scene));
 }
 
 /**
@@ -1257,15 +1276,22 @@ function leaveRoom(): void {
   view = "plan";
 }
 
-/** This function loads the code of the viewer and shows the room in 3D. */
+/** This function loads the marks of the add-ons that have marks. */
+function loadMarks(addOns: readonly PageAddOn[]): Promise<Parameters<typeof layerMarks>[2]> {
+  return Promise.all(addOns.flatMap((addOn) => (addOn.marks === undefined ? [] : [addOn.marks()])));
+}
+
+/** This function loads the code of the viewer and the marks of the add-ons, and shows the room in 3D. */
 async function enterRoom(): Promise<void> {
   view = "room";
   showView();
-  const three = await import("@mark1russell7/room-view/three");
+  const [three, marks, makers] = await Promise.all([import("@mark1russell7/room-view/three"), import("@mark1russell7/room-view/marks"), loadMarks(ADD_ONS)]);
   themes = { light: three.LIGHT_THEME, dark: three.DARK_THEME };
+  marksOf = (scene) => marks.layerMarks(scene, CORE_ADD_ONS, makers);
   // The room can change while the code loads.
   if (view !== "room" || !hasModel() || viewer !== undefined) return;
-  viewer = three.createRoomViewer(roomBox, { scene: sceneOf(), theme: isDark() ? themes.dark : themes.light, label: VIEW_TEXTS[scope].label });
+  const scene = sceneOf();
+  viewer = three.createRoomViewer(roomBox, { scene, marks: marksOf(scene), theme: isDark() ? themes.dark : themes.light, label: VIEW_TEXTS[scope].label });
   if (viewer !== undefined) return;
   noWebGl = true;
   view = "plan";
@@ -1276,7 +1302,7 @@ async function enterRoom(): Promise<void> {
 /** This function gives the rooms of the store as one level. A store with one room has no level. */
 function wholeOf(): Whole | undefined {
   if (store.rooms.length < 2) return undefined;
-  const level = expandLevel(levelOf(store));
+  const level = levelResult(levelOf(store));
   const joints = jointsOf(store, level);
   return { result: level, joints, status: levelStatus(store.rooms, statuses, level, joints) };
 }
@@ -1323,7 +1349,7 @@ function showScope(): void {
 
 /** This function calculates the room of the draft and the rooms together, and shows them. */
 function refresh(): void {
-  result = expandSurvey(roomSurvey(draft));
+  result = roomResult(roomSurvey(draft));
   faults = featureFaults(draft, result);
   objectList = objectFaults(draft, result);
   status = statusOf(draft, result, faults, objectList);
@@ -1340,7 +1366,7 @@ function refresh(): void {
   showRecords();
   showLists();
   showView();
-  if (view === "room") viewer?.setScene(sceneOf());
+  if (view === "room") showScene();
   showDrawing();
   byId("example-note").hidden = !isExample(draft);
   byId<HTMLButtonElement>("save-room").disabled = !hasModel();
@@ -1924,8 +1950,9 @@ byId("save-survey").addEventListener("click", () => {
   download(shownWhole() === undefined ? fileName(draft, "survey") : `${LEVEL_FILE}.level.json`, surveyText());
 });
 
+// The model is the scene record: the room record, the furniture and the layers of the add-ons.
 byId("save-room").addEventListener("click", () => {
-  download(shownWhole() === undefined ? fileName(draft, "room") : `${LEVEL_FILE}.room.json`, JSON.stringify(roomOf(), null, 2));
+  download(shownWhole() === undefined ? fileName(draft, "scene") : `${LEVEL_FILE}.scene.json`, JSON.stringify(sceneOf(), null, 2));
 });
 
 /** The action that the visitor confirms. */

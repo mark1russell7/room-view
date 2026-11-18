@@ -1,21 +1,32 @@
 import {
+  ANCHOR_CODES,
+  checkLayers,
+  expandLevel,
+  expandSurvey,
   formLayer,
   formRecords,
   readFormRecord,
+  SCENE_SCHEMA,
   type Anchor,
   type FormCollection,
   type FormField,
+  type FormLayer,
+  type FormOutside,
   type FormRecord,
   type FormRecords,
+  type FormRecordsRead,
   type FormSystem,
   type FormValue,
   type LayerForm,
   type Level,
+  type LevelResult,
+  type PlacedObject,
+  type Room,
   type Survey,
+  type SurveyResult,
   type WallFace,
 } from "@mark1russell7/room-view";
 import { ADD_ONS } from "./add-ons.ts";
-import type { PageAddOn } from "./bridge.ts";
 import {
   draftKeys,
   hasMore,
@@ -46,11 +57,13 @@ import {
   type SurveyParts,
   type SurveyPoint,
 } from "./draft.ts";
+import type { PageAddOn } from "./page-add-on.ts";
 
 // The records of the add-ons of the page "Measure a room", as records of the forms of the add-ons.
 //
 // A store keeps the fields of a record as a person typed them. A form tells the kind of each field.
 // This file changes the records of a store to the records of a form, and back. It knows no topic: each name comes from a form.
+// A survey record and a level record keep the records of each form as one layer, by the name of the layer.
 // Each function of this file is pure, so the tests need no browser.
 
 /** The place of the records of a collection in the page. */
@@ -214,6 +227,21 @@ export interface LayerLists {
   readonly records: FormRecords;
   /** The `id` of each record, by its key in the store. */
   readonly ids: ReadonlyMap<string, string>;
+  /**
+   * The ids of the records of the layer of the lists, by the name of each collection.
+   * The layer does not have a record that the form does not accept. The layer of a room can name each record of these ids.
+   */
+  readonly outside: FormOutside;
+}
+
+/** This function gives the ids of the records of each collection, by the name of the collection. */
+function idsIn(records: FormRecords): FormOutside {
+  return new Map(Object.entries(records).map(([name, list]) => [name, new Set(list.map((record) => record.id))]));
+}
+
+/** This function tells if a layer of `formLayer` has a record. A layer with no record has only its name. */
+function hasRecord(layer: FormLayer): boolean {
+  return Object.keys(layer).length > 1;
 }
 
 /** The records of the lists of a store, by the name of each layer. */
@@ -255,13 +283,32 @@ export function storeLists(store: Store, addOns: readonly PageAddOn[] = ADD_ONS)
       found.push([collection, records]);
     }
     const names: Names = { lists: ids, points: new Map() };
-    const records = found.map(([collection, list]): [string, readonly FormRecord[]] => [
-      collection.name,
-      list.map((record): FormRecord => ({ id: ids.get(record.key) ?? "", values: valuesOf(form, collection, record, names) })),
-    ]);
-    lists.set(form.schema, { system, records: Object.fromEntries(records), ids });
+    const records: FormRecords = Object.fromEntries(
+      found.map(([collection, list]): [string, readonly FormRecord[]] => [
+        collection.name,
+        list.map((record): FormRecord => ({ id: ids.get(record.key) ?? "", values: valuesOf(form, collection, record, names) })),
+      ]),
+    );
+    lists.set(form.schema, { system, records, ids, outside: idsIn(formRecords(form, formLayer(form, records, { system })).records) });
   }
   return lists;
+}
+
+/**
+ * This function gives the records of one layer that a room has, before the form reads their values.
+ * `lists` gives the `id` of each record of a list that a field names. With no `lists`, a field names no record of a list.
+ */
+function typedRecords(form: LayerForm, draft: Draft, lists: LayerLists | undefined, forms: readonly LayerForm[]): FormRecords {
+  const parts = roomParts(form, draft, forms);
+  const names: Names = { lists: lists?.ids ?? new Map(), points: parts.points };
+  const records = new Map<string, FormRecord[]>();
+  for (const { collection, id, anchor, owner, fields } of parts.records) {
+    const record: FormRecord = { id, ...(anchor === undefined ? {} : { anchor }), values: valuesOf(form, collection, fields, { ...names, owner }) };
+    const list = records.get(collection.name);
+    if (list === undefined) records.set(collection.name, [record]);
+    else list.push(record);
+  }
+  return Object.fromEntries(records);
 }
 
 /**
@@ -272,43 +319,122 @@ export function storeLists(store: Store, addOns: readonly PageAddOn[] = ADD_ONS)
  * `formLayer` makes the records. Thus a record that the form does not accept is not in the result, and each number with a usual value has a value.
  */
 export function roomRecords(form: LayerForm, draft: Draft, lists?: LayerLists, forms: readonly LayerForm[] = [form]): FormRecords {
-  const parts = roomParts(form, draft, forms);
-  const names: Names = { lists: lists?.ids ?? new Map(), points: parts.points };
-  const records = new Map<string, FormRecord[]>();
-  for (const { collection, id, anchor, owner, fields } of parts.records) {
-    const record: FormRecord = { id, ...(anchor === undefined ? {} : { anchor }), values: valuesOf(form, collection, fields, { ...names, owner }) };
-    const list = records.get(collection.name);
-    if (list === undefined) records.set(collection.name, [record]);
-    else list.push(record);
-  }
-  const all: FormRecords = { ...lists?.records, ...Object.fromEntries(records) };
+  const all: FormRecords = { ...lists?.records, ...typedRecords(form, draft, lists, forms) };
   return formRecords(form, formLayer(form, all, { system: lists?.system ?? systemOf(draft.mode) })).records;
 }
 
 /**
+ * This function gives the layer of one form for a room. `formLayer` makes it, so the layer has no record that the form does not accept.
+ *
+ * - With no `lists`, the layer has the records of the room. A record names no record of a list, and the system of units is the system of the room.
+ * - With `lists` and `listed`, the layer has the records of the lists, then the records of the room.
+ * - With `lists` and no `listed`, the layer has the records of the room. A record can name a record of the layer of the level record.
+ */
+function roomLayer(form: LayerForm, draft: Draft, lists: LayerLists | undefined, listed: boolean, forms: readonly LayerForm[]): FormLayer {
+  const records = typedRecords(form, draft, lists, forms);
+  if (lists === undefined) return formLayer(form, records, { system: systemOf(draft.mode) });
+  if (listed) return formLayer(form, { ...lists.records, ...records }, { system: lists.system });
+  return formLayer(form, records, { system: lists.system, outside: lists.outside });
+}
+
+/**
  * This function makes the survey record of a draft, with the records of the add-ons. It is total, as `surveyOf` is.
- * The bridge of each add-on adds the records of its form to the record. An add-on with no bridge adds nothing yet.
+ * The records of each form are one layer of the survey, by the name of the layer. A form with no record gives no layer.
  *
  * `lists` has the records of the lists of the store. With no `lists`, a record of the room names no record of a list.
- * With `listed`, the survey also lists the records of the lists. The survey of a room of a level lists none, because the level lists them.
+ * With `listed`, each layer also has the records of the lists. The survey of a room of a level has none, because the level record has them.
  */
 export function roomSurvey(draft: Draft, lists?: StoreLists, listed = false, addOns: readonly PageAddOn[] = ADD_ONS): Survey {
   const forms = addOns.map((addOn) => addOn.form);
-  let survey = surveyOf(draft, forms);
-  for (const { form, bridge } of addOns) {
-    if (bridge !== undefined) survey = bridge.survey(survey, roomRecords(form, draft, lists?.get(form.schema), forms), listed);
+  const survey = surveyOf(draft, forms);
+  const seen = new Set<string>();
+  const layers: [string, FormLayer][] = [];
+  for (const form of forms) {
+    if (seen.has(form.schema)) continue;
+    seen.add(form.schema);
+    const layer = roomLayer(form, draft, lists?.get(form.schema), listed, forms);
+    if (hasRecord(layer)) layers.push([form.schema, layer]);
   }
-  return survey;
+  return layers.length === 0 ? survey : { ...survey, layers: Object.fromEntries(layers) };
 }
 
-/** This function adds the records of the lists of a store to a level record. The bridge of each add-on adds the records of its form. */
+/**
+ * This function adds the records of the lists of a store to a level record. The records of each form are one layer of the level record.
+ * A form with no record of a list gives no layer.
+ */
 export function withLists(level: Level, lists: StoreLists, addOns: readonly PageAddOn[] = ADD_ONS): Level {
-  let next = level;
-  for (const { form, bridge } of addOns) {
+  const seen = new Set<string>();
+  const layers: [string, FormLayer][] = [];
+  for (const { form } of addOns) {
     const found = lists.get(form.schema);
-    if (bridge !== undefined && found !== undefined) next = bridge.level(next, formRecords(form, formLayer(form, found.records, { system: found.system })).records);
+    if (found === undefined || seen.has(form.schema)) continue;
+    seen.add(form.schema);
+    const layer = formLayer(form, found.records, { system: found.system });
+    if (hasRecord(layer)) layers.push([form.schema, layer]);
   }
-  return next;
+  return layers.length === 0 ? level : { ...level, layers: { ...level.layers, ...Object.fromEntries(layers) } };
+}
+
+/**
+ * This function gives the expansion of a survey record with its layers, for the add-ons of the page.
+ * `expandSurvey` puts a layer on the room record only with the add-on that reads the layer. Thus each expansion of the page comes from this function.
+ */
+export function roomResult(survey: Survey, addOns: readonly PageAddOn[] = ADD_ONS): SurveyResult {
+  return expandSurvey(survey, { addOns: addOns.map((addOn) => addOn.core) });
+}
+
+/** This function gives the expansion of a level record with its layers, for the add-ons of the page, as `roomResult` does for a survey record. */
+export function levelResult(level: Level, addOns: readonly PageAddOn[] = ADD_ONS): LevelResult {
+  return expandLevel(level, { addOns: addOns.map((addOn) => addOn.core) });
+}
+
+const ANCHOR_FAULTS: ReadonlySet<string> = new Set(ANCHOR_CODES);
+
+/**
+ * This function gives the layers that the page shows and saves with a room record. `layers` are the layers of an expansion.
+ * `room` and `objects` are the room record and the placed objects that the page shows.
+ *
+ * - A record with an error of its anchor in `room` is not in the result. For example, a point is not on its wall, or the room does not have its wall.
+ * - A record of an object that `objects` does not have is not in the result.
+ * - The form of each layer makes the layer again. Thus a field that names a removed record has no value, and a record that needs such a field goes away.
+ *
+ * A layer with no record is not in the result. No layer gives `undefined`.
+ */
+export function shownLayers(
+  room: Room,
+  objects: readonly PlacedObject[],
+  layers: Readonly<Record<string, unknown>> | undefined,
+  system: FormSystem,
+  addOns: readonly PageAddOn[] = ADD_ONS,
+): Readonly<Record<string, unknown>> | undefined {
+  if (layers === undefined) return undefined;
+  const findings = checkLayers(
+    { schema: SCENE_SCHEMA, room, objects, layers },
+    addOns.map((addOn) => addOn.core),
+  );
+  /** The ids of the records with an error of their anchor, by the name of their layer. */
+  const bad = new Map<string, Set<string>>();
+  for (const finding of findings) {
+    if (finding.level !== "error" || !ANCHOR_FAULTS.has(finding.code)) continue;
+    const ids = bad.get(finding.layer);
+    if (ids === undefined) bad.set(finding.layer, new Set([finding.at]));
+    else ids.add(finding.at);
+  }
+  const there = new Set(objects.map((object) => object.id));
+  const seen = new Set<string>();
+  const kept: [string, FormLayer][] = [];
+  for (const { form } of addOns) {
+    if (seen.has(form.schema) || !Object.hasOwn(layers, form.schema)) continue;
+    seen.add(form.schema);
+    const ids = bad.get(form.schema);
+    const records = Object.entries(formRecords(form, layers[form.schema]).records).map(([name, list]): [string, readonly FormRecord[]] => [
+      name,
+      ids === undefined ? list : list.filter((record) => !ids.has(record.id)),
+    ]);
+    const layer = formLayer(form, Object.fromEntries(records), { system, objects: there });
+    if (hasRecord(layer)) kept.push([form.schema, layer]);
+  }
+  return kept.length === 0 ? undefined : Object.fromEntries(kept);
 }
 
 /** The records of the form of one layer, from survey records and from their level record. */
@@ -476,18 +602,99 @@ export function levelParts(layers: readonly LayerRecords[], surveys: readonly Su
   return { lists, rooms, more };
 }
 
+/** The read of no layer: no record, and no data that a form does not keep. */
+const NO_RECORDS: FormRecordsRead = { records: {}, more: false };
+
+/** This function gives the layer with a name in the layers of a record. A record with no such layer gives `undefined`. */
+function layerIn(layers: Readonly<Record<string, unknown>> | undefined, name: string): unknown {
+  return layers !== undefined && Object.hasOwn(layers, name) ? layers[name] : undefined;
+}
+
 /**
  * This function gives the records of the add-ons of survey records, for the rooms of a store. `level` is the level record of the surveys.
- * The bridge of each add-on reads the records of its form from the fields of the surveys and of the level. An add-on with no bridge has no record yet.
+ *
+ * The add-on of the core reads the layer of each form in the level record and in each survey. Then the form reads the records of the layer.
+ * A record of the time before the layers has no layer: it has fields of its own. The add-on of the page gives the layer of those fields.
+ *
+ * A record of a list can be in the layer of the level record and in the layer of a survey. `levelParts` makes one list of them.
+ * A record of a layer can name a record of a list of a different layer. For example, an outlet of a room names a circuit of the level record.
+ * Thus the read of the layers repeats until it finds no new record of a list.
+ *
+ * The page does not keep these data, and `more` tells them:
+ *
+ * - a layer of no add-on of the page, and a layer with a fault in its form
+ * - the old fields of a record that also has the layer of their form
+ * - each part of a layer that its form does not keep, as `formRecords` tells it
+ * - each record that `levelParts` does not keep
  */
 export function surveyParts(surveys: readonly Survey[], level: Level | undefined, system: FormSystem, addOns: readonly PageAddOn[] = ADD_ONS): LevelParts {
   let more = false;
-  const layers = addOns.flatMap(({ form, bridge }): LayerRecords[] => {
-    if (bridge === undefined) return [];
-    const read = bridge.read(surveys, level, system);
-    if (read.more) more = true;
-    return [{ form, lists: read.lists, rooms: read.rooms }];
-  });
+  const known = new Set(addOns.map((addOn) => addOn.form.schema));
+  for (const record of [level, ...surveys]) {
+    if (Object.keys(record?.layers ?? {}).some((name) => !known.has(name))) more = true;
+  }
+  const seen = new Set<string>();
+  const layers: LayerRecords[] = [];
+  for (const addOn of addOns) {
+    const { form } = addOn;
+    if (seen.has(form.schema)) continue;
+    seen.add(form.schema);
+    /** This function gives the layer of a record: its layer of the form, or the layer of its old fields. `old` gives the second one. */
+    const layerOf = (given: unknown, old: () => unknown): unknown => {
+      let layer: unknown;
+      if (given === undefined) layer = old();
+      else {
+        const read = addOn.core.parse(given);
+        // The layer comes before the old fields. A layer with a fault in its form has no record for the page.
+        if (!read.ok || old() !== undefined) more = true;
+        layer = read.ok ? read.layer : undefined;
+      }
+      return layer === undefined || addOn.plain === undefined ? layer : addOn.plain(layer, system);
+    };
+    // The layer of the level record comes first, then the layer of each survey.
+    const given = [
+      level === undefined ? undefined : layerOf(layerIn(level.layers, form.schema), () => addOn.fromLevel?.(level)),
+      ...surveys.map((survey) => layerOf(layerIn(survey.layers, form.schema), () => addOn.fromSurvey?.(survey))),
+    ];
+    const listNames = new Set(form.collections.filter((collection) => placeOf(collection) === "list").map((collection) => collection.name));
+    const outside = new Map<string, Set<string>>();
+    for (const name of listNames) outside.set(name, new Set());
+    let found: readonly FormRecordsRead[] = [];
+    // A record can name a record of a list of a different layer. Thus the read repeats until it finds no new record of a list.
+    for (let grows = true; grows; ) {
+      grows = false;
+      found = given.map((layer) => (layer === undefined ? NO_RECORDS : formRecords(form, layer, { outside })));
+      for (const { records } of found) {
+        for (const name of listNames) {
+          const ids = outside.get(name);
+          for (const record of recordsIn(records, name)) {
+            if (ids === undefined || ids.has(record.id)) continue;
+            ids.add(record.id);
+            grows = true;
+          }
+        }
+      }
+    }
+    if (found.some((item) => item.more)) more = true;
+    const read = found.map((item) => item.records);
+    const [own = {}, ...rooms] = read;
+    layers.push({
+      form,
+      // A record of the level record with no place in a list stays here, and `levelParts` tells it.
+      lists: Object.fromEntries(
+        form.collections.map((collection): [string, readonly FormRecord[]] => [
+          collection.name,
+          listNames.has(collection.name) ? read.flatMap((records) => recordsIn(records, collection.name)) : recordsIn(own, collection.name),
+        ]),
+      ),
+      rooms: rooms.map(
+        (records): FormRecords =>
+          Object.fromEntries(
+            form.collections.filter((collection) => !listNames.has(collection.name)).map((collection): [string, readonly FormRecord[]] => [collection.name, recordsIn(records, collection.name)]),
+          ),
+      ),
+    });
+  }
   const parts = levelParts(layers, surveys, system);
   return more ? { ...parts, more } : parts;
 }

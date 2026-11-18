@@ -1,6 +1,5 @@
-import { checkForm, formLayer, formRecords, LEVEL_SCHEMA, type FormRecord, type FormRecords, type LayerForm, type Level, type Survey, type WallAnchor } from "@mark1russell7/room-view";
+import { checkForm, checkLayers, formLayer, formRecords, LEVEL_SCHEMA, SCENE_SCHEMA, type FormRecord, type FormRecords, type LayerForm, type Level, type PlacedObject, type Survey, type WallAnchor } from "@mark1russell7/room-view";
 import { describe, expect, it } from "vitest";
-import type { AddOnBridge, PageAddOn } from "./bridge.ts";
 import {
   draftKeys,
   emptyDraft,
@@ -25,7 +24,9 @@ import {
   type TypedLength,
 } from "./draft.ts";
 import { ELECTRICAL } from "./electrical.ts";
-import { levelParts, numberFrom, placeOf, readSurvey, roomRecords, roomSurvey, storeLists, surveyParts, withLists, type LayerRecords, type LevelParts } from "./layers.ts";
+import { pageAddOn } from "./form-add-on.fixture.ts";
+import { levelParts, levelResult, numberFrom, placeOf, readSurvey, roomRecords, roomResult, roomSurvey, shownLayers, storeLists, surveyParts, withLists, type LayerRecords, type LevelParts } from "./layers.ts";
+import type { PageAddOn } from "./page-add-on.ts";
 
 /**
  * A false add-on for the tests. The page has no code for it.
@@ -111,8 +112,8 @@ const GAS: LayerForm = {
 
 const P = PLUMBING.schema;
 const FORMS: readonly LayerForm[] = [PLUMBING, GAS];
-/** The two false add-ons, with no bridge. */
-const ADD_ONS: readonly PageAddOn[] = [{ form: PLUMBING }, { form: GAS }];
+/** The two false add-ons. Each one has a test add-on of the core, and it reads no old file. */
+const ADD_ONS: readonly PageAddOn[] = [pageAddOn(PLUMBING), pageAddOn(GAS)];
 
 const typed = (text = ""): TypedLength => ({ value: text, inches: "" });
 
@@ -239,7 +240,29 @@ describe("storeLists", () => {
         { id: "vent", values: { name: "Vent", vent: "main" } },
       ],
     });
-    expect(lists.get(GAS.schema)).toEqual({ system: "metric", records: { meters: [] }, ids: new Map() });
+    expect(lists.get(GAS.schema)).toEqual({
+      system: "metric",
+      records: { meters: [] },
+      ids: new Map(),
+      outside: new Map([
+        ["meters", new Set()],
+        ["valves", new Set()],
+      ]),
+    });
+  });
+
+  it("gives the ids of the records that the form accepts, for the layer of a room", () => {
+    const outside = (store: Store): readonly (readonly [string, readonly string[]])[] => [...(storeLists(store, ADD_ONS).get(P)?.outside ?? [])].map(([name, ids]) => [name, [...ids]]);
+    expect(outside(STORE)).toEqual([
+      ["stacks", ["main", "vent"]],
+      ["taps", []],
+      ["drains", []],
+      ["notes", []],
+      ["gullies", []],
+    ]);
+    // The form does not accept a size that is not a number, so a record of a room cannot name that stack.
+    const bad: Store = { ...STORE, lists: stacks(recordOf("r1", { values: { name: "Main", size: "x" } }), recordOf("r2", { values: { name: "Vent" }, records: { vent: "r1" } })) };
+    expect(outside(bad)[0]).toEqual(["stacks", ["vent"]]);
   });
 
   it("gives the word of the collection and a number to a record with no name, and a number to a second name", () => {
@@ -269,7 +292,7 @@ describe("storeLists", () => {
 
   it("gives the word `record` to the records of a collection with no letter and no digit in its word", () => {
     const form: LayerForm = { ...PLUMBING, collections: PLUMBING.collections.map((collection) => (collection.name === "stacks" || collection.name === "notes" ? { ...collection, word: "?" } : collection)) };
-    expect([...(storeLists({ ...STORE, lists: stacks(recordOf("r1")) }, [{ form }]).get(P)?.ids.values() ?? [])]).toEqual(["record-1"]);
+    expect([...(storeLists({ ...STORE, lists: stacks(recordOf("r1")) }, [pageAddOn(form)]).get(P)?.ids.values() ?? [])]).toEqual(["record-1"]);
     const noted = onWall(box(), 0, [], [sink("o1", "1", [ownedOf(P, "notes", { values: { text: "a" } })])]);
     expect(roomRecords(form, noted)["notes"]?.map((record) => record.id)).toEqual(["record-sink-1"]);
   });
@@ -282,9 +305,9 @@ describe("storeLists", () => {
   });
 
   it("makes the lists of a layer one time, from the form of its first add-on", () => {
-    const lists = storeLists(STORE, [{ form: PLUMBING }, { form: { schema: P, collections: [] } }]);
+    const lists = storeLists(STORE, [pageAddOn(PLUMBING), pageAddOn({ schema: P, collections: [] })]);
     expect([...lists.keys()]).toEqual([P]);
-    expect(lists.get(P)).toEqual(storeLists(STORE, [{ form: PLUMBING }]).get(P));
+    expect(lists.get(P)).toEqual(storeLists(STORE, [pageAddOn(PLUMBING)]).get(P));
     expect(lists.get(P)?.records["stacks"]).toHaveLength(2);
   });
 });
@@ -389,72 +412,232 @@ describe("roomRecords", () => {
   });
 });
 
+const TAP_1 = { id: "water-tap-1", anchor: { on: "wall", wall: "wall-1", face: "left", offset: 1, height: 0.9 }, size: "15 mm", stack: "main", next: "water-tap-2" };
+const TAP_2 = { id: "water-tap-2", anchor: { on: "wall", wall: "wall-1", face: "left", offset: 2, height: 1.2 } };
+/** The stacks of the store `STORE` in a layer. Each number with a usual value has a value. */
+const STACKS = [
+  { id: "main", name: "Main", size: 110, slope: -2 },
+  { id: "vent", name: "Vent", size: 110, vent: "main" },
+];
+/** The records of the room `ROOM` in a layer, with the stacks of the store `STORE`. */
+const ROOM_LAYER = {
+  schema: P,
+  taps: [TAP_1, TAP_2],
+  drains: [
+    { id: "drain-sink-1", object: "sink-1", tap: "water-tap-1", flow: 2 },
+    { id: "drain-sink-1-2", object: "sink-1", tap: "water-tap-2" },
+  ],
+};
+/** The layer of the false add-on for the room `ROOM`, with the stacks of the store `STORE`. */
+const LAYER = { ...ROOM_LAYER, stacks: STACKS };
+
 describe("roomSurvey", () => {
-  it("adds nothing for an add-on with no bridge", () => {
-    expect(roomSurvey(ROOM, storeLists(STORE, ADD_ONS), true, ADD_ONS)).toEqual(surveyOf(ROOM, FORMS));
-    expect(roomSurvey(ROOM, undefined, false, [])).toEqual(surveyOf(ROOM, []));
+  const lists = storeLists(STORE, ADD_ONS);
+
+  it("gives the records of each form as one layer of the survey record", () => {
+    const survey = roomSurvey(ROOM, lists, true, ADD_ONS);
+    // The second false add-on has no record, so the survey has no layer of it.
+    expect(survey).toEqual({ ...surveyOf(ROOM, FORMS), layers: { [P]: LAYER } });
+    expect(survey.layers?.[P]).toEqual(formLayer(PLUMBING, roomRecords(PLUMBING, ROOM, lists.get(P), FORMS), { system: "metric" }));
+    // The layer is a layer of its form, with no data that the form does not keep.
+    expect(formRecords(PLUMBING, survey.layers?.[P]).more).toBe(false);
   });
 
-  it("gives the records of each add-on to its bridge", () => {
-    const calls: unknown[] = [];
-    const bridge: AddOnBridge = {
-      read: (surveys) => ({ lists: {}, rooms: surveys.map(() => ({})), more: false }),
-      survey: (survey, records, listed) => {
-        calls.push({ records, listed });
-        return { ...survey, name: `${survey.name ?? ""}+` };
-      },
-      level: (level) => level,
-    };
-    const addOns: readonly PageAddOn[] = [{ form: PLUMBING, bridge }, { form: GAS }, { form: GAS, bridge }];
-    const lists = storeLists(STORE, addOns);
-    const survey = roomSurvey({ ...ROOM, name: "Bath" }, lists, true, addOns);
-    expect(survey).toEqual({ ...surveyOf({ ...ROOM, name: "Bath" }, FORMS), name: "Bath++" });
-    expect(calls).toEqual([
-      { records: roomRecords(PLUMBING, ROOM, lists.get(P), FORMS), listed: true },
-      { records: roomRecords(GAS, ROOM, lists.get(GAS.schema), FORMS), listed: true },
-    ]);
-    calls.length = 0;
-    roomSurvey(ROOM, undefined, undefined, addOns);
-    expect(calls).toEqual([
-      { records: roomRecords(PLUMBING, ROOM, undefined, FORMS), listed: false },
-      { records: roomRecords(GAS, ROOM, undefined, FORMS), listed: false },
-    ]);
+  it("has the records of the lists only with `listed`, and a record of the room names them", () => {
+    const survey = roomSurvey(ROOM, lists, false, ADD_ONS);
+    expect(survey.layers).toEqual({ [P]: ROOM_LAYER });
+    // The layer names a stack of the level record, so its read needs the ids of those records.
+    expect(formRecords(PLUMBING, survey.layers?.[P]).more).toBe(true);
+    expect(formRecords(PLUMBING, survey.layers?.[P], { outside: lists.get(P)?.outside }).more).toBe(false);
+  });
+
+  it("names no record of a list with no lists", () => {
+    const alone = { id: TAP_1.id, anchor: TAP_1.anchor, size: TAP_1.size, next: TAP_1.next };
+    expect(roomSurvey(ROOM, undefined, false, ADD_ONS).layers).toEqual({ [P]: { ...ROOM_LAYER, taps: [alone, TAP_2] } });
+    expect(roomSurvey(ROOM, undefined, true, ADD_ONS).layers).toEqual({ [P]: { ...ROOM_LAYER, taps: [alone, TAP_2] } });
+  });
+
+  it("names no record of a list that the form does not accept", () => {
+    const bad = storeLists({ ...STORE, lists: stacks(recordOf("r1", { values: { name: "Main", size: "x" } })) }, ADD_ONS);
+    for (const listed of [true, false]) {
+      const read = formRecords(PLUMBING, roomSurvey(ROOM, bad, listed, ADD_ONS).layers?.[P]);
+      expect(read.more, String(listed)).toBe(false);
+      expect(read.records["stacks"], String(listed)).toEqual([]);
+      expect(read.records["taps"]?.map((record) => record.values), String(listed)).toEqual([{ size: "15 mm", next: "water-tap-2" }, {}]);
+    }
+  });
+
+  it("gives no layer for no record, and the survey record of the core for no add-on", () => {
+    const empty = roomSurvey(box(), lists, false, ADD_ONS);
+    expect(empty).toEqual(surveyOf(box(), FORMS));
+    expect(empty).not.toHaveProperty("layers");
+    // With `listed`, the lists of the store are records of the layer of each room.
+    expect(roomSurvey(box(), lists, true, ADD_ONS).layers).toEqual({ [P]: { schema: P, stacks: STACKS } });
+    const none = roomSurvey(ROOM, lists, true, []);
+    expect(none).toEqual(surveyOf(ROOM, []));
+    expect(none).not.toHaveProperty("layers");
+  });
+
+  it("makes the layer of a name one time, from the form of its first add-on", () => {
+    const twice = roomSurvey(ROOM, lists, true, [pageAddOn(PLUMBING), pageAddOn({ schema: P, collections: [] }), pageAddOn(GAS)]);
+    expect(twice.layers).toEqual({ [P]: LAYER });
   });
 
   it("numbers the points of two add-ons with one word together, as the survey record does", () => {
-    const seen: FormRecords[] = [];
-    const bridge: AddOnBridge = {
-      read: (surveys) => ({ lists: {}, rooms: surveys.map(() => ({})), more: false }),
-      survey: (survey, records) => {
-        seen.push(records);
-        return survey;
-      },
-      level: (level) => level,
-    };
     const gas: LayerForm = { ...GAS, collections: GAS.collections.map((collection) => (collection.name === "valves" ? { ...collection, word: "water tap" } : collection)) };
     const mixed = onWall(box(), 0, [tap("f1", "1"), point("f2", "2", ownedOf(gas.schema, "valves")), tap("f3", "3")]);
-    roomSurvey(mixed, undefined, false, [{ form: PLUMBING, bridge }, { form: gas, bridge }]);
-    expect(seen.map((records) => [...(records["taps"] ?? []), ...(records["valves"] ?? [])].map((record) => record.id))).toEqual([["water-tap-1", "water-tap-3"], ["water-tap-2"]]);
+    const layers = roomSurvey(mixed, undefined, false, [pageAddOn(PLUMBING), pageAddOn(gas)]).layers;
+    const ids = (form: LayerForm, name: string): readonly string[] | undefined => formRecords(form, layers?.[form.schema]).records[name]?.map((record) => record.id);
+    expect([ids(PLUMBING, "taps"), ids(gas, "valves")]).toEqual([["water-tap-1", "water-tap-3"], ["water-tap-2"]]);
   });
 });
 
 describe("withLists", () => {
   const level: Level = { schema: LEVEL_SCHEMA, unit: "m", rooms: [] };
+  const lists = storeLists(STORE, ADD_ONS);
 
-  it("gives the records of the lists of each add-on to its bridge", () => {
-    const bridge: AddOnBridge = {
-      read: (surveys) => ({ lists: {}, rooms: surveys.map(() => ({})), more: false }),
-      survey: (survey) => survey,
-      level: (given, records) => ({ ...given, name: `${given.name ?? ""}${JSON.stringify(records)}` }),
-    };
-    const lists = storeLists(STORE, ADD_ONS);
-    expect(withLists(level, lists, ADD_ONS)).toBe(level);
-    expect(withLists(level, new Map(), [{ form: PLUMBING, bridge }])).toBe(level);
-    const expected = formRecords(PLUMBING, formLayer(PLUMBING, lists.get(P)?.records ?? {}, { system: "metric" })).records;
-    expect(expected["stacks"]?.map((record) => record.values["size"])).toEqual([110, 110]);
-    expect(withLists(level, lists, [{ form: PLUMBING, bridge }]).name).toBe(JSON.stringify(expected));
+  it("gives the records of the lists of each form as one layer of the level record", () => {
+    // The second false add-on has no record of a list, so the level record has no layer of it.
+    expect(withLists(level, lists, ADD_ONS)).toEqual({ ...level, layers: { [P]: { schema: P, stacks: STACKS } } });
+  });
+
+  it("gives the same level record for no record of a list", () => {
+    expect(withLists(level, new Map(), ADD_ONS)).toBe(level);
+    expect(withLists(level, storeLists({ ...STORE, lists: [] }, ADD_ONS), ADD_ONS)).toBe(level);
+    expect(withLists(level, lists, [])).toBe(level);
+    // The form does not accept the only record of the lists.
+    const bad: Store = { ...STORE, lists: stacks(recordOf("r1", { values: { size: "x" } })) };
+    expect(withLists(level, storeLists(bad, ADD_ONS), ADD_ONS)).toBe(level);
+  });
+
+  it("keeps each different layer of the level record, and makes the layer of a form again", () => {
+    const other = { schema: "other/1", marks: [] };
+    const given: Level = { ...level, layers: { "other/1": other, [P]: { schema: P, stacks: [] } } };
+    expect(withLists(given, lists, ADD_ONS).layers).toEqual({ "other/1": other, [P]: { schema: P, stacks: STACKS } });
   });
 });
+
+describe("roomResult and levelResult", () => {
+  const lists = storeLists(STORE, ADD_ONS);
+  const survey = roomSurvey(ROOM, lists, true, ADD_ONS);
+
+  it("gives the layers of a survey record to the expansion, with the add-ons of the page", () => {
+    const result = roomResult(survey, ADD_ONS);
+    expect(result.layerFindings).toEqual([]);
+    // The room is in meters and its walk closes, so each anchor keeps its numbers.
+    expect(result.layers).toEqual({ [P]: LAYER });
+  });
+
+  it("gives no layer to the expansion with no add-on that reads it", () => {
+    const result = roomResult(survey, []);
+    expect(result.layers).toEqual({});
+    expect(result.layerFindings.map((finding) => [finding.code, finding.layer])).toEqual([["layer-unknown", P]]);
+    expect(roomResult(surveyOf(ROOM, FORMS), ADD_ONS)).not.toHaveProperty("layers");
+  });
+
+  it("gives the layer of a level record to the expansion, with the add-ons of the page", () => {
+    const level = withLists({ schema: LEVEL_SCHEMA, unit: "m", rooms: [] }, lists, ADD_ONS);
+    expect(levelResult(level, ADD_ONS).layers).toEqual({ [P]: { schema: P, stacks: STACKS } });
+    expect(levelResult(level, ADD_ONS).layerFindings).toEqual([]);
+    // The expansion keeps a layer of the level record that no add-on reads, as `checkLayers` keeps a layer of a scene.
+    expect(levelResult(level, []).layers).toEqual({ [P]: { schema: P, stacks: STACKS } });
+  });
+});
+
+describe("shownLayers", () => {
+  const result = roomResult(roomSurvey(ROOM, storeLists(STORE, ADD_ONS), true, ADD_ONS), ADD_ONS);
+  const shown = (layers: Readonly<Record<string, unknown>> | undefined, objects: readonly PlacedObject[] = result.objects): Readonly<Record<string, unknown>> | undefined =>
+    shownLayers(result.room, objects, layers, "metric", ADD_ONS);
+
+  it("gives the layers of an expansion with no fault as they are", () => {
+    expect(result.objects.map((object) => object.id)).toEqual(["sink-1"]);
+    expect(checkLayers({ schema: SCENE_SCHEMA, room: result.room, objects: result.objects, layers: { [P]: LAYER } }, ADD_ONS.map((addOn) => addOn.core))).toEqual([]);
+    expect(shown(result.layers)).toEqual({ [P]: LAYER });
+  });
+
+  it("gives no layers for no layers, and for layers with no record", () => {
+    expect(shown(undefined)).toBeUndefined();
+    expect(shown({})).toBeUndefined();
+    expect(shown({ [P]: { schema: P } })).toBeUndefined();
+    expect(shown({ [P]: { schema: P, stacks: [], taps: [] } })).toBeUndefined();
+  });
+
+  it("has no record with an error of its anchor, and no field names such a record", () => {
+    const layers = {
+      [P]: {
+        schema: P,
+        taps: [
+          { id: "far", anchor: { ...WALL, offset: 9 } },
+          { id: "high", anchor: { ...WALL, height: 99 } },
+          { id: "lost", anchor: { ...WALL, wall: "hall" } },
+          { id: "near", anchor: WALL, next: "far" },
+        ],
+        drains: [
+          { id: "d1", object: "sink-1", tap: "far", flow: 1 },
+          { id: "d2", object: "sink-1", tap: "near" },
+        ],
+      },
+    };
+    expect(shown(layers)).toEqual({
+      [P]: {
+        schema: P,
+        taps: [{ id: "near", anchor: WALL }],
+        drains: [
+          { id: "d1", object: "sink-1", flow: 1 },
+          { id: "d2", object: "sink-1", tap: "near" },
+        ],
+      },
+    });
+    // A layer with only such records is not in the result.
+    expect(shown({ [P]: { schema: P, taps: [{ id: "far", anchor: { ...WALL, offset: 9 } }] } })).toBeUndefined();
+  });
+
+  it("has no record of an object that the scene does not have", () => {
+    expect(shown(result.layers, [])).toEqual({ [P]: { schema: P, stacks: STACKS, taps: [TAP_1, TAP_2] } });
+    expect(shown({ [P]: { schema: P, drains: ROOM_LAYER.drains } }, [])).toBeUndefined();
+    // A record that needs a record with an error of its anchor goes away too.
+    const chain: LayerForm = {
+      schema: P,
+      collections: [
+        { name: "taps", word: "tap", label: "Tap", title: "Taps", on: ["wall"], height: { imperial: 0.9144, metric: 0.9 }, fields: [] },
+        {
+          name: "drains",
+          word: "drain",
+          label: "Drain",
+          title: "Drains",
+          owner: "object",
+          fields: [
+            { kind: "object", name: "object", label: "Object", needed: true },
+            { kind: "record", name: "tap", label: "Tap", of: "taps", needed: true },
+          ],
+        },
+      ],
+    };
+    expect(checkForm(chain)).toEqual([]);
+    const layers = { [P]: { schema: P, taps: [{ id: "far", anchor: { ...WALL, offset: 9 } }, { id: "near", anchor: WALL }], drains: [{ id: "d1", object: "sink-1", tap: "far" }, { id: "d2", object: "sink-1", tap: "near" }] } };
+    expect(shownLayers(result.room, result.objects, layers, "metric", [pageAddOn(chain)])).toEqual({ [P]: { schema: P, taps: [{ id: "near", anchor: WALL }], drains: [{ id: "d2", object: "sink-1", tap: "near" }] } });
+  });
+
+  it("has no layer of an add-on that the page does not have", () => {
+    expect(shown({ "other/1": { schema: "other/1", marks: [{ id: "a" }] } })).toBeUndefined();
+    expect(shown({ ...result.layers, "other/1": { schema: "other/1" } })).toEqual({ [P]: LAYER });
+    expect(shownLayers(result.room, result.objects, result.layers, "metric", [])).toBeUndefined();
+  });
+
+  it("gives each number with no value its usual value in the system of units", () => {
+    const layers = { [P]: { schema: P, stacks: [{ id: "main", name: "Main" }] } };
+    expect(shown(layers)).toEqual({ [P]: { schema: P, stacks: [{ id: "main", name: "Main", size: 110 }] } });
+    expect(shownLayers(result.room, result.objects, layers, "imperial", ADD_ONS)).toEqual({ [P]: { schema: P, stacks: [{ id: "main", name: "Main", size: 100 }] } });
+  });
+});
+
+/** This function gives a store with two rooms and the records of the two false add-ons. A valve names a meter, and a valve names a valve. */
+function mixedStore(): Store {
+  const valves = [point("f3", "0.5", ownedOf(GAS.schema, "valves", { records: { meter: "r3" } }), "0.3"), point("f4", "3.5", ownedOf(GAS.schema, "valves", { points: { next: "f3" } }), "0.3")];
+  const first: Draft = { ...ROOM, sides: ROOM.sides.map((side, index) => (index === 0 ? { ...side, features: [...side.features, ...valves] } : side)) };
+  const second = onWall(box(), 2, [tap("f1", "1", { records: { stack: "r2" } })], [sink("o1", "2", [ownedOf(P, "notes", { values: { text: "Old" } })])]);
+  return { ...storeOf([first, second]), lists: [...STORE.lists, { layer: GAS.schema, collection: "meters", records: [recordOf("r3", { values: { name: "Main" } })] }] };
+}
 
 describe("levelParts", () => {
   const SURVEY = surveyOf(ROOM, FORMS);
@@ -485,10 +668,7 @@ describe("levelParts", () => {
   });
 
   it("gives a store with the same records, for two add-ons and two rooms", () => {
-    const valves = [point("f3", "0.5", ownedOf(GAS.schema, "valves", { records: { meter: "r3" } }), "0.3"), point("f4", "3.5", ownedOf(GAS.schema, "valves", { points: { next: "f3" } }), "0.3")];
-    const first: Draft = { ...ROOM, sides: ROOM.sides.map((side, index) => (index === 0 ? { ...side, features: [...side.features, ...valves] } : side)) };
-    const second = onWall(box(), 2, [tap("f1", "1", { records: { stack: "r2" } })], [sink("o1", "2", [ownedOf(P, "notes", { values: { text: "Old" } })])]);
-    const store: Store = { ...storeOf([first, second]), lists: [...STORE.lists, { layer: GAS.schema, collection: "meters", records: [recordOf("r3", { values: { name: "Main" } })] }] };
+    const store = mixedStore();
     const layers = [layerOf(store), layerOf(store, GAS)];
     expect(layers[1]?.rooms[0]?.["valves"]?.map((record) => record.values)).toEqual([{ meter: "meter-1" }, { next: "valve-1" }]);
     const surveys = store.rooms.map((room) => surveyOf(room, FORMS));
@@ -650,37 +830,164 @@ describe("levelParts", () => {
   });
 });
 
-/**
- * This function gives a false add-on with a bridge that keeps the records of each survey in memory.
- * The fields of a survey record have no place for the records of a false add-on.
- */
-function kept(form: LayerForm): PageAddOn {
-  const memory = new WeakMap<Survey, { readonly records: FormRecords; readonly listed: boolean }>();
-  const places = (place: string): readonly string[] => form.collections.filter((collection) => placeOf(collection) === place).map((collection) => collection.name);
-  return {
-    form,
-    bridge: {
-      read: (surveys) => ({
-        lists: Object.assign({}, ...surveys.map((survey) => (memory.get(survey)?.listed === true ? pick(memory.get(survey)?.records ?? {}, places("list")) : {}))) as FormRecords,
-        rooms: surveys.map((survey) => pick(memory.get(survey)?.records ?? {}, [...places("point"), ...places("owned")])),
-        more: surveys.some((survey) => survey.name === "More"),
-      }),
-      survey: (survey, records, listed) => {
-        const next = { ...survey };
-        memory.set(next, { records, listed });
-        return next;
+/** A false add-on of lists only. A record of its second list needs a record of its first list, and a record of its third list needs one of the second. */
+const CHAIN: LayerForm = {
+  schema: "chain/1",
+  collections: [
+    { name: "firsts", word: "first", label: "First", title: "Firsts", fields: [{ kind: "text", name: "name", label: "Name" }] },
+    { name: "seconds", word: "second", label: "Second", title: "Seconds", fields: [{ kind: "record", name: "first", label: "First", of: "firsts", needed: true }] },
+    { name: "thirds", word: "third", label: "Third", title: "Thirds", fields: [{ kind: "record", name: "second", label: "Second", of: "seconds", needed: true }] },
+  ],
+};
+
+describe("surveyParts", () => {
+  const level: Level = { schema: LEVEL_SCHEMA, unit: "m", rooms: [] };
+  const none = { points: [], owned: new Map() };
+  const main = recordOf("r1", { values: { name: "Main", size: "110", slope: "-2" } });
+  const vent = recordOf("r2", { values: { name: "Vent", size: "110" }, records: { vent: "r1" } });
+
+  it("reads no record from a record with no layer", () => {
+    expect(surveyParts([surveyOf(ROOM, FORMS)], undefined, "metric", ADD_ONS)).toEqual({ lists: [], rooms: [none], more: false });
+    expect(surveyParts([surveyOf(ROOM, FORMS), surveyOf(box(), FORMS)], level, "metric", ADD_ONS)).toEqual({ lists: [], rooms: [none, none], more: false });
+    expect(surveyParts([], undefined, "metric", ADD_ONS)).toEqual({ lists: [], rooms: [], more: false });
+    expect(surveyParts([surveyOf(ROOM, FORMS)], undefined, "metric", [])).toEqual({ lists: [], rooms: [none], more: false });
+  });
+
+  it("reads the layers of a level record and of its surveys as the records of the store", () => {
+    const lists = storeLists(STORE, ADD_ONS);
+    const surveys = STORE.rooms.map((room) => roomSurvey(room, lists, false, ADD_ONS));
+    const read = surveyParts(surveys, withLists(level, lists, ADD_ONS), "metric", ADD_ONS);
+    expect(read).toEqual(
+      levelParts(
+        [layerOf(STORE), layerOf(STORE, GAS)],
+        STORE.rooms.map((room) => surveyOf(room, FORMS)),
+        "metric",
+      ),
+    );
+    expect(read.more).toBe(false);
+    expect(read.lists).toEqual(stacks(main, vent));
+    expect(draftKeys(surveys[0] ?? surveyOf(box(), FORMS), read.rooms[0]).draft.sides).toEqual(ROOM.sides);
+  });
+
+  it("gives a store with the same layers, for two add-ons and two rooms", () => {
+    const store = mixedStore();
+    const lists = storeLists(store, ADD_ONS);
+    const record = withLists(level, lists, ADD_ONS);
+    const surveys = store.rooms.map((room) => roomSurvey(room, lists, false, ADD_ONS));
+    expect(Object.keys(record.layers ?? {})).toEqual([P, GAS.schema]);
+    expect(surveys.map((survey) => Object.keys(survey.layers ?? {}))).toEqual([[P, GAS.schema], [P]]);
+    const read = surveyParts(surveys, record, "metric", ADD_ONS);
+    expect(read.more).toBe(false);
+    const rooms = surveys.map((survey, index) => draftKeys(survey, read.rooms[index]).draft);
+    const next = withNewRooms(storeOf([emptyDraft("m")]), rooms, [], true, read.lists);
+    const again = storeLists(next, ADD_ONS);
+    expect(withLists(level, again, ADD_ONS)).toEqual(record);
+    expect(next.rooms.map((room) => roomSurvey(room, again, false, ADD_ONS))).toEqual(surveys);
+    // One file of one room has the lists in the layer of the room.
+    const alone = roomSurvey(store.rooms[0] ?? box(), lists, true, ADD_ONS);
+    const one = readSurvey(alone, ADD_ONS);
+    expect(one.more).toBe(false);
+    const single = withNewRooms(storeOf([emptyDraft("m")]), [one.draft], [], true, one.lists);
+    expect(roomSurvey(single.rooms[0] ?? box(), storeLists(single, ADD_ONS), true, ADD_ONS)).toEqual(alone);
+  });
+
+  it("reads a name of a record of a list of a different record, in the two directions", () => {
+    // A stack of the level record names a stack of the survey, and the other way. A tap of the survey names a stack of the level record.
+    const top: Level = { ...level, layers: { [P]: { schema: P, stacks: [{ id: "top", name: "Top", size: 110, vent: "side" }] } } };
+    const survey: Survey = { ...surveyOf(box(), FORMS), layers: { [P]: { schema: P, stacks: [{ id: "side", name: "Side", size: 110, vent: "top" }], taps: [{ id: "a", anchor: WALL, stack: "top" }] } } };
+    const read = surveyParts([survey], top, "metric", ADD_ONS);
+    expect(read.more).toBe(false);
+    expect(read.lists).toEqual(stacks(recordOf("r1", { values: { name: "Top", size: "110" }, records: { vent: "r2" } }), recordOf("r2", { values: { name: "Side", size: "110" }, records: { vent: "r1" } })));
+    expect(read.rooms[0]?.points).toEqual([{ wall: "wall-1", offset: 1, height: 0.9, point: ownedOf(P, "taps", { records: { stack: "r1" } }) }]);
+    // With no level record, the names of the survey have no record.
+    const alone = surveyParts([survey], undefined, "metric", ADD_ONS);
+    expect(alone.more).toBe(true);
+    expect(alone.lists).toEqual(stacks(recordOf("r1", { values: { name: "Side", size: "110" } })));
+    expect(alone.rooms[0]?.points).toEqual([{ wall: "wall-1", offset: 1, height: 0.9, point: ownedOf(P, "taps") }]);
+  });
+
+  it("repeats the read until it finds no new record of a list", () => {
+    expect(checkForm(CHAIN)).toEqual([]);
+    const C = CHAIN.schema;
+    const plain = surveyOf(box(), [CHAIN]);
+    // The third needs the second, and the second needs the first. Each one is in a different record.
+    const third: Survey = { ...plain, layers: { [C]: { schema: C, thirds: [{ id: "c", second: "b" }] } } };
+    const second: Survey = { ...plain, layers: { [C]: { schema: C, seconds: [{ id: "b", first: "a" }] } } };
+    const top: Level = { ...level, layers: { [C]: { schema: C, firsts: [{ id: "a", name: "One" }] } } };
+    const read = surveyParts([third, second], top, "metric", [pageAddOn(CHAIN)]);
+    expect(read).toEqual({
+      lists: [
+        { layer: C, collection: "firsts", records: [recordOf("r1", { values: { name: "One" } })] },
+        { layer: C, collection: "seconds", records: [recordOf("r2", { records: { first: "r1" } })] },
+        { layer: C, collection: "thirds", records: [recordOf("r3", { records: { second: "r2" } })] },
+      ],
+      rooms: [none, none],
+      more: false,
+    });
+    // With no first record, the second one and the third one are not records of the form.
+    expect(surveyParts([third, second], level, "metric", [pageAddOn(CHAIN)])).toEqual({ lists: [], rooms: [none, none], more: true });
+  });
+
+  it("tells a layer of no add-on of the page, and a layer with a fault in its form", () => {
+    const plain = surveyOf(ROOM, FORMS);
+    const other = { "other/1": { schema: "other/1" } };
+    expect(surveyParts([{ ...plain, layers: other }], undefined, "metric", ADD_ONS)).toEqual({ lists: [], rooms: [none], more: true });
+    expect(surveyParts([plain], { ...level, layers: other }, "metric", ADD_ONS)).toEqual({ lists: [], rooms: [none], more: true });
+    // The test add-on of the core does not read a layer with a different name in it.
+    expect(surveyParts([{ ...plain, layers: { [P]: { schema: "wrong", taps: [TAP_2] } } }], undefined, "metric", ADD_ONS)).toEqual({ lists: [], rooms: [none], more: true });
+    // The page does not have the add-on of a layer of its own survey.
+    const survey = roomSurvey(ROOM, storeLists(STORE, ADD_ONS), true, ADD_ONS);
+    expect(surveyParts([survey], undefined, "metric", [pageAddOn(GAS)])).toEqual({ lists: [], rooms: [none], more: true });
+  });
+
+  it("reads the old fields of a record with the add-on of the page, when the record has no layer of the form", () => {
+    const addOn: PageAddOn = {
+      ...pageAddOn(PLUMBING),
+      fromSurvey: (survey) => (survey.name === "Old" ? { schema: P, stacks: [{ id: "main", name: "Main", size: 110, vent: "top" }] } : undefined),
+      fromLevel: (given) => (given.name === "Old" ? { schema: P, stacks: [{ id: "top", name: "Top", size: 110 }] } : undefined),
+    };
+    const survey: Survey = { ...surveyOf(box(), FORMS), name: "Old" };
+    const read = surveyParts([survey], { ...level, name: "Old" }, "metric", [addOn]);
+    expect(read.more).toBe(false);
+    expect(read.lists).toEqual(stacks(recordOf("r1", { values: { name: "Top", size: "110" } }), recordOf("r2", { values: { name: "Main", size: "110" }, records: { vent: "r1" } })));
+    // A record with no old fields gives no layer.
+    expect(surveyParts([{ ...survey, name: "New" }], { ...level, name: "New" }, "metric", [addOn])).toEqual({ lists: [], rooms: [none], more: false });
+  });
+
+  it("reads the layer before the old fields, and tells the old fields", () => {
+    const addOn: PageAddOn = { ...pageAddOn(PLUMBING), fromSurvey: () => ({ schema: P, stacks: [{ id: "old", name: "Old", size: 110 }] }), fromLevel: () => ({ schema: P, stacks: [{ id: "low", name: "Low", size: 110 }] }) };
+    const given = { [P]: { schema: P, stacks: [{ id: "new", name: "New", size: 110 }] } };
+    const survey: Survey = { ...surveyOf(box(), FORMS), layers: given };
+    const read = surveyParts([survey], undefined, "metric", [addOn]);
+    expect(read).toEqual({ lists: stacks(recordOf("r1", { values: { name: "New", size: "110" } })), rooms: [none], more: true });
+    // The level record has the layer, and the survey has only old fields.
+    const mixed = surveyParts([surveyOf(box(), FORMS)], { ...level, layers: given }, "metric", [addOn]);
+    expect(mixed).toEqual({ lists: stacks(recordOf("r1", { values: { name: "New", size: "110" } }), recordOf("r2", { values: { name: "Old", size: "110" } })), rooms: [none], more: true });
+  });
+
+  it("gives each layer to the function `plain` of its add-on, with the system of units", () => {
+    const seen: unknown[] = [];
+    const addOn: PageAddOn = {
+      ...pageAddOn(PLUMBING),
+      plain: (layer, system) => {
+        seen.push([layer, system]);
+        return { schema: P, stacks: [{ id: "s", name: system }] };
       },
-      level: (level) => level,
-    },
-  };
-}
+    };
+    const given = { schema: P, stacks: [{ id: "a", name: "A" }] };
+    // The second survey has no layer, so the function gets only the first one.
+    const read = surveyParts([{ ...surveyOf(box(), FORMS), layers: { [P]: given } }, surveyOf(box(), FORMS)], undefined, "imperial", [addOn]);
+    expect(seen).toEqual([[given, "imperial"]]);
+    expect(read).toEqual({ lists: stacks(recordOf("r1", { values: { name: "imperial" } })), rooms: [none, none], more: false });
+  });
+});
 
 describe("readSurvey", () => {
-  const addOns: readonly PageAddOn[] = [kept(PLUMBING), { form: GAS }];
+  const lists = storeLists(STORE, ADD_ONS);
 
   it("reads the survey record of a room of a store again", () => {
-    const survey = roomSurvey(ROOM, storeLists(STORE, addOns), true, addOns);
-    const read = readSurvey(survey, addOns);
+    const survey = roomSurvey(ROOM, lists, true, ADD_ONS);
+    const read = readSurvey(survey, ADD_ONS);
     expect(read.more).toBe(false);
     expect(read.draft.sides).toEqual(ROOM.sides);
     expect(read.lists).toEqual(stacks(recordOf("r1", { values: { name: "Main", size: "110", slope: "-2" } }), recordOf("r2", { values: { name: "Vent", size: "110" }, records: { vent: "r1" } })));
@@ -688,20 +995,26 @@ describe("readSurvey", () => {
   });
 
   it("tells a name of a record of a list that the survey does not list", () => {
-    const read = readSurvey(roomSurvey(ROOM, storeLists(STORE, addOns), false, addOns), addOns);
+    const read = readSurvey(roomSurvey(ROOM, lists, false, ADD_ONS), ADD_ONS);
     expect(read.more).toBe(true);
     expect(read.lists).toEqual([]);
     expect(read.draft.sides[0]?.features[0]?.point).toEqual(ownedOf(P, "taps", { values: { size: "15 mm" }, points: { next: "f2" } }));
   });
 
-  it("reads no record of an add-on with no bridge, and tells the data that a bridge does not keep", () => {
-    const none = readSurvey(roomSurvey(ROOM, storeLists(STORE, ADD_ONS), true, ADD_ONS), ADD_ONS);
+  it("has the usual numbers of the units of the survey", () => {
+    const feet = roomSurvey(box("ft-in"), storeLists({ ...storeOf([box("ft-in")]), lists: stacks(recordOf("r1", { values: { name: "Main" } })) }, ADD_ONS), true, ADD_ONS);
+    expect(feet.layers).toEqual({ [P]: { schema: P, stacks: [{ id: "main", name: "Main", size: 100 }] } });
+    expect(readSurvey(feet, ADD_ONS).lists).toEqual(stacks(recordOf("r1", { values: { name: "Main", size: "100" } })));
+  });
+
+  it("reads no record of an add-on from a survey with no layer, and tells the data that a draft does not keep", () => {
+    const none = readSurvey(surveyOf(ROOM, FORMS), ADD_ONS);
     expect(none).toMatchObject({ lists: [], more: false });
     expect(none.draft.sides[0]?.features).toEqual([]);
     expect(none.draft.sides[0]?.objects.map((object) => object.owns)).toEqual([[]]);
-    expect(surveyParts([surveyOf(ROOM)], undefined, "metric", ADD_ONS)).toEqual({ lists: [], rooms: [{ points: [], owned: new Map() }], more: false });
-    expect(readSurvey(roomSurvey({ ...ROOM, name: "More" }, undefined, false, addOns), addOns).more).toBe(true);
     // The data that the core draft does not keep.
-    expect(readSurvey({ ...surveyOf(ROOM), checks: [{ id: "diagonal", from: "wall-1", to: "wall-3", length: 5 }] }, addOns).more).toBe(true);
+    expect(readSurvey({ ...surveyOf(ROOM, FORMS), checks: [{ id: "diagonal", from: "wall-1", to: "wall-3", length: 5 }] }, ADD_ONS).more).toBe(true);
+    // A layer of no add-on of the page.
+    expect(readSurvey({ ...surveyOf(ROOM, FORMS), layers: { "other/1": { schema: "other/1" } } }, ADD_ONS).more).toBe(true);
   });
 });

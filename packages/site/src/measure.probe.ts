@@ -251,6 +251,12 @@ if (power !== null && power.options.length === 2) {
 }
 check("the outlet of the desk gives the room no fault", power?.selectedIndex === 1 && text("#status-text") === exact, status());
 
+// The power of an object in watts is a field of its feed, and the page shows it.
+const watts = document.querySelector<HTMLInputElement>(`${desk} > details.more input[data-field="watts"]`);
+check("an object with an outlet has a field for its power in watts", watts !== null, "no field");
+enter(watts, "120");
+check("the power of the desk gives the room no fault", watts?.getAttribute("aria-invalid") !== "true" && text("#status-text") === exact, status());
+
 // A click on an object of the drawing goes to its first field.
 const deskKey = $(desk)?.dataset["key"] ?? "";
 $(`#plan-box .walk-touch[data-object="${CSS.escape(deskKey)}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

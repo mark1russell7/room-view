@@ -311,9 +311,10 @@ interface FormCollection {
 - The store of the browser stays. The page reads the store of version 1, and it moves its outlets, its circuits and the outlet of each object. A person loses no number.
 - The page reads and writes the records of each add-on from its form: points of a wall, records of an object and lists. That code names no topic.
 
-A survey and a level do not have layers before step 6. Until then, an add-on of the page can have a bridge.
-The bridge changes the records of the form to the fields of a survey and of a level, and back. The electrical add-on has the only bridge, in one file.
-The bridge goes away in step 6, when a survey and a level get layers.
+The page writes the records of each add-on as the layer of that add-on, in the survey and in the level. `formLayer` of the core makes each layer from the form.
+The page reads a layer of a file with the add-on of the core. The page does not keep the layer of an add-on that it does not have, and it tells the person.
+An old file has no layer. The page add-on reads its old fields with `fromSurvey` and `fromLevel`. For the electrical add-on, these are `fromSurveyV1` and `fromLevelV1`.
+The 3D view of the page draws the marks of the layers. A record with an error of its anchor is not in the view.
 
 ### The inputs of the page
 
@@ -337,17 +338,17 @@ A form has no sentences of help. Thus an add-on of the page can give them, as da
 
 The code of the page names no topic. The electrical topic is in four files of the site:
 
-- `electrical.ts` has the add-on of the page: the form, the sentences of help and the bridge.
+- `electrical.ts` has the add-on of the page: the form, the sentences of help, the limit of a circuit and the read of an old file.
 - `store-v1.ts` reads the store of version 1 of the browser.
 - `draft.ts` has the example room, with an outlet and the power of a rack.
 - `electrical.fixture.ts` has functions for the tests.
 
-The inputs have three limits:
+The inputs have two limits:
 
 - A piece of furniture has one record of a collection, also when the form permits more. No add-on needs more at this time.
 - The plural of the word of a collection is the word with an `s`. A word with a different plural needs a new field in the form.
-- An add-on of the page can hide a field. The electrical add-on hides the power of a piece of furniture, because a survey has no field for it.
-  The hidden fields go away with the bridge, in step 6.
+
+The page shows each field of a form. For example, a person can type the power of a piece of furniture in watts.
 
 ## The procedures package
 
@@ -376,6 +377,7 @@ The layers of a survey and of a level are a feature of the core and of the add-o
 Thus `@mark1russell7/room-view` goes to 0.2.3, and `@mark1russell7/electrical` goes to 0.3.3.
 The ids outside a layer in the form are a feature of the core. The move of an old survey and of an old level is a feature of the add-on.
 Thus `@mark1russell7/room-view` goes to 0.2.4, and `@mark1russell7/electrical` goes to 0.3.4.
+The page that writes the layers changes only the site. The site is not a package on npm, so it has no version.
 The last part of step 6 removes records from the public API, so `@mark1russell7/room-view` then goes to 0.3.0.
 
 - `room/1` and `scene/1` stay readable. `fromSceneV1` of the electrical add-on gives the electrical layer of a `scene/1`. Step 6 adds the move of the scene to `scene/2`.
