@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package",
   "name": "@mark1russell7/room-view",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A room as data, and its 3D model from that data: walls with openings, floors, outlets, circuits and placed objects.",
   "license": "MIT",
   "repository": {
