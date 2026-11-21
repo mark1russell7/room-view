@@ -225,7 +225,7 @@ importers:
         version: 0.19.1(zod@4.6.7)
       '@mark1russell7/visuals':
         specifier: ^0.3.1
-        version: 0.3.11(three@0.187.0)(zod@4.6.7)
+        version: 0.3.12(three@0.187.0)(zod@4.6.7)
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -262,7 +262,7 @@ importers:
         version: 0.4.3(zod@4.6.7)
       '@mark1russell7/visuals':
         specifier: ^0.3.3
-        version: 0.3.11(three@0.187.0)(zod@4.6.7)
+        version: 0.3.12(three@0.187.0)(zod@4.6.7)
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -323,7 +323,7 @@ importers:
         version: 0.0.17
       '@mark1russell7/visuals':
         specifier: ^0.3.3
-        version: 0.3.11(three@0.187.0)(zod@4.6.7)
+        version: 0.3.12(three@0.187.0)(zod@4.6.7)
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.6
@@ -683,8 +683,8 @@ packages:
   '@mark1russell7/vex@0.19.1':
     resolution: {integrity: sha512-Hl8IVbyNmhJ7xV2nyTyOgiqANGWSWhmZSdnuucSRnmBj/KSnp0kvSz7MNzcWcI+tV34wfXmTNp6Y3ewDATbXjg==}
 
-  '@mark1russell7/visuals@0.3.11':
-    resolution: {integrity: sha512-Vx95QT4EZ8cnNqdAJSdvCBZPw/lbk7I2JvJiTBQFUQcfnFOEXLSrT8Aku+sQqw5eiOhVH3JyYBgcPVgZIm7jSg==}
+  '@mark1russell7/visuals@0.3.12':
+    resolution: {integrity: sha512-E7yCLff5KP1qXC0zFuxv5mWTc5fg6U0nBG8GRPBowKgKHFmJEQnzpHmfL861nQuI8yfPilSVF9wLnMgVWacuqg==}
     engines: {node: '>=22'}
     peerDependencies:
       three: '>=0.187.0'
@@ -2100,7 +2100,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@mark1russell7/visuals@0.3.11(three@0.187.0)(zod@4.6.7)':
+  '@mark1russell7/visuals@0.3.12(three@0.187.0)(zod@4.6.7)':
     dependencies:
       '@mark1russell7/geo': 0.5.2
       '@mark1russell7/layout-contract': 0.10.5(zod@4.6.7)
