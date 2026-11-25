@@ -103,6 +103,21 @@ describe("importPlan", () => {
     expect(importPlan(marked, { legend, gateEdge: 0 }).gate.rings).toHaveLength(4);
   });
 
+  it("takes a hole with walls on its edge out of the area of a ring, but not a hole with no walls", () => {
+    // The sheet has a margin of 6 ft and 9 units in one foot.
+    const box = (x0: number, y0: number, x1: number, y1: number) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => [(x! + 6) * SAMPLE_SCALE, (y! + 6) * SAMPLE_SCALE] as const);
+    // Two invented holes of 2 ft by 2 ft in the fill of the east room: a shaft with walls on its edge, and a fixture with no lines.
+    const shaft = box(20, 8, 22, 10);
+    const fixture = box(14, 14, 16, 16);
+    const fills = (sheet.fills ?? []).map((fill, index) => (index === 3 ? { ...fill, rings: [...fill.rings, shaft, fixture] } : fill));
+    const walls = shaft.map((from, index) => ({ from, to: shaft[(index + 1) % 4]!, width: 0.5, color: "#000000" }));
+    const holed = { ...sheet, fills, lines: [...sheet.lines, ...walls] };
+    const east = (options: { gateHoles?: number }) => importPlan(holed, { legend, ...options }).gate.rings.find((ring) => ring.fill === 3)!;
+    const whole = (12 - SAMPLE_WALL) * (14 - SAMPLE_WALL);
+    expect(east({}).area).toBeCloseTo(whole - 4, 6);
+    expect(east({ gateHoles: 0 }).area).toBeCloseTo(whole, 6);
+  });
+
   it("joins the two rooms of a door with no bridge, but a door swing stays a barrier", () => {
     const wide = importPlan(sheet, { legend, bridges: { widest: 2 } });
     expect(wide.openings).toHaveLength(0);

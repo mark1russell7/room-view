@@ -143,10 +143,10 @@ export function scanRings(grid: Grid, rings: readonly Ring[], visit: (row: numbe
   }
 }
 
-/** This function gives the number of cells of each label with the center inside one ring. */
-export function ringCells(grid: Grid, labels: Int32Array, ring: Ring): Map<number, number> {
+/** This function gives the number of cells of each label with the center inside one ring and outside its holes. */
+export function ringCells(grid: Grid, labels: Int32Array, ring: Ring, holes: readonly Ring[] = []): Map<number, number> {
   const counts = new Map<number, number>();
-  scanRings(grid, [ring], (row, first, last) => {
+  scanRings(grid, [ring, ...holes], (row, first, last) => {
     for (let x = first; x <= last; x++) {
       const label = labels[row * grid.columns + x]!;
       if (label !== 0) counts.set(label, (counts.get(label) ?? 0) + 1);

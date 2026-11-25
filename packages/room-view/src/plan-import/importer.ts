@@ -1,4 +1,4 @@
-import { pointSegmentDistance, regionArea, type Ring } from "@mark1russell7/layout-contract";
+import { pointInRing, pointSegmentDistance, regionArea, type Ring } from "@mark1russell7/layout-contract";
 import { median } from "@mark1russell7/rigor-statistics";
 import { ROOM_SCHEMA, type Floor, type Opening, type OpeningKind, type PlanPoint, type Room, type Wall } from "../room.ts";
 import { unitsPer } from "../units.ts";
@@ -41,6 +41,11 @@ export interface ImportOptions {
    * A ring with no line on its edge is a letter or a symbol, not a room. The value 0 keeps each ring. The default is 0.25.
    */
   readonly gateEdge?: number | undefined;
+  /**
+   * A hole of a fill ring is out of the area of the ring only when this part of its edge or more is near a wall line.
+   * A hole with no walls on its edge is a fixture or a column under the fill. The value 0 keeps each hole in the area. The default is 0.5.
+   */
+  readonly gateHoles?: number | undefined;
 }
 
 /** One room of a plan import: a free region of the grid inside the building. */
@@ -82,7 +87,7 @@ export interface RingFit {
   /** The position of the ring in the rings of the fill. */
   readonly ring: number;
   readonly use: string;
-  /** The area of the ring. */
+  /** The area of the ring, without its holes with walls on their edges. */
   readonly area: number;
   /** The rooms that have most of their cells in the ring, and half of their cells or more. */
   readonly rooms: readonly string[];
@@ -291,21 +296,31 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
   // 5. The area gate.
   const fits: RingFit[] = [];
   const ringArea = options.smallestRing ?? 15 * feet * feet;
-  const gateRings: { fill: number; ring: number; use: string; area: number; points: Ring }[] = [];
+  const gateRings: { fill: number; ring: number; use: string; area: number; points: Ring; holes: readonly Ring[] }[] = [];
   const edgeShare = options.gateEdge ?? 0.25;
   // A point of the edge of a ring is near a line at 0.4 ft or less. The points of the edge are 0.5 ft apart.
   const edgeOf = edgeShare > 0 ? lineEdge(sheet.lines, sheetLength(undefined, 0.4)) : undefined;
+  const holeShare = options.gateHoles ?? 0.5;
+  const wallSet = new Set(wallPens);
+  const wallEdgeOf = holeShare > 0 ? lineEdge(sheet.lines.filter((line) => wallSet.has(penOf(line))), sheetLength(undefined, 0.4)) : undefined;
   fills.forEach((fill, index) => {
     const use = names[fill.color];
     if (use === undefined || samples.has(index)) return;
+    const areas = fill.rings.map((points) => regionArea({ kind: "polygon", points }));
+    // The rings of the fill around each ring: the larger rings that hold most of its points.
+    const around = fill.rings.map((points, ring) => fill.rings.flatMap((other, at) => (at !== ring && areas[at]! > areas[ring]! && mostInside(points, other) ? [at] : [])));
     fill.rings.forEach((points, ring) => {
-      const area = regionArea({ kind: "polygon", points }) / (scale * scale);
+      const depth = around[ring]!.length;
+      // The paint is even-odd, so a ring inside an odd number of rings is a hole, not a room.
+      if (wallEdgeOf !== undefined && depth % 2 === 1) return;
+      const holes = wallEdgeOf === undefined ? [] : fill.rings.filter((hole, at) => around[at]!.length === depth + 1 && around[at]!.includes(ring) && wallEdgeOf(hole, sheetLength(undefined, 0.5)) >= holeShare);
+      const area = (areas[ring]! - holes.reduce((total, hole) => total + regionArea({ kind: "polygon", points: hole }), 0)) / (scale * scale);
       if (area < ringArea) return;
       if (edgeOf !== undefined && edgeOf(points, sheetLength(undefined, 0.5)) < edgeShare) return;
-      gateRings.push({ fill: index, ring, use, area, points });
+      gateRings.push({ fill: index, ring, use, area, points, holes });
     });
   });
-  const overlaps = gateRings.map((ring) => ringCells(grid, labels, ring.points));
+  const overlaps = gateRings.map((ring) => ringCells(grid, labels, ring.points, ring.holes));
   const owners = new Map<number, string[]>();
   regions.forEach((region, index) => {
     if (kinds[index] !== "room") return;
@@ -383,6 +398,11 @@ function openingSides(
     if (a !== undefined && b !== undefined) return a === b ? undefined : [a, b];
   }
   return undefined;
+}
+
+/** This function tells if most points of `inner` are inside `outer`. */
+function mostInside(inner: Ring, outer: Ring): boolean {
+  return inner.filter(([x, y]) => pointInRing(x, y, outer)).length > inner.length / 2;
 }
 
 /**
