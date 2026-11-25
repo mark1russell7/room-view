@@ -383,7 +383,7 @@ console.log(result.rooms.length, result.gate.within);
 
 The import has five steps:
 
-1. `readPens` finds the wall pens. A wall pen has long lines, and each line has a parallel partner at the distance of a wall thickness.
+1. `readPens` finds the wall pens. A wall pen has long lines, and each line has a parallel partner at the distance of a wall thickness. `readWallLines` also reads the walls of the other pens one line at a time. `snapEnds` closes the small gaps at the open wall ends.
 2. `findBridges` closes each gap between two wall ends. The bridge of a gap is an opening of the room record.
 3. The walls, the door swings and the bridges go on a grid. Each free region inside the building is a room.
 4. Each room gets the fill color under most of its cells. `readLegend` gives the name of each color.
@@ -395,6 +395,24 @@ The import has five steps:
 - An opening is a `door` when a door swing is near it. Each other opening is a `gap`.
 - The import does not read the windows or the heights. The room record has the default heights.
 
+### The read of the wall lines
+
+A drawing can draw some walls with the pen of the glazing or of the fixtures. Thus that pen is not a wall pen. The option `walls` of `importPlan` sets the read of these lines:
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `read` | `"lines"` | `"lines"` also takes the wall faces of the other pens. `"pens"` takes only the lines of the wall pens. |
+| `patternSide` | `0.4` | A pen with a smaller part of one-side lines is a pattern pen, for example a hatch or glazing. Its lines are not wall faces. |
+| `crossPens` | `true` | A wall face can have its partner in a different pen. |
+| `glazing` | `true` | The glazing lines of the pattern pens close the rooms. They give no wall of the room record. |
+| `snap` | `1` ft | An open wall end goes on for this distance or less, to the next wall line or to a wall end in front of it. The value `0` closes no gap. |
+
+- A wall face is a long line with a parallel partner at a wall thickness on one side only.
+- An end line is a short line that joins two face ends. It is a wall line.
+- A glazing line is a long line of a pattern pen with 1 to 3 partners. Its two ends are near wall ends.
+- The result has `lineRead`: the wall lines, the glazing lines and the number of faces of each pen.
+- For the read of version 0.3, set `read: "pens"` and `snap: 0`.
+
 ## The entries
 
 | Entry | What it has |
@@ -403,7 +421,7 @@ The import has five steps:
 | `@mark1russell7/room-view/schema` | `readRecord`, the schemas of the records and of an anchor in `zod/mini`, and `READ_CONTEXT`: the read of a JSON record. |
 | `@mark1russell7/room-view/sample` | `SAMPLE_ROOM`, `SAMPLE_SCENE`, `SAMPLE_SURVEY` and `SAMPLE_LEVEL`: a room with a rack and an apartment of four rooms, for demos and tests. |
 | `@mark1russell7/room-view/marks` | `layerMarks` and the type `AddOnMarks`: the marks of the layers of a scene, as plain data for a viewer. |
-| `@mark1russell7/room-view/import` | `importPlan`, `readLegend`, `readPens`, `wallPairs` and `findBridges`: a room record from the vector paths of a floor plan drawing. |
+| `@mark1russell7/room-view/import` | `importPlan`, `readLegend`, `readPens`, `readWallLines`, `snapEnds`, `wallPairs` and `findBridges`: a room record from the vector paths of a floor plan drawing. |
 | `@mark1russell7/room-view/three` | `createRoomViewer`, the themes and `solidGeometry`: the viewer in a page. It needs the package `three`. |
 
 The schemas examine the form of a record: the fields and their types. The checks examine its meaning. Use the two for a record from a file:

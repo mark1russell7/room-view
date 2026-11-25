@@ -234,9 +234,12 @@ Sheet: build/plan-import.d.ts#Sheet
 SheetFill: build/plan-import.d.ts#SheetFill
 SheetLine: build/plan-import.d.ts#SheetLine
 SheetText: build/plan-import.d.ts#SheetText
+WALL_READS: build/plan-import.d.ts#WALL_READS
 WallLimits: build/plan-import.d.ts#WallLimits
+WallLineRead: build/plan-import.d.ts#WallLineRead
 WallOptions: build/plan-import.d.ts#WallOptions
 WallPair: build/plan-import.d.ts#WallPair
+WallRead: build/plan-import.d.ts#WallRead
 fillBox: build/plan-import.d.ts#fillBox
 findBridges: build/plan-import.d.ts#findBridges
 importPlan: build/plan-import.d.ts#importPlan
@@ -245,6 +248,8 @@ parallelPairs: build/plan-import.d.ts#parallelPairs
 penOf: build/plan-import.d.ts#penOf
 readLegend: build/plan-import.d.ts#readLegend
 readPens: build/plan-import.d.ts#readPens
+readWallLines: build/plan-import.d.ts#readWallLines
+snapEnds: build/plan-import.d.ts#snapEnds
 wallPairs: build/plan-import.d.ts#wallPairs
 
 ## Declarations
@@ -1002,6 +1007,7 @@ export interface PlanImport {
   readonly doorPens: readonly string[];
   readonly grid: Grid;
   readonly gate: AreaGate;
+  readonly lineRead: WallLineRead;
 }
 
 ### build/plan-import.d.ts#REGION_KINDS
@@ -1053,6 +1059,9 @@ export interface SheetText {
   readonly height: number;
 }
 
+### build/plan-import.d.ts#WALL_READS
+export declare const WALL_READS: readonly ["pens", "lines"];
+
 ### build/plan-import.d.ts#WallLimits
 export interface WallLimits {
   readonly thinnest: number;
@@ -1061,6 +1070,19 @@ export interface WallLimits {
   readonly fewestLines: number;
   readonly leastLength: number;
   readonly shortestWall: number;
+  readonly read?: WallRead | undefined;
+  readonly patternSide?: number | undefined;
+  readonly crossPens?: boolean | undefined;
+  readonly glazing?: boolean | undefined;
+  readonly touch?: number | undefined;
+}
+
+### build/plan-import.d.ts#WallLineRead
+export interface WallLineRead {
+  readonly walls: readonly SheetLine[];
+  readonly glazing: readonly SheetLine[];
+  readonly faces: Readonly<Record<string, number>>;
+  readonly glazingPens: Readonly<Record<string, number>>;
 }
 
 ### build/plan-import.d.ts#WallOptions
@@ -1071,6 +1093,11 @@ export interface WallOptions {
   readonly fewestLines?: number | undefined;
   readonly leastLength?: number | undefined;
   readonly shortestWall?: number | undefined;
+  readonly read?: WallRead | undefined;
+  readonly patternSide?: number | undefined;
+  readonly crossPens?: boolean | undefined;
+  readonly glazing?: boolean | undefined;
+  readonly snap?: number | undefined;
 }
 
 ### build/plan-import.d.ts#WallPair
@@ -1081,6 +1108,9 @@ export interface WallPair {
   readonly to: PlanPoint;
   readonly thickness: number;
 }
+
+### build/plan-import.d.ts#WallRead
+export type WallRead = (typeof WALL_READS)[number];
 
 ### build/plan-import.d.ts#fillBox
 export declare function fillBox(fill: SheetFill): readonly [number, number, number, number];
@@ -1105,6 +1135,12 @@ export declare function readLegend(sheet: Pick<Sheet, "fills" | "texts">, option
 
 ### build/plan-import.d.ts#readPens
 export declare function readPens(lines: readonly SheetLine[], limits: WallLimits, scale: number): readonly PenRead[];
+
+### build/plan-import.d.ts#readWallLines
+export declare function readWallLines(lines: readonly SheetLine[], reads: readonly PenRead[], limits: WallLimits, wallPens: readonly string[]): WallLineRead;
+
+### build/plan-import.d.ts#snapEnds
+export declare function snapEnds(lines: readonly SheetLine[], reach: number, touch: number, angle?: number): readonly SheetLine[];
 
 ### build/plan-import.d.ts#wallPairs
 export declare function wallPairs(lines: readonly SheetLine[], limits: WallLimits): readonly WallPair[];

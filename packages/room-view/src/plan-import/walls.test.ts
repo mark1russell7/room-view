@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { findBridges, type BridgeLimits } from "./bridges.ts";
 import type { SheetLine } from "./sheet.ts";
-import { parallelPairs, readPens, wallPairs, type WallLimits } from "./walls.ts";
+import { parallelPairs, readPens, readWallLines, snapEnds, wallPairs, type WallLimits } from "./walls.ts";
 
 const line = (x0: number, y0: number, x1: number, y1: number, width = 1, color = "#000000"): SheetLine => ({ from: [x0, y0], to: [x1, y1], width, color });
 
@@ -75,5 +75,49 @@ describe("findBridges", () => {
   it("does not bridge a gap that is too wide or two ends that do not face each other", () => {
     expect(findBridges([line(0, 0, 5, 0), line(10, 0, 15, 0)], bridgeLimits)).toEqual([]);
     expect(findBridges([line(0, 0, 5, 0), line(8, 3, 8, 8)], bridgeLimits)).toEqual([]);
+  });
+});
+
+describe("readWallLines", () => {
+  it("gives the faces of a pen that is not a wall pen, and the short end line that joins two face ends", () => {
+    const lines = [line(0, 0, 10, 0, 0.2), line(0, 0.5, 10, 0.5, 0.2), line(10, 0, 10, 0.5, 0.2), line(3, 3, 3.5, 3, 0.2)];
+    const limits: WallLimits = { ...wallLimits, touch: 0.1 };
+    const read = readWallLines(lines, readPens(lines, limits, 1), limits, []);
+    expect(read.faces).toEqual({ "0.2|#000000": 3 });
+    expect(read.walls).toHaveLength(3);
+    expect(read.walls).not.toContain(lines[3]);
+  });
+
+  it("finds the partner of a face in a different pen only with the option crossPens", () => {
+    const lines = [line(0, 0, 10, 0, 0.2), line(0, 0.5, 10, 0.5, 0.2), line(0, -0.4, 10, -0.4, 0.3), line(0, 3, 10, 3, 0.3), line(0, 3.5, 10, 3.5, 0.3)];
+    const reads = readPens(lines, wallLimits, 1);
+    expect(readWallLines(lines, reads, { ...wallLimits, crossPens: false }, []).faces).toEqual({ "0.2|#000000": 2, "0.3|#000000": 2 });
+    // The face at 0 has a partner on its two sides when the pens join, so it is not a face.
+    expect(readWallLines(lines, reads, wallLimits, []).faces).toEqual({ "0.2|#000000": 1, "0.3|#000000": 3 });
+  });
+
+  it("gives only the lines of the wall pens with the read of the pens", () => {
+    const lines = [line(0, 0, 10, 0), line(0, 0.5, 10, 0.5), line(0, 3, 10, 3, 0.2), line(0, 3.5, 10, 3.5, 0.2)];
+    const read = readWallLines(lines, readPens(lines, wallLimits, 1), { ...wallLimits, read: "pens" }, ["1|#000000"]);
+    expect(read).toEqual({ walls: lines.slice(0, 2), glazing: [], faces: {}, glazingPens: {} });
+  });
+});
+
+describe("snapEnds", () => {
+  it("joins an open end to the end of a line in front of it", () => {
+    const lines = [line(0, 0, 5, 0), line(5.5, 0.2, 5.5, 5)];
+    const snaps = snapEnds(lines, 1, 0.2);
+    expect(snaps).toHaveLength(1);
+    expect(snaps[0]).toMatchObject({ from: [5, 0], to: [5.5, 0.2] });
+    expect(snapEnds(lines, 1, 0.2, 10)).toEqual([]);
+  });
+
+  it("goes on along the line to the next line, and does not move a closed end or an end far from a line", () => {
+    const snaps = snapEnds([line(0, 0.6, 0, 5), line(-3, 0, 3, 0), line(-3, 0, -3, 5)], 1, 0.2);
+    expect(snaps).toHaveLength(1);
+    expect(snaps[0]!.from).toEqual([0, 0.6]);
+    expect(snaps[0]!.to[0]).toBeCloseTo(0, 9);
+    expect(snaps[0]!.to[1]).toBeCloseTo(0, 9);
+    expect(snapEnds([line(0, 0, 5, 0), line(7, 0, 9, 0)], 1, 0.2)).toEqual([]);
   });
 });
