@@ -4,7 +4,7 @@ import { ROOM_SCHEMA, type Floor, type Opening, type OpeningKind, type PlanPoint
 import { unitsPer } from "../units.ts";
 import { findBridges, type Bridge, type BridgeLimits, type BridgeOptions } from "./bridges.ts";
 import { gridOf, labelRegions, regionOutline, ringCells, scanRings, stampLines, type Grid, type GridRegion } from "./raster.ts";
-import { lineLength, penOf, type Legend, type Sheet, type SheetLine } from "./sheet.ts";
+import { lineLength, penOf, type Legend, type Sheet } from "./sheet.ts";
 import { readPens, wallPairs, type PenRead, type WallLimits, type WallOptions } from "./walls.ts";
 
 /** The name of the side of an opening that is outside the building. */
@@ -327,8 +327,9 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
 }
 
 /**
- * This function finds the rooms on the two sides of an opening. It goes from the center across the wall in the two directions,
- * past the cells of a speck or of the space in a wall, to the first room or the outside. It tries the center, then two points along the opening.
+ * This function finds the rooms on the two sides of an opening. It goes from the center across the wall in the two directions.
+ * It goes past the cells of a speck or of the space in a wall, to the first room or the outside.
+ * It tries the center, then two points along the opening.
  */
 function openingSides(
   grid: Grid,

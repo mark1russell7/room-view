@@ -40,7 +40,8 @@ export interface SampleOptions {
 }
 
 /**
- * This function gives a small invented sheet in points: two rooms of 12 ft by 14 ft to the south of a corridor of 24 ft by 4 ft.
+ * This function gives a small invented sheet in points.
+ * The sheet has two rooms of 12 ft by 14 ft to the south of a corridor of 24 ft by 4 ft.
  * Each room has a door of 3 ft to the corridor. The door of the west room has a swing. The sheet has a legend with two colors.
  */
 export function sampleSheet(options: SampleOptions = {}): Sheet {

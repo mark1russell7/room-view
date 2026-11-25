@@ -96,7 +96,7 @@ export function fillBox(fill: SheetFill): readonly [number, number, number, numb
 }
 
 /**
- * This function reads the legend of a sheet. A sample is a small square fill with a text just to its right.
+ * This function reads the legend of a sheet. A sample is a small square fill with a text near its right side.
  * The text is the name of the color of the sample.
  */
 export function readLegend(sheet: Pick<Sheet, "fills" | "texts">, options: LegendOptions = {}): Legend {

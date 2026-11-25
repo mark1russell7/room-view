@@ -49,7 +49,7 @@ export interface Bridge {
 /**
  * This function finds the bridges across the gaps in the walls. A gap is from `narrowest` to `widest`.
  *
- * - Two short end lines of walls that are parallel and face each other across a gap give two lines: one along each face of the wall.
+ * - Two short end lines of walls can be parallel and face each other across a gap. They give two lines, one along each face of the wall.
  * - An open end of a long line, with no other line near it, joins the nearest open end that faces it.
  */
 export function findBridges(lines: readonly SheetLine[], limits: BridgeLimits): readonly Bridge[] {

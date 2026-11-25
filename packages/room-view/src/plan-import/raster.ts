@@ -108,8 +108,8 @@ export function labelRegions(grid: Grid, barrier: Uint8Array): GridRegions {
 }
 
 /**
- * This function calls `visit` for each cell with its center inside a set of rings, by the even-odd rule over all the rings.
- * The calls go row by row.
+ * This function gives each cell with its center inside a set of rings to `visit`, by the even-odd rule over all the rings.
+ * It goes row by row.
  */
 export function scanRings(grid: Grid, rings: readonly Ring[], visit: (row: number, first: number, last: number) => void): void {
   const { columns, rows, cell } = grid;
@@ -157,7 +157,7 @@ export function ringCells(grid: Grid, labels: Int32Array, ring: Ring): Map<numbe
 
 /**
  * This function gives the outline of one region: the cell sides between the region and the other cells, as one ring.
- * The ring goes with the region on its right side in the coordinates of the grid, so in a plan with the y axis up it goes counter-clockwise.
+ * The ring goes with the region on its right side in the coordinates of the grid. Thus in a plan with the y axis up, it goes counter-clockwise.
  * A hole of the region is not in the ring. The ring has a corner only where its direction changes.
  */
 export function regionOutline(grid: Grid, labels: Int32Array, region: Pick<GridRegion, "label" | "first">): Ring {

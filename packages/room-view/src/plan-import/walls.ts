@@ -146,8 +146,9 @@ export interface WallLimits {
 }
 
 /**
- * This function reads each pen of the straight lines of a sheet. A pen is a wall pen when most of its long lines have a parallel partner
- * at the distance of a wall thickness, and most of the paired lines have the partner on one side only.
+ * This function reads each pen of the straight lines of a sheet.
+ * A pen is a wall pen when most of its long lines have a parallel partner at the distance of a wall thickness.
+ * Also, most of the paired lines of a wall pen have the partner on one side only.
  * The limits are in the units of the sheet. The pens with the most lines come first.
  */
 export function readPens(lines: readonly SheetLine[], limits: WallLimits, scale: number): readonly PenRead[] {
