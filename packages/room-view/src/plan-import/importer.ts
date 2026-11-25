@@ -1,10 +1,10 @@
-import { regionArea, type Ring } from "@mark1russell7/layout-contract";
+import { pointSegmentDistance, regionArea, type Ring } from "@mark1russell7/layout-contract";
 import { median } from "@mark1russell7/rigor-statistics";
 import { ROOM_SCHEMA, type Floor, type Opening, type OpeningKind, type PlanPoint, type Room, type Wall } from "../room.ts";
 import { unitsPer } from "../units.ts";
 import { findBridges, type Bridge, type BridgeLimits, type BridgeOptions } from "./bridges.ts";
 import { gridOf, labelRegions, regionOutline, ringCells, scanRings, stampLines, type Grid, type GridRegion } from "./raster.ts";
-import { lineLength, penOf, type Legend, type Sheet } from "./sheet.ts";
+import { lineLength, penOf, type Legend, type Sheet, type SheetLine } from "./sheet.ts";
 import { readPens, readWallLines, snapEnds, wallPairs, type PenRead, type WallLimits, type WallLineRead, type WallOptions } from "./walls.ts";
 
 /** The name of the side of an opening that is outside the building. */
@@ -36,6 +36,11 @@ export interface ImportOptions {
   readonly smallestRing?: number | undefined;
   /** The limits of the area gate, as parts of the area of a ring. The default is 0.05 and 0.1. */
   readonly gateLimits?: readonly number[] | undefined;
+  /**
+   * A fill ring is in the area gate only when this part of its edge or more is near a line of the sheet.
+   * A ring with no line on its edge is a letter or a symbol, not a room. The value 0 keeps each ring. The default is 0.25.
+   */
+  readonly gateEdge?: number | undefined;
 }
 
 /** One room of a plan import: a free region of the grid inside the building. */
@@ -287,12 +292,17 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
   const fits: RingFit[] = [];
   const ringArea = options.smallestRing ?? 15 * feet * feet;
   const gateRings: { fill: number; ring: number; use: string; area: number; points: Ring }[] = [];
+  const edgeShare = options.gateEdge ?? 0.25;
+  // A point of the edge of a ring is near a line at 0.4 ft or less. The points of the edge are 0.5 ft apart.
+  const edgeOf = edgeShare > 0 ? lineEdge(sheet.lines, sheetLength(undefined, 0.4)) : undefined;
   fills.forEach((fill, index) => {
     const use = names[fill.color];
     if (use === undefined || samples.has(index)) return;
     fill.rings.forEach((points, ring) => {
       const area = regionArea({ kind: "polygon", points }) / (scale * scale);
-      if (area >= ringArea) gateRings.push({ fill: index, ring, use, area, points });
+      if (area < ringArea) return;
+      if (edgeOf !== undefined && edgeOf(points, sheetLength(undefined, 0.5)) < edgeShare) return;
+      gateRings.push({ fill: index, ring, use, area, points });
     });
   });
   const overlaps = gateRings.map((ring) => ringCells(grid, labels, ring.points));
@@ -373,6 +383,49 @@ function openingSides(
     if (a !== undefined && b !== undefined) return a === b ? undefined : [a, b];
   }
   return undefined;
+}
+
+/**
+ * This function measures the edge of a ring. The measure is the part of its points with a line of the sheet at `reach` or less.
+ * The points are at the distance `step` or less along the edge. A hash of cells finds the lines near each point.
+ */
+function lineEdge(lines: readonly SheetLine[], reach: number): (ring: Ring, step: number) => number {
+  const cell = Math.max(reach * 4, 1e-9);
+  const keyOf = (x: number, y: number): string => `${Math.floor(x / cell)},${Math.floor(y / cell)}`;
+  const hash = new Map<string, number[]>();
+  lines.forEach((line, index) => {
+    // The points of the line are one cell or less apart, so each cell that the line crosses gets the line.
+    const steps = Math.max(1, Math.ceil(lineLength(line) / cell));
+    const keys = new Set<string>();
+    for (let k = 0; k <= steps; k++) keys.add(keyOf(line.from[0] + ((line.to[0] - line.from[0]) * k) / steps, line.from[1] + ((line.to[1] - line.from[1]) * k) / steps));
+    for (const key of keys) hash.set(key, [...(hash.get(key) ?? []), index]);
+  });
+  const near = (x: number, y: number): boolean => {
+    const cx = Math.floor(x / cell);
+    const cy = Math.floor(y / cell);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const index of hash.get(`${cx + dx},${cy + dy}`) ?? []) {
+          const line = lines[index]!;
+          if (pointSegmentDistance({ x, y }, { x: line.from[0], y: line.from[1] }, { x: line.to[0], y: line.to[1] }) <= reach) return true;
+        }
+      }
+    }
+    return false;
+  };
+  return (ring, step) => {
+    let points = 0;
+    let lined = 0;
+    ring.forEach(([x0, y0], index) => {
+      const [x1, y1] = ring[(index + 1) % ring.length]!;
+      const count = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / step));
+      for (let k = 0; k < count; k++) {
+        points++;
+        if (near(x0 + ((x1 - x0) * (k + 0.5)) / count, y0 + ((y1 - y0) * (k + 0.5)) / count)) lined++;
+      }
+    });
+    return points === 0 ? 0 : lined / points;
+  };
 }
 
 /** This function puts a calculated length on a grid of 1e-9, so the noise of float arithmetic does not go to a file. */

@@ -934,6 +934,7 @@ export interface ImportOptions {
   readonly openingHeight?: number | undefined;
   readonly smallestRing?: number | undefined;
   readonly gateLimits?: readonly number[] | undefined;
+  readonly gateEdge?: number | undefined;
 }
 
 ### build/plan-import.d.ts#ImportedOpening
