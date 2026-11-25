@@ -28,8 +28,23 @@ describe("readPens and wallPairs", () => {
   it("reads a pen of double lines as a wall pen, and a pen of single lines as a different pen", () => {
     const lines = [line(0, 0, 10, 0), line(0, 0.5, 10, 0.5), line(0, 4, 0, 14, 0.2), line(3, 4, 3, 14, 0.2)];
     const reads = readPens(lines, wallLimits, 1);
-    expect(reads.find((read) => read.pen === "1|#000000")).toMatchObject({ lines: 2, paired: 1, oneSide: 1, wall: true });
+    expect(reads.find((read) => read.pen === "1|#000000")).toMatchObject({ lines: 2, paired: 1, oneSide: 1, lengthShare: 1, wall: true });
     expect(reads.find((read) => read.pen === "0.2|#000000")).toMatchObject({ lines: 2, paired: 0, wall: false });
+  });
+
+  it("does not read a pen of short lines as a wall pen when only some of its lines are paired", () => {
+    // Two paired long lines hold 20 of the 120 units of the length of the pen: the other lines are a hatch of short lines.
+    const hatch = Array.from({ length: 100 }, (_, index) => line(index, 3, index + 1, 4, 0.5));
+    const reads = readPens([line(0, 0, 10, 0, 0.5), line(0, 0.5, 10, 0.5, 0.5), ...hatch], wallLimits, 1);
+    const read = reads.find((each) => each.pen === "0.5|#000000")!;
+    expect(read).toMatchObject({ lines: 2, paired: 1, oneSide: 1, wall: false });
+    expect(read.lengthShare).toBeCloseTo(20 / (20 + 100 * Math.SQRT2), 9);
+  });
+
+  it("reads a pen as a wall pen when its paired lines hold most of its length", () => {
+    const ends = Array.from({ length: 4 }, (_, index) => line(index * 2, 0, index * 2, 0.5));
+    const reads = readPens([line(0, 0, 10, 0), line(0, 0.5, 10, 0.5), ...ends], wallLimits, 1);
+    expect(reads.find((each) => each.pen === "1|#000000")).toMatchObject({ lines: 2, paired: 1, lengthShare: 20 / 22, wall: true });
   });
 
   it("gives the center line of the common part of two faces", () => {

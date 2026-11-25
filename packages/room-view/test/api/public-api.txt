@@ -987,6 +987,7 @@ export interface PenRead {
   readonly paired: number;
   readonly oneSide: number;
   readonly length: number;
+  readonly lengthShare: number;
   readonly wall: boolean;
 }
 

@@ -109,7 +109,7 @@ export interface WallOptions {
   readonly thinnest?: number | undefined;
   /** The largest thickness of a wall. The default is 1.5 ft. */
   readonly thickest?: number | undefined;
-  /** The length of a long line of a pen. Only the long lines tell if a pen is a wall pen. The default is 1.5 ft. */
+  /** The length of a long line of a pen. The pairs of the long lines tell if a pen is a wall pen. The default is 1.5 ft. */
   readonly longLine?: number | undefined;
   /** The smallest number of long lines of a wall pen. The default is 8. */
   readonly fewestLines?: number | undefined;
@@ -131,6 +131,8 @@ export interface PenRead {
   readonly oneSide: number;
   /** The sum of the lengths of the paired lines, in the `unit` of the sheet. */
   readonly length: number;
+  /** The part of the length of all the straight lines of the pen that is in the paired lines, from 0 to 1. A pen of short lines, as a hatch or text, has a small part. */
+  readonly lengthShare: number;
   /** This value is true when the pen draws walls. */
   readonly wall: boolean;
 }
@@ -149,13 +151,18 @@ export interface WallLimits {
  * This function reads each pen of the straight lines of a sheet.
  * A pen is a wall pen when most of its long lines have a parallel partner at the distance of a wall thickness.
  * Also, most of the paired lines of a wall pen have the partner on one side only.
+ * Also, the paired lines hold most of the length of all the straight lines of the pen. Thus a hatch with some paired lines is not a wall pen.
+ *
  * The limits are in the units of the sheet. The pens with the most lines come first.
  */
 export function readPens(lines: readonly SheetLine[], limits: WallLimits, scale: number): readonly PenRead[] {
   const byPen = new Map<string, SheetLine[]>();
+  const straight = new Map<string, number>();
   for (const line of lines) {
-    if (line.curve === true || lineLength(line) < limits.longLine) continue;
+    if (line.curve === true) continue;
     const pen = penOf(line);
+    straight.set(pen, (straight.get(pen) ?? 0) + lineLength(line));
+    if (lineLength(line) < limits.longLine) continue;
     const list = byPen.get(pen) ?? [];
     list.push(line);
     byPen.set(pen, list);
@@ -163,7 +170,7 @@ export function readPens(lines: readonly SheetLine[], limits: WallLimits, scale:
   const reads: PenRead[] = [];
   for (const [pen, list] of byPen) {
     if (list.length < limits.fewestLines) {
-      reads.push({ pen, lines: list.length, paired: 0, oneSide: 0, length: 0, wall: false });
+      reads.push({ pen, lines: list.length, paired: 0, oneSide: 0, length: 0, lengthShare: 0, wall: false });
       continue;
     }
     const { sides } = parallelPairs(list, limits.thinnest, limits.thickest, limits.longLine);
@@ -180,7 +187,9 @@ export function readPens(lines: readonly SheetLine[], limits: WallLimits, scale:
     });
     const share = paired / list.length;
     const single = paired === 0 ? 0 : oneSide / paired;
-    reads.push({ pen, lines: list.length, paired: share, oneSide: single, length: length / scale, wall: share >= 0.5 && single >= 0.6 && length >= limits.leastLength });
+    const lengthShare = length / straight.get(pen)!;
+    const wall = share >= 0.5 && single >= 0.6 && lengthShare >= 0.5 && length >= limits.leastLength;
+    reads.push({ pen, lines: list.length, paired: share, oneSide: single, length: length / scale, lengthShare, wall });
   }
   return reads.sort((p, q) => q.lines - p.lines);
 }
