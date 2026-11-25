@@ -42,7 +42,7 @@ export interface ImportOptions {
    */
   readonly gateEdge?: number | undefined;
   /**
-   * A hole of a fill ring is out of the area of the ring only when this part of its edge or more is near a wall line.
+   * This value is the part of the edge of a hole that wall lines must touch. Only such a hole leaves the area of its ring.
    * A hole with no walls on its edge is a fixture or a column under the fill. The value 0 keeps each hole in the area. The default is 0.5.
    */
   readonly gateHoles?: number | undefined;
