@@ -5,7 +5,7 @@ import { unitsPer } from "../units.ts";
 import { findBridges, type Bridge, type BridgeLimits, type BridgeOptions } from "./bridges.ts";
 import { gridOf, labelRegions, regionOutline, ringCells, scanRings, stampLines, type Grid, type GridRegion } from "./raster.ts";
 import { lineLength, penOf, type Legend, type Sheet } from "./sheet.ts";
-import { readPens, wallPairs, type PenRead, type WallLimits, type WallOptions } from "./walls.ts";
+import { readPens, readWallLines, snapEnds, wallPairs, type PenRead, type WallLimits, type WallLineRead, type WallOptions } from "./walls.ts";
 
 /** The name of the side of an opening that is outside the building. */
 export const OUTSIDE = "outside";
@@ -111,6 +111,8 @@ export interface PlanImport {
   /** The grid of the rooms. Its cell is in the `unit` of the sheet. */
   readonly grid: Grid;
   readonly gate: AreaGate;
+  /** The wall lines, the glazing lines and the faces of each pen, from `readWallLines`. */
+  readonly lineRead: WallLineRead;
 }
 
 /** The fill colors of a grid: a color number for each cell, or `NO_COLOR`. */
@@ -120,6 +122,7 @@ const NO_COLOR = 0xffff;
  * This function turns the vector paths of a floor plan into a room record with rooms, walls and openings.
  *
  * 1. A wall pen has long lines with a parallel partner at the distance of a wall thickness. Two such lines give a wall.
+ *    `readWallLines` also takes the wall faces and the glazing of the other pens. `snapEnds` closes the small gaps at the open wall ends.
  * 2. A bridge closes each gap between two wall ends. The bridge is an opening of the room record.
  * 3. The walls, the door pens and the bridges go on a grid. Each free region of the grid that does not touch the border is a room, a speck or the space in a wall.
  * 4. A room gets the fill color under most of its cells, and its use from the legend.
@@ -137,6 +140,8 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
   const planRing = (ring: Ring): Ring => ring.map((point) => toPlan(point));
 
   const wallOptions = options.walls ?? {};
+  // Two wall ends touch at this distance or less.
+  const touch = sheetLength(undefined, 0.225);
   const wallLimits: WallLimits = {
     thinnest: sheetLength(wallOptions.thinnest, 0.25),
     thickest: sheetLength(wallOptions.thickest, 1.5),
@@ -144,6 +149,11 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
     fewestLines: wallOptions.fewestLines ?? 8,
     leastLength: sheetLength(wallOptions.leastLength, 40),
     shortestWall: sheetLength(wallOptions.shortestWall, 1),
+    read: wallOptions.read ?? "lines",
+    patternSide: wallOptions.patternSide ?? 0.4,
+    crossPens: wallOptions.crossPens ?? true,
+    glazing: wallOptions.glazing ?? true,
+    touch,
   };
   const bridgeOptions = options.bridges ?? {};
   const bridgeLimits: BridgeLimits = {
@@ -162,12 +172,13 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
   for (const line of sheet.lines) if (line.curve === true) curves.set(penOf(line), (curves.get(penOf(line)) ?? 0) + 1);
   const swing = [...curves].sort((a, b) => b[1] - a[1])[0];
   const doorPens = options.doorPens ?? (swing === undefined ? [] : [swing[0]]);
-  const wallSet = new Set(wallPens);
   const doorSet = new Set(doorPens);
-  const wallLines = sheet.lines.filter((line) => wallSet.has(penOf(line)));
+  const lineRead = readWallLines(sheet.lines, pens, wallLimits, wallPens);
+  const wallLines = lineRead.walls;
   const straight = wallLines.filter((line) => line.curve !== true);
   const doorLines = sheet.lines.filter((line) => doorSet.has(penOf(line)));
   const pairs = wallPairs(straight, wallLimits);
+  const snaps = snapEnds(straight, sheetLength(wallOptions.snap, 1), touch);
 
   // 2. The bridges.
   const bridges = findBridges(straight, bridgeLimits);
@@ -181,6 +192,8 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
   let barrier: Uint8Array | undefined = new Uint8Array(grid.columns * grid.rows);
   stampLines(grid, barrier, wallLines);
   stampLines(grid, barrier, doorLines);
+  stampLines(grid, barrier, lineRead.glazing);
+  stampLines(grid, barrier, snaps);
   for (const bridge of bridges) stampLines(grid, barrier, bridge.lines);
   const { labels, regions } = labelRegions(grid, barrier);
   barrier = undefined;
@@ -323,7 +336,7 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
     ...(openings.length === 0 ? {} : { openings }),
     ...(floors.length === 0 ? {} : { floors }),
   };
-  return { room, rooms, openings: imported, regions: tally, pens, wallPens, doorPens, grid: { ...grid, cell: cell / scale }, gate };
+  return { room, rooms, openings: imported, regions: tally, pens, wallPens, doorPens, grid: { ...grid, cell: cell / scale }, gate, lineRead };
 }
 
 /**

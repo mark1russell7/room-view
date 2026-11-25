@@ -103,3 +103,52 @@ export function sampleSheet(options: SampleOptions = {}): Sheet {
   }
   return { width: (24 + 2 * MARGIN) * scale, height: (18 + 2 * MARGIN) * scale, scale, unit: "ft", lines, fills, texts };
 }
+
+/** The pens of the sheet of `pairSheet`. */
+export const PAIR_PENS = { outer: "0.4|#000000", inner: "0.25|#000000", glass: "0.1|#000000" } as const;
+
+/**
+ * This function gives a small invented sheet in points, with two rooms of 20 ft by 10 ft side by side.
+ *
+ * - The outer walls have a wall pen, with two lines at 0.5 ft.
+ * - A different pen draws the wall between the rooms, with two lines at 0.4 ft. Each line has two parts. The pen also has five single lines of 3 ft, as the fronts of counters.
+ * - The south wall has a gap of 8 ft with three glazing lines at 0.3 ft. A pattern of ten lines in the same pen is below the building.
+ * - The wall between the rooms stops 0.6 ft from the north wall.
+ */
+export function pairSheet(): Sheet {
+  const scale = SAMPLE_SCALE;
+  const lines: SheetLine[] = [];
+  const draw = (pen: string, x0: number, y0: number, x1: number, y1: number): void => {
+    const [width, color] = pen.split("|");
+    lines.push({ from: at(x0, y0, scale), to: at(x1, y1, scale), width: Number(width), color: color! });
+  };
+  const outer = PAIR_PENS.outer;
+  // The north, east and west walls: an inner face and an outer face.
+  draw(outer, 0, 0, 40, 0);
+  draw(outer, -0.5, -0.5, 40.5, -0.5);
+  draw(outer, 40, 0, 40, 10);
+  draw(outer, 40.5, -0.5, 40.5, 10.5);
+  draw(outer, 0, 0, 0, 10);
+  draw(outer, -0.5, -0.5, -0.5, 10.5);
+  // The south wall, with a gap from 6 ft to 14 ft. A short end line closes each wall end at the gap.
+  draw(outer, 0, 10, 6, 10);
+  draw(outer, -0.5, 10.5, 6, 10.5);
+  draw(outer, 14, 10, 40, 10);
+  draw(outer, 14, 10.5, 40.5, 10.5);
+  draw(outer, 6, 10, 6, 10.5);
+  draw(outer, 14, 10, 14, 10.5);
+  // The wall between the rooms: two faces, each in two parts, from 0.6 ft to 10 ft.
+  const inner = PAIR_PENS.inner;
+  for (const x of [19.8, 20.2]) {
+    draw(inner, x, 0.6, x, 5.3);
+    draw(inner, x, 5.3, x, 10);
+  }
+  // The fronts of the counters: single lines with no partner.
+  for (const y of [2, 4, 6, 8]) draw(inner, 4, y, 7, y);
+  draw(inner, 30, 3, 30, 6);
+  // The glazing in the gap of the south wall, and a pattern below the building.
+  const glass = PAIR_PENS.glass;
+  for (const y of [9.95, 10.25, 10.55]) draw(glass, 6, y, 14, y);
+  for (let k = 0; k < 10; k++) draw(glass, 10, 13 + 0.3 * k, 14, 13 + 0.3 * k);
+  return { width: (40 + 2 * MARGIN) * scale, height: (10 + 2 * MARGIN) * scale, scale, unit: "ft", lines };
+}

@@ -2,8 +2,9 @@ import { regionArea } from "@mark1russell7/layout-contract";
 import { describe, expect, it } from "vitest";
 import { checkRoom } from "../check.ts";
 import { importPlan, OUTSIDE } from "./importer.ts";
-import { sampleSheet, SAMPLE_SCALE, SAMPLE_WALL } from "./sheet.fixture.ts";
+import { pairSheet, PAIR_PENS, sampleSheet, SAMPLE_SCALE, SAMPLE_WALL } from "./sheet.fixture.ts";
 import { readLegend } from "./sheet.ts";
+import { snapEnds } from "./walls.ts";
 
 const sheet = sampleSheet();
 const legend = readLegend(sheet);
@@ -132,5 +133,54 @@ describe("importPlan", () => {
     const plain = importPlan(sampleSheet({ swing: false }), { legend });
     expect(plain.doorPens).toEqual([]);
     expect(plain.openings.map((opening) => opening.kind)).toEqual(["gap", "gap"]);
+  });
+});
+
+describe("importPlan with the read of the wall lines", () => {
+  const pair = pairSheet();
+  const result = importPlan(pair);
+
+  it("finds one wall pen, and reads the other pens one line at a time", () => {
+    expect(result.wallPens).toEqual([PAIR_PENS.outer]);
+    const inner = result.pens.find((read) => read.pen === PAIR_PENS.inner)!;
+    // Four of the nine long lines of the pen are in pairs. Thus the pen is not a wall pen.
+    expect(inner).toMatchObject({ lines: 9, wall: false });
+    expect(inner.paired).toBeCloseTo(4 / 9, 9);
+    expect(result.lineRead.faces).toEqual({ [PAIR_PENS.inner]: 4 });
+    expect(result.lineRead.glazing).toHaveLength(3);
+    expect(result.lineRead.glazingPens).toEqual({ [PAIR_PENS.glass]: 3 });
+  });
+
+  it("closes the gap at the end of the wall between the rooms", () => {
+    const straight = result.lineRead.walls.filter((line) => line.curve !== true);
+    const snaps = snapEnds(straight, pair.scale, 0.225 * pair.scale);
+    expect(snaps).toHaveLength(2);
+    for (const snap of snaps) expect(Math.hypot(snap.to[0] - snap.from[0], snap.to[1] - snap.from[1]) / pair.scale).toBeCloseTo(0.6, 9);
+  });
+
+  it("finds the two rooms", () => {
+    expect(result.regions.room).toBe(2);
+    for (const room of result.rooms) expect(room.area).toBeGreaterThan(180);
+    for (const room of result.rooms) expect(room.area).toBeLessThan(198);
+    expect(result.room.walls.length).toBeGreaterThan(5);
+  });
+
+  it("joins the rooms when the import closes no gap", () => {
+    const open = importPlan(pair, { walls: { snap: 0 } });
+    expect(open.regions.room).toBe(1);
+    expect(open.rooms[0]!.area).toBeGreaterThan(380);
+  });
+
+  it("keeps only the room with no gap with the option glazing false: the other room is open through the gap", () => {
+    const open = importPlan(pair, { walls: { glazing: false } });
+    expect(open.regions.room).toBe(1);
+    expect(open.rooms[0]!.area).toBeGreaterThan(180);
+    expect(open.rooms[0]!.area).toBeLessThan(198);
+  });
+
+  it("finds no room with the read of the pens: the wall between the rooms is not a wall, and the gap of the glazing is open", () => {
+    const pens = importPlan(pair, { walls: { read: "pens" } });
+    expect(pens.lineRead).toEqual({ walls: pens.lineRead.walls, glazing: [], faces: {}, glazingPens: {} });
+    expect(pens.regions.room).toBe(0);
   });
 });
