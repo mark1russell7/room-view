@@ -95,6 +95,14 @@ describe("importPlan", () => {
     expect(result.gate.median).toBeLessThan(0);
   });
 
+  it("keeps a fill ring with no line on its edge out of the area gate, as a letter of a text", () => {
+    // An invented ring of 6 ft by 4 ft of the color UNIT, in the east room and 2 ft or more from each wall. The sheet has a margin of 6 ft.
+    const label = { color: "#ffcc00", rings: [[[22, 15], [28, 15], [28, 19], [22, 19]].map(([x, y]) => [x! * SAMPLE_SCALE, y! * SAMPLE_SCALE] as const)] };
+    const marked = { ...sheet, fills: [...(sheet.fills ?? []), label] };
+    expect(importPlan(marked, { legend }).gate.rings).toHaveLength(3);
+    expect(importPlan(marked, { legend, gateEdge: 0 }).gate.rings).toHaveLength(4);
+  });
+
   it("joins the two rooms of a door with no bridge, but a door swing stays a barrier", () => {
     const wide = importPlan(sheet, { legend, bridges: { widest: 2 } });
     expect(wide.openings).toHaveLength(0);
