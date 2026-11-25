@@ -368,6 +368,33 @@ viewer?.showMarks((mark) => mark.kind === "outlet");
 
 The option `cut` gives a floor plan: the plan keeps only the solids that start below the height of the cut. Thus a door becomes a gap in its wall. Use the plan for a drawing in SVG, or for a browser with no WebGL 2.
 
+## A floor plan from a drawing
+
+The entry `@mark1russell7/room-view/import` reads the vector paths of a floor plan drawing, for example the lines of a page of a PDF file. It gives a room record with the walls, the openings and one floor for each room.
+
+```ts
+import { importPlan, readLegend, type Sheet } from "@mark1russell7/room-view/import";
+
+// The lines, the fills and the texts of one page, in points. The scale 1/8 inch to the foot gives 9 points for each foot.
+const sheet: Sheet = { width, height, scale: 9, unit: "ft", lines, fills, texts };
+const result = importPlan(sheet, { legend: readLegend(sheet) });
+console.log(result.rooms.length, result.gate.within);
+```
+
+The import has five steps:
+
+1. `readPens` finds the wall pens. A wall pen has long lines, and each line has a parallel partner at the distance of a wall thickness.
+2. `findBridges` closes each gap between two wall ends. The bridge of a gap is an opening of the room record.
+3. The walls, the door swings and the bridges go on a grid. Each free region inside the building is a room.
+4. Each room gets the fill color under most of its cells. `readLegend` gives the name of each color.
+5. The area gate compares the area of each fill of the legend with the rooms in it.
+
+- A free region with a small area is a speck. A thin free region is the space inside a wall. They are not rooms.
+- The sheet has the y axis down. The plan of the result has the y axis up.
+- Each option has a default in feet. The import changes the default to the unit of the sheet.
+- An opening is a `door` when a door swing is near it. Each other opening is a `gap`.
+- The import does not read the windows or the heights. The room record has the default heights.
+
 ## The entries
 
 | Entry | What it has |
@@ -376,6 +403,7 @@ The option `cut` gives a floor plan: the plan keeps only the solids that start b
 | `@mark1russell7/room-view/schema` | `readRecord`, the schemas of the records and of an anchor in `zod/mini`, and `READ_CONTEXT`: the read of a JSON record. |
 | `@mark1russell7/room-view/sample` | `SAMPLE_ROOM`, `SAMPLE_SCENE`, `SAMPLE_SURVEY` and `SAMPLE_LEVEL`: a room with a rack and an apartment of four rooms, for demos and tests. |
 | `@mark1russell7/room-view/marks` | `layerMarks` and the type `AddOnMarks`: the marks of the layers of a scene, as plain data for a viewer. |
+| `@mark1russell7/room-view/import` | `importPlan`, `readLegend`, `readPens`, `wallPairs` and `findBridges`: a room record from the vector paths of a floor plan drawing. |
 | `@mark1russell7/room-view/three` | `createRoomViewer`, the themes and `solidGeometry`: the viewer in a page. It needs the package `three`. |
 
 The schemas examine the form of a record: the fields and their types. The checks examine its meaning. Use the two for a record from a file:
