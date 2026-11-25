@@ -386,7 +386,7 @@ function openingSides(
 }
 
 /**
- * This function gives a measure of the edge of a ring: the part of its points with a line of the sheet at `reach` or less.
+ * This function measures the edge of a ring. The measure is the part of its points with a line of the sheet at `reach` or less.
  * The points are at the distance `step` or less along the edge. A hash of cells finds the lines near each point.
  */
 function lineEdge(lines: readonly SheetLine[], reach: number): (ring: Ring, step: number) => number {
