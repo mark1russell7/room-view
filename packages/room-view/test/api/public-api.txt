@@ -225,6 +225,7 @@ layerMarks: build/marks.d.ts#layerMarks
 AreaGate: build/plan-import.d.ts#AreaGate
 BRIDGE_SOURCES: build/plan-import.d.ts#BRIDGE_SOURCES
 Bridge: build/plan-import.d.ts#Bridge
+BridgeGuide: build/plan-import.d.ts#BridgeGuide
 BridgeLimits: build/plan-import.d.ts#BridgeLimits
 BridgeOptions: build/plan-import.d.ts#BridgeOptions
 BridgeSource: build/plan-import.d.ts#BridgeSource
@@ -974,10 +975,17 @@ export interface Bridge {
   readonly lines: readonly SheetLine[];
 }
 
+### build/plan-import.d.ts#BridgeGuide
+export interface BridgeGuide {
+  readonly from: PlanPoint;
+  readonly to: PlanPoint;
+}
+
 ### build/plan-import.d.ts#BridgeLimits
 export interface BridgeLimits {
   readonly narrowest: number;
   readonly widest: number;
+  readonly widestGuided?: number | undefined;
   readonly shortestEnd: number;
   readonly longestEnd: number;
   readonly touch: number;
@@ -988,6 +996,7 @@ export interface BridgeLimits {
 export interface BridgeOptions {
   readonly narrowest?: number | undefined;
   readonly widest?: number | undefined;
+  readonly widestGuided?: number | undefined;
   readonly shortestEnd?: number | undefined;
   readonly longestEnd?: number | undefined;
   readonly touch?: number | undefined;
@@ -1205,7 +1214,7 @@ export type WallRead = (typeof WALL_READS)[number];
 export declare function fillBox(fill: SheetFill): readonly [number, number, number, number];
 
 ### build/plan-import.d.ts#findBridges
-export declare function findBridges(lines: readonly SheetLine[], limits: BridgeLimits): readonly Bridge[];
+export declare function findBridges(lines: readonly SheetLine[], limits: BridgeLimits, guides?: readonly BridgeGuide[]): readonly Bridge[];
 
 ### build/plan-import.d.ts#importPlan
 export declare function importPlan(sheet: Sheet, options?: ImportOptions): PlanImport;

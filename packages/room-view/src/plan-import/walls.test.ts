@@ -76,6 +76,25 @@ describe("findBridges", () => {
     expect(findBridges([line(0, 0, 5, 0), line(10, 0, 15, 0)], bridgeLimits)).toEqual([]);
     expect(findBridges([line(0, 0, 5, 0), line(8, 3, 8, 8)], bridgeLimits)).toEqual([]);
   });
+
+  it("bridges a wide door only along the edge of a fill ring, with widestGuided", () => {
+    // A door of 7 units: wider than widest (4.5), not wider than widestGuided (8).
+    const left = [line(0, 0, 5, 0), line(0, 0.5, 5, 0.5), line(5, 0, 5, 0.5)];
+    const right = [line(12, 0, 17, 0), line(12, 0.5, 17, 0.5), line(12, 0, 12, 0.5)];
+    const walls = [...left, ...right];
+    const wide = { ...bridgeLimits, widestGuided: 8 };
+    const along = [{ from: [0, 0.3] as const, to: [17, 0.3] as const }];
+    const across = [{ from: [8.5, -5] as const, to: [8.5, 5] as const }];
+    const far = [{ from: [0, 6] as const, to: [17, 6] as const }];
+    expect(findBridges(walls, wide)).toEqual([]);
+    expect(findBridges(walls, bridgeLimits, along)).toEqual([]);
+    expect(findBridges(walls, wide, along)).toMatchObject([{ source: "ends", from: [5, 0.25], to: [12, 0.25] }]);
+    expect(findBridges(walls, wide, across)).toEqual([]);
+    expect(findBridges(walls, wide, far)).toEqual([]);
+    // Two open ends at the same gap follow the same rule.
+    expect(findBridges([line(0, 0, 5, 0), line(12, 0, 17, 0)], wide, along)).toMatchObject([{ source: "open", from: [5, 0], to: [12, 0] }]);
+    expect(findBridges([line(0, 0, 5, 0), line(12, 0, 17, 0)], wide)).toEqual([]);
+  });
 });
 
 describe("readWallLines", () => {

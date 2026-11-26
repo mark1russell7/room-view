@@ -172,6 +172,18 @@ describe("importPlan", () => {
     expect(coarse.grid.cell).toBeGreaterThan(0.1);
   });
 
+  it("closes a wide door with widestGuided, because the edges of the fill rings go along the wall", () => {
+    // The east door is 7 ft. The gap is wider than widest, so the east room joins the corridor.
+    const wide = sampleSheet({ eastDoor: 7 });
+    const wideLegend = readLegend(wide);
+    expect(importPlan(wide, { legend: wideLegend }).regions.room).toBe(2);
+    const guided = importPlan(wide, { legend: wideLegend, bridges: { widestGuided: 8 } });
+    expect(guided.regions.room).toBe(3);
+    expect(guided.rooms.map((room) => room.use).sort()).toEqual(["CORRIDOR", "UNIT", "UNIT"]);
+    // With no legend, no fill ring guides the bridges, and the gap stays open.
+    expect(importPlan(wide, { bridges: { widestGuided: 8 } }).regions.room).toBe(2);
+  });
+
   it("does not find a door swing when the sheet has none", () => {
     const plain = importPlan(sampleSheet({ swing: false }), { legend });
     expect(plain.doorPens).toEqual([]);

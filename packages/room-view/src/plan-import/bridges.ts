@@ -8,6 +8,11 @@ export interface BridgeOptions {
   readonly narrowest?: number | undefined;
   /** The largest width of a gap in a wall. The default is 4.5 ft. */
   readonly widest?: number | undefined;
+  /**
+   * The largest width of a gap along the edge of a fill ring of a use, as at a wide door. The default is the value of `widest`.
+   * A gap from `widest` to this value is a bridge only when such an edge goes through the middle of the gap, in its direction.
+   */
+  readonly widestGuided?: number | undefined;
   /** The smallest length of the end line of a wall. The default is 0.2 ft. */
   readonly shortestEnd?: number | undefined;
   /** The largest length of the end line of a wall. The default is 1.6 ft. */
@@ -22,6 +27,8 @@ export interface BridgeOptions {
 export interface BridgeLimits {
   readonly narrowest: number;
   readonly widest: number;
+  /** The largest gap along the edge of a fill ring of a use. No value gives `widest`. */
+  readonly widestGuided?: number | undefined;
   readonly shortestEnd: number;
   readonly longestEnd: number;
   readonly touch: number;
@@ -33,6 +40,12 @@ export const BRIDGE_SOURCES: readonly ["ends", "open"] = ["ends", "open"];
 
 /** A source of a bridge. */
 export type BridgeSource = (typeof BRIDGE_SOURCES)[number];
+
+/** An edge of a fill ring of a use, in the coordinates of the sheet. A gap wider than `widest` is a bridge only along such an edge. */
+export interface BridgeGuide {
+  readonly from: PlanPoint;
+  readonly to: PlanPoint;
+}
 
 /** A bridge: a gap between two wall ends, in the coordinates of the sheet. A bridge closes a room, and the room record has it as an opening. */
 export interface Bridge {
@@ -48,20 +61,33 @@ export interface Bridge {
 
 /**
  * This function finds the bridges across the gaps in the walls. A gap is from `narrowest` to `widest`.
+ * A wider gap to `widestGuided` is a bridge when the edge of a fill ring of a use goes through it.
  *
  * - Two short end lines of walls can be parallel and face each other across a gap. They give two lines, one along each face of the wall.
  * - An open end of a long line, with no other line near it, joins the nearest open end that faces it.
+ *
+ * @param lines - The straight wall lines of the sheet
+ * @param limits - The limits of the search, in the units of the sheet
+ * @param guides - The edges of the fill rings of the uses. With no edges, no gap is wider than `widest`.
  */
-export function findBridges(lines: readonly SheetLine[], limits: BridgeLimits): readonly Bridge[] {
+export function findBridges(lines: readonly SheetLine[], limits: BridgeLimits, guides: readonly BridgeGuide[] = []): readonly Bridge[] {
   const bridges: Bridge[] = [];
+  const cosine = Math.cos((limits.angle * Math.PI) / 180);
+  const guided = guides.length === 0 ? limits.widest : Math.max(limits.widest, limits.widestGuided ?? limits.widest);
+  const along = guideTest(guides, guided, cosine, limits.longestEnd);
+  // A gap to `widest` is a bridge. A wider gap is a bridge only along the edge of a fill ring.
+  const fits = (from: PlanPoint, to: PlanPoint): boolean => Math.hypot(to[0] - from[0], to[1] - from[1]) <= limits.widest || along(from, to);
   const ends = lines.filter((line) => {
     const length = lineLength(line);
     return length >= limits.shortestEnd && length <= limits.longestEnd;
   });
-  const { pairs } = parallelPairs(ends, limits.narrowest, limits.widest, 0.6 * limits.shortestEnd, 0.06);
+  const { pairs } = parallelPairs(ends, limits.narrowest, guided, 0.6 * limits.shortestEnd, 0.06);
   for (const pair of pairs) {
     const a = ends[pair.a]!;
     const b = ends[pair.b]!;
+    const middleA: PlanPoint = [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2];
+    const middleB: PlanPoint = [(b.from[0] + b.to[0]) / 2, (b.from[1] + b.to[1]) / 2];
+    if (!fits(middleA, middleB)) continue;
     const width = Math.max(a.width, b.width);
     const color = a.color;
     const straight = Math.hypot(a.from[0] - b.from[0], a.from[1] - b.from[1]) + Math.hypot(a.to[0] - b.to[0], a.to[1] - b.to[1]);
@@ -69,8 +95,8 @@ export function findBridges(lines: readonly SheetLine[], limits: BridgeLimits): 
     const [b0, b1] = straight <= crossed ? [b.from, b.to] : [b.to, b.from];
     bridges.push({
       source: "ends",
-      from: [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2],
-      to: [(b.from[0] + b.to[0]) / 2, (b.from[1] + b.to[1]) / 2],
+      from: middleA,
+      to: middleB,
       thickness: (lineLength(a) + lineLength(b)) / 2,
       lines: [
         { from: a.from, to: b0, width, color },
@@ -127,7 +153,7 @@ export function findBridges(lines: readonly SheetLine[], limits: BridgeLimits): 
     if (!near(line.from[0], line.from[1], index)) open.push({ x: line.from[0], y: line.from[1], dx: -ux, dy: -uy, line: index });
   });
   // The search of the partner of an open end looks only in the cells of the widest gap around it.
-  const span = Math.max(limits.widest, 1e-9);
+  const span = Math.max(guided, 1e-9);
   const endGrid = new Map<string, number[]>();
   const spanKey = (x: number, y: number): string => `${Math.floor(x / span)},${Math.floor(y / span)}`;
   open.forEach((end, index) => {
@@ -136,7 +162,6 @@ export function findBridges(lines: readonly SheetLine[], limits: BridgeLimits): 
     list.push(index);
     endGrid.set(key, list);
   });
-  const cosine = Math.cos((limits.angle * Math.PI) / 180);
   const best = open.map((end, a) => {
     let found = -1;
     let distance = Infinity;
@@ -150,9 +175,10 @@ export function findBridges(lines: readonly SheetLine[], limits: BridgeLimits): 
           const gx = other.x - end.x;
           const gy = other.y - end.y;
           const gap = Math.hypot(gx, gy);
-          if (gap < limits.narrowest || gap > limits.widest) continue;
+          if (gap < limits.narrowest || gap > guided) continue;
           if ((gx * end.dx + gy * end.dy) / gap < cosine) continue;
           if (-(other.dx * end.dx + other.dy * end.dy) < cosine) continue;
+          if (!fits([end.x, end.y], [other.x, other.y])) continue;
           // The sequence of the ends breaks a tie, so the result does not change with the sequence of the cells.
           if (gap < distance || (gap === distance && b < found)) {
             distance = gap;
@@ -177,4 +203,54 @@ export function findBridges(lines: readonly SheetLine[], limits: BridgeLimits): 
     });
   });
   return bridges;
+}
+
+/**
+ * This function gives the test of a gap against the guides. An edge must go through the middle of the gap, in its direction.
+ * The test examines only the edges in the cells near the middle, so its time does not grow with the count of all edges.
+ *
+ * @param guides - The edges of the fill rings of the uses
+ * @param widest - The largest gap of the test, and the size of a cell of the search
+ * @param cosine - The cosine of the largest angle between an edge and the gap
+ * @param near - The largest distance from the middle of the gap to the edge
+ */
+function guideTest(guides: readonly BridgeGuide[], widest: number, cosine: number, near: number): (from: PlanPoint, to: PlanPoint) => boolean {
+  if (guides.length === 0) return () => false;
+  const cell = Math.max(widest, near, 1e-9);
+  const keyOf = (x: number, y: number): string => `${Math.floor(x / cell)},${Math.floor(y / cell)}`;
+  const grid = new Map<string, number[]>();
+  guides.forEach((guide, index) => {
+    const length = Math.hypot(guide.to[0] - guide.from[0], guide.to[1] - guide.from[1]);
+    const steps = Math.max(1, Math.ceil(length / cell));
+    for (let k = 0; k <= steps; k++) {
+      const key = keyOf(guide.from[0] + ((guide.to[0] - guide.from[0]) * k) / steps, guide.from[1] + ((guide.to[1] - guide.from[1]) * k) / steps);
+      const list = grid.get(key) ?? [];
+      if (list[list.length - 1] !== index) list.push(index);
+      grid.set(key, list);
+    }
+  });
+  return (from, to) => {
+    const gap = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    if (gap === 0 || gap > widest) return false;
+    const ux = (to[0] - from[0]) / gap;
+    const uy = (to[1] - from[1]) / gap;
+    const mx = (from[0] + to[0]) / 2;
+    const my = (from[1] + to[1]) / 2;
+    const cx = Math.floor(mx / cell);
+    const cy = Math.floor(my / cell);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const index of grid.get(`${cx + dx},${cy + dy}`) ?? []) {
+          const guide = guides[index]!;
+          const vx = guide.to[0] - guide.from[0];
+          const vy = guide.to[1] - guide.from[1];
+          const square = vx * vx + vy * vy;
+          if (square === 0 || Math.abs(vx * ux + vy * uy) / Math.sqrt(square) < cosine) continue;
+          const t = Math.max(0, Math.min(1, ((mx - guide.from[0]) * vx + (my - guide.from[1]) * vy) / square));
+          if (Math.hypot(mx - guide.from[0] - t * vx, my - guide.from[1] - t * vy) <= near) return true;
+        }
+      }
+    }
+    return false;
+  };
 }

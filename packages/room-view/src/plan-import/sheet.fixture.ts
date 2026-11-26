@@ -37,6 +37,8 @@ export interface SampleOptions {
   readonly scale?: number | undefined;
   /** This value is true when the sheet has the swing of the door of the west room. The default is true. */
   readonly swing?: boolean | undefined;
+  /** The width of the door of the east room, in feet. The default is 3. */
+  readonly eastDoor?: number | undefined;
 }
 
 /**
@@ -47,16 +49,17 @@ export interface SampleOptions {
 export function sampleSheet(options: SampleOptions = {}): Sheet {
   const scale = options.scale ?? SAMPLE_SCALE;
   const width = 0.5 * (scale / SAMPLE_SCALE);
+  const eastDoor = options.eastDoor ?? 3;
   const centers: [PlanPoint, PlanPoint][] = [
     // The outer walls.
     [[-0.25, 0], [24.25, 0]],
     [[24, -0.25], [24, 18.25]],
     [[-0.25, 18], [24.25, 18]],
     [[0, -0.25], [0, 18.25]],
-    // The wall of the corridor, with a door at 5 ft to 8 ft and a door at 15 ft to 18 ft.
+    // The wall of the corridor, with a door at 5 ft to 8 ft and a door of the east room from 15 ft.
     [[0, 4], [5, 4]],
     [[8, 4], [15, 4]],
-    [[18, 4], [24, 4]],
+    [[15 + eastDoor, 4], [24, 4]],
     // The wall between the two rooms.
     [[12, 4], [12, 18]],
   ];
