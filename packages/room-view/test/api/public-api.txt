@@ -40,7 +40,7 @@ Floor: build/room.chunk.d.ts#Floor
 FloorAnchor: build/layers.chunk.d.ts#FloorAnchor
 FloorExposure: build/index.d.ts#FloorExposure
 FloorExposureOptions: build/index.d.ts#FloorExposureOptions
-type FloorGrid: build/index.d.ts#FloorGrid
+FloorGrid: build/index.d.ts#FloorGrid
 FloorRoute: build/index.d.ts#FloorRoute
 FloorRouteOptions: build/index.d.ts#FloorRouteOptions
 FormCode: build/index.d.ts#FormCode
@@ -291,13 +291,7 @@ export interface FloorExposureOptions {
 }
 
 ### build/index.d.ts#FloorGrid
-interface FloorGrid {
-  readonly origin: PlanPoint;
-  readonly cell: number;
-  readonly columns: number;
-  readonly rows: number;
-  readonly inside: Uint8Array;
-}
+export type FloorGrid = CellGrid;
 
 ### build/index.d.ts#FloorRoute
 export interface FloorRoute {
