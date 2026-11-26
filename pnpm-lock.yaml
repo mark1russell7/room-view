@@ -316,8 +316,8 @@ importers:
         specifier: workspace:*
         version: link:../electrical
       '@mark1russell7/layout-contract':
-        specifier: ^0.10.2
-        version: 0.10.2(zod@4.6.7)
+        specifier: ^0.11.4
+        version: 0.11.4(zod@4.6.7)
       '@mark1russell7/room-view':
         specifier: workspace:*
         version: link:../room-view
@@ -621,10 +621,6 @@ packages:
 
   '@mark1russell7/geo@0.5.2':
     resolution: {integrity: sha512-hr8rFQLIQ0MbzdZUDhQ10A6dKUtVsSXHhpXng8xzkR9NFnwy9dXSgfx1E5dgXF4GjGIFmd4TD/4ZYOwl5YUoiQ==}
-    engines: {node: '>=22.12'}
-
-  '@mark1russell7/layout-contract@0.10.2':
-    resolution: {integrity: sha512-53xgUkaVtkGXEdRZesdxKl1bSel8NCIs/OyKyk56t7VhjgSIIinELGKei8prBL1/cHnjswXMkkDgu/eo6wqmYg==}
     engines: {node: '>=22.12'}
 
   '@mark1russell7/layout-contract@0.10.5':
@@ -2063,16 +2059,6 @@ snapshots:
     dependencies:
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/predicates': 0.1.5
-
-  '@mark1russell7/layout-contract@0.10.2(zod@4.6.7)':
-    dependencies:
-      '@mark1russell7/predicates': 0.1.5
-      '@mark1russell7/rigor-generators': 0.1.16
-      '@mark1russell7/rigor-statistics': 0.1.29
-      '@mark1russell7/strategy-space': 0.0.5
-      '@mark1russell7/typeset': 0.5.3(zod@4.6.7)
-    transitivePeerDependencies:
-      - zod
 
   '@mark1russell7/layout-contract@0.10.5(zod@4.6.7)':
     dependencies:
