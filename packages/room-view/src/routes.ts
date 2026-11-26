@@ -38,7 +38,7 @@ export interface RoomGraphOptions {
 /**
  * This function makes the graph of the ways through a room.
  *
- * - The floors of an opening are the first floors on a line from its center, out from each face of its wall, up to the reach.
+ * - The floors of an opening are the first floors on a line from its center. The line goes out from each face of its wall, up to the reach.
  * - An opening with the same floor on its two sides is not in the graph.
  * - A step joins two openings of the same floor. Its weight is the straight distance between their centers.
  *   In a floor that is not convex, the walk can be longer, so the weight is a lower bound.
