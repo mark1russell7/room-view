@@ -30,7 +30,9 @@ export interface FloorExposureOptions {
 /**
  * This function gives the exposure of each floor of a room: the length of its outline on the outside, and its depth from the outside.
  *
- * - The outline of each floor is in parts of equal length, near `step`. A search goes out from the middle of each part, square to the outline, in steps of 0.1 m.
+ * - The outline of each floor is in sides, from corner to corner. A corner is a turn of more than 30 degrees.
+ *   Each side is in parts of equal length, near `step`. Thus the parts of a side give its full length.
+ * - A search goes out from the middle of each part, square to the outline, in steps of 0.1 m.
  * - A part is outer when the search finds no floor before `reach`, and it gets to the outside. A search that comes back into its own floor finds its own floor.
  * - The outside is the space with no floor that goes to the edge of the plan. Each gap narrower than `reach` is closed first.
  *   Thus a space that the floors close around is not the outside, for example a room that the plan has no floor for.
@@ -60,12 +62,17 @@ export function floorExposure(room: Room, options: FloorExposureOptions = {}): F
     const turn = signedArea(ring) >= 0 ? 1 : -1;
     // The parts go along the outline by length. The outline of a plan import has many short edges, so the direction of a part is the line between its two ends.
     const at = outlineWalker(ring);
-    const parts = Math.max(1, Math.ceil(at.length / step));
-    const part = at.length / parts;
-    for (let index = 0; index < parts; index++) {
-      const middle = at.point((index + 0.5) * part);
-      const [xa, ya] = at.point(index * part);
-      const [xb, yb] = at.point((index + 1) * part);
+    const corners = at.corners.length > 0 ? at.corners : [0];
+    const sides = corners.map((from, side) => ({ from, to: side + 1 < corners.length ? corners[side + 1]! : corners[0]! + at.length }));
+    const pieces = sides.flatMap(({ from, to }) => {
+      const parts = Math.max(1, Math.ceil((to - from) / step));
+      const part = (to - from) / parts;
+      return Array.from({ length: parts }, (_, index) => ({ start: from + index * part, part }));
+    });
+    for (const { start, part } of pieces) {
+      const middle = at.point(start + part / 2);
+      const [xa, ya] = at.point(start);
+      const [xb, yb] = at.point(start + part);
       const chord = Math.hypot(xb - xa, yb - ya);
       if (!(chord > 0)) continue;
       const normal: PlanPoint = [(turn * (yb - ya)) / chord, (turn * -(xb - xa)) / chord];
@@ -214,16 +221,34 @@ function chessDistance(marked: Uint8Array, nx: number, ny: number): Uint32Array 
   return distance;
 }
 
-/** This function gives the length of the outline of a ring, and the point at a distance along it from its first point. */
-function outlineWalker(ring: readonly PlanPoint[]): { length: number; point: (distance: number) => PlanPoint } {
+/**
+ * This function gives the length of the outline of a ring and the point at a distance along it.
+ * It also gives the distance of each corner from the first point of the ring.
+ * A corner is the start of an edge that turns by more than 30 degrees from the edge before it. A distance past the length goes around the ring again.
+ */
+function outlineWalker(ring: readonly PlanPoint[]): { length: number; corners: number[]; point: (distance: number) => PlanPoint } {
   const ends: number[] = [0];
   ring.forEach(([xa, ya], index) => {
     const [xb, yb] = ring[(index + 1) % ring.length]!;
     ends.push(ends[index]! + Math.hypot(xb - xa, yb - ya));
   });
   const length = ends[ring.length]!;
+  const direction = (index: number): PlanPoint => {
+    const [xa, ya] = ring[index]!;
+    const [xb, yb] = ring[(index + 1) % ring.length]!;
+    const size = ends[index + 1]! - ends[index]!;
+    return [(xb - xa) / size, (yb - ya) / size];
+  };
+  const edges = ring.map((_, index) => index).filter((index) => ends[index + 1]! - ends[index]! > 0);
+  const corners = edges
+    .filter((index, order) => {
+      const [ax, ay] = direction(edges[(order + edges.length - 1) % edges.length]!);
+      const [bx, by] = direction(index);
+      return ax * bx + ay * by < Math.cos(Math.PI / 6);
+    })
+    .map((index) => ends[index]!);
   const point = (distance: number): PlanPoint => {
-    const d = Math.min(Math.max(distance, 0), length);
+    const d = length > 0 && distance > length ? distance - length : Math.max(distance, 0);
     let low = 0;
     let high = ring.length - 1;
     while (low < high) {
@@ -237,7 +262,7 @@ function outlineWalker(ring: readonly PlanPoint[]): { length: number; point: (di
     const t = edge > 0 ? (d - ends[low]!) / edge : 0;
     return [xa + (xb - xa) * t, ya + (yb - ya) * t];
   };
-  return { length, point };
+  return { length, corners, point };
 }
 
 /** This function gives the signed area of a ring. It is positive for a counterclockwise ring. */

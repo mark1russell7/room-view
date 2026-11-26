@@ -28,6 +28,21 @@ describe("floorExposure", () => {
     expect(exposure.get("c11")!.outer).toBe(0);
   });
 
+  it("gives the full length of each outer side when the step does not divide the side", () => {
+    const rough = new Map(floorExposure(block, { step: 0.7 }).map((item) => [item.floor, item]));
+    expect(rough.get("c00")!.outer).toBeCloseTo(6, 6);
+    expect(rough.get("c22")!.outer).toBeCloseTo(6, 6);
+    expect(rough.get("c10")!.outer).toBeCloseTo(3, 6);
+  });
+
+  it("keeps the edges of a gentle curve in one side", () => {
+    // An invented round floor of 24 edges: each edge turns by 15 degrees, so the outline has no corner.
+    const ring: PlanPoint[] = Array.from({ length: 24 }, (_, index) => [5 * Math.cos((index * Math.PI) / 12), 5 * Math.sin((index * Math.PI) / 12)]);
+    const round = floorExposure({ ...block, floors: [{ id: "round", ring }] });
+    const perimeter = 24 * 2 * 5 * Math.sin(Math.PI / 24);
+    expect(round[0]!.outer).toBeCloseTo(perimeter, 6);
+  });
+
   it("gives the depth of an interior floor: the distance from its outline to the outer wall of another floor", () => {
     expect(exposure.get("c11")!.depth).toBeCloseTo(3.2, 6);
     expect(exposure.get("c00")!.depth).toBe(0);
