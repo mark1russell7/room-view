@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package",
   "name": "@mark1russell7/electrical",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "Electrical circuits as data: outlets, circuits, feeds and loads, the continuous-load check, and the circuit formulas as Vex programs. An add-on of room-view.",
   "license": "MIT",
   "repository": {

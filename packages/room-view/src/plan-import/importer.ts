@@ -2,7 +2,7 @@ import { pointInRing, pointSegmentDistance, regionArea, type Ring } from "@mark1
 import { median } from "@mark1russell7/rigor-statistics";
 import { ROOM_SCHEMA, type Floor, type Opening, type OpeningKind, type PlanPoint, type Room, type Wall } from "../room.ts";
 import { unitsPer } from "../units.ts";
-import { findBridges, type Bridge, type BridgeLimits, type BridgeOptions } from "./bridges.ts";
+import { findBridges, type Bridge, type BridgeGuide, type BridgeLimits, type BridgeOptions } from "./bridges.ts";
 import { gridOf, labelRegions, regionOutline, ringCells, scanRings, stampLines, type Grid, type GridRegion } from "./raster.ts";
 import { lineLength, penOf, type Legend, type Sheet, type SheetLine } from "./sheet.ts";
 import { readPens, readWallLines, snapEnds, wallPairs, type PenRead, type WallLimits, type WallLineRead, type WallOptions } from "./walls.ts";
@@ -179,6 +179,7 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
   const bridgeLimits: BridgeLimits = {
     narrowest: sheetLength(bridgeOptions.narrowest, 1.5),
     widest: sheetLength(bridgeOptions.widest, 4.5),
+    widestGuided: sheetLength(bridgeOptions.widestGuided ?? bridgeOptions.widest, 4.5),
     shortestEnd: sheetLength(bridgeOptions.shortestEnd, 0.2),
     longestEnd: sheetLength(bridgeOptions.longestEnd, 1.6),
     touch: sheetLength(bridgeOptions.touch, 0.225),
@@ -203,8 +204,14 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
   const pairs = wallPairs(straight, wallLimits);
   const snaps = snapEnds(straight, sheetLength(wallOptions.snap, 1), touch);
 
-  // 2. The bridges.
-  const bridges = findBridges(straight, bridgeLimits);
+  // 2. The bridges. The edges of the fill rings of the uses guide the bridges of the wide gaps.
+  const legendSamples = new Set(options.legend?.samples ?? []);
+  const guides: BridgeGuide[] = (sheet.fills ?? []).flatMap((fill, index) =>
+    options.legend?.names[fill.color] === undefined || legendSamples.has(index)
+      ? []
+      : fill.rings.flatMap((ring) => ring.map((from, at) => ({ from, to: ring[(at + 1) % ring.length]! }))),
+  );
+  const bridges = findBridges(straight, bridgeLimits, guides);
 
   // 3. The grid and its regions.
   let cell = sheetLength(options.cell, 0.1);
