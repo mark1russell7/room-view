@@ -395,6 +395,7 @@ The import has five steps:
 - An opening is a `door` when a door swing is near it. Each other opening is a `gap`.
 - The lines of the door pen are barriers of the rooms. A straight line of the pen longer than `longestLeaf` (4.5 ft) is not a door leaf, so it is not a barrier.
 - The import does not read the windows or the heights. The room record has the default heights.
+- Each room of the result has `labels`: the texts of the sheet on that room, from the top to the bottom. A text goes to the room under most of its line.
 
 ### The read of the wall lines
 
@@ -432,6 +433,26 @@ console.log(route?.openings, route?.length, route?.path);
 - With the option `walk`, each step goes on a grid of cells inside its floor. The other floors inside its outline are holes, so a walk goes around a court.
 - `true` gives cells of 0.25 m. A number gives the side of a cell in the unit of the room.
 - With the option `walk`, the route has `path`: the points of the walk from the first door to the last door. Each straight part stays inside a floor, and `length` is the length of the path.
+
+## The outside of each floor
+
+`floorExposure` gives the length of the outline of each floor on the outside, and the depth of each interior floor from the outside.
+
+```ts
+import { floorExposure } from "@mark1russell7/room-view";
+
+const exposure = floorExposure(result.room, { outside: ["room-9"] });
+const interior = exposure.filter((item) => item.outer === 0).sort((a, b) => b.depth - a.depth);
+console.log(interior[0]?.floor, interior[0]?.depth);
+```
+
+- A search goes out from each part of the outline, square to it. A part is on the outside when the search finds no floor before `reach` (3 m).
+- Thus a wall, a shaft or a chase narrower than `reach` is not the outside.
+- The outside is the space with no floor that goes to the edge of the plan, after each gap narrower than `reach` closes. A space that the floors close around is not the outside.
+- Thus a room that the import did not close, and that leaks through a door gap, does not give outer walls to its neighbors.
+- The option `outside` gives the floors that are outside, for example a court that is open to the sky. The floors around such a floor get their walls on it as outer walls.
+- `outer` is the length on the outside. `depth` is the least distance from the floor to the outer wall of another floor. A floor with an outer wall has the depth 0.
+- The result has no item for a floor of `outside`.
 
 ## The entries
 

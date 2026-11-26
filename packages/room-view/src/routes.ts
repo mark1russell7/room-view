@@ -1,5 +1,5 @@
 import { shortestPath, type PathEdge } from "@mark1russell7/collections/graph";
-import { pointInRing, regionArea } from "@mark1russell7/layout-contract";
+import { floorLocator, floorShapes, innerFloors, type FloorShape } from "./floors.ts";
 import { wallFrames, wallPoint } from "./frames.ts";
 import { OPENING_KINDS, type OpeningKind, type PlanPoint, type Room } from "./room.ts";
 import { metersPer } from "./units.ts";
@@ -69,17 +69,8 @@ export function roomGraph(room: Room, options: RoomGraphOptions = {}): RoomGraph
   const kinds = new Set<OpeningKind>(options.kinds ?? OPENING_KINDS.filter((kind) => kind !== "window"));
   const scale = metersPer(room.unit);
   const frames = new Map(wallFrames(room).map((frame) => [frame.id, frame]));
-  const floors = (room.floors ?? []).map((floor) => ({ id: floor.id, ring: floor.ring, box: boxOf(floor.ring), area: regionArea({ kind: "polygon", points: floor.ring }) }));
-  // The outline of a floor can go around other floors, as a corridor goes around a court. The smallest floor that holds a point is its floor.
-  const floorAt = (x: number, y: number): string | undefined => {
-    let best: (typeof floors)[number] | undefined;
-    for (const floor of floors) {
-      const { box } = floor;
-      if (x < box[0] || x > box[2] || y < box[1] || y > box[3] || (best !== undefined && floor.area >= best.area)) continue;
-      if (pointInRing(x, y, floor.ring)) best = floor;
-    }
-    return best?.id;
-  };
+  const floors = floorShapes(room);
+  const floorAt = floorLocator(floors);
   const sides: OpeningSides[] = [];
   for (const opening of room.openings ?? []) {
     const frame = frames.get(opening.wall);
@@ -237,20 +228,9 @@ function floorWalk(grid: FloorGrid, from: PlanPoint, to: PlanPoint): PlanPoint[]
 }
 
 /** This function makes the grid of the walks of one floor. The other floors inside its outline are holes. */
-function walkGrid(floors: readonly { id: string; ring: readonly PlanPoint[]; box: readonly number[]; area: number }[], id: string, cell: number): FloorGrid {
+function walkGrid(floors: readonly FloorShape[], id: string, cell: number): FloorGrid {
   const floor = floors.find((item) => item.id === id)!;
-  const [x0, y0, x1, y1] = floor.box;
-  const holes = floors.filter(
-    (other) =>
-      other.id !== id &&
-      other.area < floor.area &&
-      other.box[0]! >= x0! &&
-      other.box[1]! >= y0! &&
-      other.box[2]! <= x1! &&
-      other.box[3]! <= y1! &&
-      pointInRing(other.ring[0]![0], other.ring[0]![1], floor.ring),
-  );
-  return floorGrid(floor.ring, cell, holes.map((hole) => hole.ring));
+  return floorGrid(floor.ring, cell, innerFloors(floors, floor).map((hole) => hole.ring));
 }
 
 /** This function gives the first point of a floor beside an opening. */
@@ -261,11 +241,4 @@ function entryOf(side: OpeningSides, floor: string): PlanPoint {
 /** This function gives the straight distance between two points. */
 function distance(a: PlanPoint, b: PlanPoint): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
-}
-
-/** This function gives the box of a ring: the least x, the least y, the greatest x and the greatest y. */
-function boxOf(ring: readonly PlanPoint[]): readonly [number, number, number, number] {
-  const xs = ring.map(([x]) => x);
-  const ys = ring.map(([, y]) => y);
-  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
