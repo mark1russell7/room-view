@@ -135,6 +135,16 @@ describe("importPlan", () => {
     expect(importPlan(lined, { legend, longestLeaf: 6 }).regions.room).toBe(4);
   });
 
+  it("gives the texts on each room as its labels", () => {
+    // The sheet has a margin of 6 ft. The text is on the corridor, with its base line 3 ft from the north wall, and 1 ft high.
+    const ft = (x: number, y: number): [number, number] => [(x + 6) * SAMPLE_SCALE, (y + 6) * SAMPLE_SCALE];
+    const named = { ...sheet, texts: [...(sheet.texts ?? []), { text: "TRASH", at: ft(10, 3), height: SAMPLE_SCALE }, { text: "  ", at: ft(4, 3), height: SAMPLE_SCALE }] };
+    const rooms = importPlan(named, { legend }).rooms;
+    expect(rooms.find((room) => room.use === "CORRIDOR")!.labels).toEqual(["TRASH"]);
+    // The texts of the legend are outside the building, so no room has them.
+    expect(rooms.filter((room) => room.use !== "CORRIDOR").every((room) => room.labels === undefined)).toBe(true);
+  });
+
   it("gives no use and no gate without a legend", () => {
     const bare = importPlan(sheet);
     expect(bare.rooms.every((room) => room.use === undefined)).toBe(true);

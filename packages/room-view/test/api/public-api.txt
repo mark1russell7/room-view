@@ -38,6 +38,8 @@ FindingCode: build/layers.chunk.d.ts#FindingCode
 FindingLevel: build/layers.chunk.d.ts#FindingLevel
 Floor: build/room.chunk.d.ts#Floor
 FloorAnchor: build/layers.chunk.d.ts#FloorAnchor
+FloorExposure: build/index.d.ts#FloorExposure
+FloorExposureOptions: build/index.d.ts#FloorExposureOptions
 type FloorGrid: build/index.d.ts#FloorGrid
 FloorRoute: build/index.d.ts#FloorRoute
 FloorRouteOptions: build/index.d.ts#FloorRouteOptions
@@ -143,6 +145,7 @@ checkScene: build/layers.chunk.d.ts#checkScene
 convertSurvey: build/level.chunk.d.ts#convertSurvey
 expandLevel: build/level.chunk.d.ts#expandLevel
 expandSurvey: build/level.chunk.d.ts#expandSurvey
+floorExposure: build/index.d.ts#floorExposure
 floorRoute: build/index.d.ts#floorRoute
 formLayer: build/index.d.ts#formLayer
 formRecords: build/index.d.ts#formRecords
@@ -271,6 +274,20 @@ export declare const FORM_FIELD_KINDS: readonly ["text", "number", "record", "ob
 
 ### build/index.d.ts#FORM_SYSTEMS
 export declare const FORM_SYSTEMS: readonly ["metric", "imperial"];
+
+### build/index.d.ts#FloorExposure
+export interface FloorExposure {
+  readonly floor: string;
+  readonly outer: number;
+  readonly depth: number;
+}
+
+### build/index.d.ts#FloorExposureOptions
+export interface FloorExposureOptions {
+  readonly reach?: number | undefined;
+  readonly step?: number | undefined;
+  readonly outside?: Iterable<string> | undefined;
+}
 
 ### build/index.d.ts#FloorGrid
 interface FloorGrid {
@@ -464,6 +481,9 @@ export interface RoomWalk {
 
 ### build/index.d.ts#checkForm
 export declare function checkForm(form: LayerForm): readonly FormFault[];
+
+### build/index.d.ts#floorExposure
+export declare function floorExposure(room: Room, options?: FloorExposureOptions): FloorExposure[];
 
 ### build/index.d.ts#floorRoute
 export declare function floorRoute(graph: RoomGraph, from: string, to: Iterable<string>, options?: FloorRouteOptions): FloorRoute | undefined;
@@ -1019,6 +1039,7 @@ export interface ImportedRoom {
   readonly use?: string | undefined;
   readonly color?: string | undefined;
   readonly area: number;
+  readonly labels?: readonly string[] | undefined;
   readonly center: PlanPoint;
 }
 

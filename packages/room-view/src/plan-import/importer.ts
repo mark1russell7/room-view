@@ -63,6 +63,11 @@ export interface ImportedRoom {
   readonly color?: string | undefined;
   /** The area of the cells of the room. */
   readonly area: number;
+  /**
+   * The texts of the sheet on the room, from the top to the bottom and from the left to the right. A room with no text has no value.
+   * A text is on the room when most of its line is on the cells of the room.
+   */
+  readonly labels?: readonly string[] | undefined;
   /** The mean point of the cells of the room, in the plan. */
   readonly center: PlanPoint;
 }
@@ -270,6 +275,30 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
     const center = toPlan([(region.center[0] + 0.5) * cell, (region.center[1] + 0.5) * cell]);
     rooms.push({ id, ...(use === undefined ? {} : { use }), ...(color === undefined ? {} : { color }), area: tidy(areaUnit(region.cells, cell)), center });
     floors.push({ id, ...(use === undefined ? {} : { name: use }), ring: planRing(regionOutline(grid, labels, region)) });
+  });
+
+  // The texts on each room. The line of a text goes from its start along its base line, about 0.6 of its height for each character, and up by half its height.
+  const textsOf = new Map<string, string[]>();
+  const texts = [...(sheet.texts ?? [])].sort((a, b) => a.at[1] - b.at[1] || a.at[0] - b.at[0]);
+  for (const text of texts) {
+    const words = text.text.trim();
+    if (words === "") continue;
+    const length = 0.6 * text.height * words.length;
+    const count = Math.max(1, Math.ceil(length / Math.max(text.height, cell)));
+    const votes = new Map<string, number>();
+    for (let k = 0; k < count; k++) {
+      const column = Math.floor((text.at[0] + (length * (k + 0.5)) / count) / cell);
+      const row = Math.floor((text.at[1] - text.height / 2) / cell);
+      if (column < 0 || row < 0 || column >= grid.columns || row >= grid.rows) continue;
+      const id = idOf.get(labels[row * grid.columns + column]!);
+      if (id !== undefined) votes.set(id, (votes.get(id) ?? 0) + 1);
+    }
+    const best = [...votes].sort((a, b) => b[1] - a[1])[0];
+    if (best !== undefined && 2 * best[1] > count) textsOf.set(best[0], [...(textsOf.get(best[0]) ?? []), words]);
+  }
+  rooms.forEach((room, index) => {
+    const found = textsOf.get(room.id);
+    if (found !== undefined) rooms[index] = { ...room, labels: found };
   });
 
   // The walls, and the openings of the bridges with the rooms on their two sides.
