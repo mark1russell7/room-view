@@ -393,6 +393,7 @@ The import has five steps:
 - The sheet has the y axis down. The plan of the result has the y axis up.
 - Each option has a default in feet. The import changes the default to the unit of the sheet.
 - An opening is a `door` when a door swing is near it. Each other opening is a `gap`.
+- The lines of the door pen are barriers of the rooms. A straight line of the pen longer than `longestLeaf` (4.5 ft) is not a door leaf, so it is not a barrier.
 - The import does not read the windows or the heights. The room record has the default heights.
 
 ### The read of the wall lines
@@ -412,6 +413,25 @@ A drawing can draw some walls with the pen of the glazing or of the fixtures. Th
 - A glazing line is a long line of a pattern pen with 1 to 3 partners. Its two ends are near wall ends.
 - The result has `lineRead`: the wall lines, the glazing lines and the number of faces of each pen.
 - For the read of version 0.3, set `read: "pens"` and `snap: 0`.
+
+## The ways through a room
+
+`roomGraph` gives the floors on the two sides of each door and gap. `floorRoute` finds the shortest route from one floor to the nearest floor of a set.
+
+```ts
+import { floorRoute, roomGraph } from "@mark1russell7/room-view";
+
+const graph = roomGraph(result.room, { walk: true });
+const route = floorRoute(graph, "room-12", ["room-3", "room-40"], { through: ["room-5", "room-7"] });
+console.log(route?.openings, route?.length, route?.path);
+```
+
+- The option `through` of `floorRoute` gives the floors that a route can go through. Thus a route from a home to a stair keeps out of the other homes.
+- The floor of a point is the smallest floor that holds it. Thus a floor inside the outline of a corridor keeps its own doors.
+- With no option `walk`, a step between two doors of one floor has the straight distance. The length of a route is then a lower bound.
+- With the option `walk`, each step goes on a grid of cells inside its floor. The other floors inside its outline are holes, so a walk goes around a court.
+- `true` gives cells of 0.25 m. A number gives the side of a cell in the unit of the room.
+- With the option `walk`, the route has `path`: the points of the walk from the first door to the last door. Each straight part stays inside a floor, and `length` is the length of the path.
 
 ## The entries
 

@@ -84,3 +84,84 @@ describe("floorRoute", () => {
     expect(route?.length).toBeCloseTo(10, 0);
   });
 });
+
+/**
+ * An invented hall of 10 m by 10 m around a court of 4 m by 4 m, with a room on its west side and a room on its east side.
+ * The outline of the hall goes around the court, as the outline of a plan import does. The court has one door to the hall.
+ */
+const court: Room = {
+  schema: "room/2",
+  unit: "m",
+  height: 2.5,
+  wallThickness: 0.2,
+  walls: [
+    { id: "west", from: [0, 0], to: [0, 10] },
+    { id: "east", from: [10, 0], to: [10, 10] },
+    { id: "court-north", from: [3, 7], to: [7, 7] },
+  ],
+  openings: [
+    { id: "d-west", wall: "west", kind: "door", offset: 4.5, width: 1, height: 2 },
+    { id: "d-east", wall: "east", kind: "door", offset: 4.5, width: 1, height: 2 },
+    { id: "d-court", wall: "court-north", kind: "door", offset: 1.5, width: 1, height: 2 },
+  ],
+  floors: [
+    { id: "hall", ring: [[0.1, 0.1], [9.9, 0.1], [9.9, 9.9], [0.1, 9.9]] },
+    { id: "court", ring: [[3.1, 3.1], [6.9, 3.1], [6.9, 6.9], [3.1, 6.9]] },
+    { id: "W", ring: [[-4, 0], [-0.1, 0], [-0.1, 10], [-4, 10]] },
+    { id: "E", ring: [[10.1, 0], [14, 0], [14, 10], [10.1, 10]] },
+  ],
+};
+
+describe("the walk inside each floor", () => {
+  it("gives a point to the smallest floor that holds it", () => {
+    const sides = roomGraph(court).sides.find((side) => side.opening === "d-court");
+    expect([...sides!.floors].sort()).toEqual(["court", "hall"]);
+  });
+
+  it("goes around the court, and the length is the length of the walk", () => {
+    const straight = floorRoute(roomGraph(court), "W", ["E"]);
+    expect(straight?.length).toBeCloseTo(10, 9);
+    expect(straight?.path).toBeUndefined();
+    const walked = floorRoute(roomGraph(court, { walk: 0.1 }), "W", ["E"])!;
+    expect(walked.openings).toEqual(["d-west", "d-east"]);
+    expect(walked.floors).toEqual(["W", "hall", "E"]);
+    // The shortest walk goes from the west door past two corners of the court: 2 * hypot(3, 2) + 4 m.
+    const shortest = 2 * Math.hypot(3, 2) + 4;
+    expect(walked.length).toBeGreaterThanOrEqual(shortest - 0.2);
+    expect(walked.length).toBeLessThanOrEqual(shortest + 0.4);
+    expect(walked.path![0]).toEqual([0, 5]);
+    expect(walked.path![walked.path!.length - 1]).toEqual([10, 5]);
+    // No point of the walk is inside the court.
+    for (const [x, y] of walked.path!) expect(x > 3.1 && x < 6.9 && y > 3.1 && y < 6.9).toBe(false);
+    for (let k = 1; k < walked.path!.length; k++) {
+      const [a, b] = [walked.path![k - 1]!, walked.path![k]!];
+      for (let t = 0; t <= 20; t++) {
+        const [x, y] = [a[0] + ((b[0] - a[0]) * t) / 20, a[1] + ((b[1] - a[1]) * t) / 20];
+        expect(x > 3.1 && x < 6.9 && y > 3.1 && y < 6.9).toBe(false);
+      }
+    }
+  });
+
+  it("gives the step weight of the walk on the grid, which is not less than the straight distance", () => {
+    const graph = roomGraph(court, { walk: true });
+    const step = graph.steps.find((item) => item.from === "d-west" && item.to === "d-east")!;
+    expect(step.weight).toBeGreaterThan(2 * Math.hypot(3, 2) + 4 - 0.2);
+    expect(graph.walk?.grids.has("hall")).toBe(true);
+  });
+});
+
+describe("the floors that a route goes through", () => {
+  const graph = roomGraph(row);
+
+  it("goes only through the floors of the option through", () => {
+    expect(floorRoute(graph, "A", ["C"], { through: [] })).toBeUndefined();
+    expect(floorRoute(graph, "A", ["C"], { through: ["B"] })?.floors).toEqual(["A", "B", "C"]);
+    expect(floorRoute(graph, "A", ["B"], { through: [] })?.openings).toEqual(["d1"]);
+  });
+
+  it("gives the walk of the steps that the route takes", () => {
+    const walked = floorRoute(roomGraph(court, { walk: 0.1 }), "W", ["E"], { through: ["hall"] })!;
+    expect(walked.floors).toEqual(["W", "hall", "E"]);
+    expect(floorRoute(roomGraph(court, { walk: 0.1 }), "W", ["E"], { through: ["court"] })).toBeUndefined();
+  });
+});
