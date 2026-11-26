@@ -3,7 +3,10 @@ import { floorLocator, floorShapes, innerFloors, type FloorShape } from "./floor
 import { wallFrames, wallPoint } from "./frames.ts";
 import { OPENING_KINDS, type OpeningKind, type PlanPoint, type Room } from "./room.ts";
 import { metersPer } from "./units.ts";
-import { cellCenter, cellNear, floorGrid, pathLength, searchGrid, straighten, walkCells, type FloorGrid } from "./walk.ts";
+import { cellCenter, cellNear, polygonGrid, polylineLength, searchGrid, straightenWalk, walkCells, type CellGrid } from "@mark1russell7/layout-contract";
+
+/** The grid of the cells inside the outline of a floor. A cell inside another floor is not inside it. */
+export type FloorGrid = CellGrid;
 
 /** The floors on the two sides of one opening. */
 export interface OpeningSides {
@@ -213,7 +216,7 @@ export function floorRoute(graph: RoomGraph, from: string, to: Iterable<string>,
     const b = bySide.get(step.to)!;
     path.push(...floorWalk(graph.walk.grids.get(floor)!, entryOf(a, floor), entryOf(b, floor)), b.at);
   }
-  return { floors, openings, length: pathLength(path), path };
+  return { floors, openings, length: polylineLength(path), path };
 }
 
 /**
@@ -224,13 +227,13 @@ function floorWalk(grid: FloorGrid, from: PlanPoint, to: PlanPoint): PlanPoint[]
   const start = cellNear(grid, from);
   const end = cellNear(grid, to);
   const centers = walkCells(searchGrid(grid, start, [end]), end).map((index) => cellCenter(grid, index));
-  return [from, ...straighten(grid, centers), to];
+  return [from, ...straightenWalk(grid, centers), to];
 }
 
 /** This function makes the grid of the walks of one floor. The other floors inside its outline are holes. */
 function walkGrid(floors: readonly FloorShape[], id: string, cell: number): FloorGrid {
   const floor = floors.find((item) => item.id === id)!;
-  return floorGrid(floor.ring, cell, innerFloors(floors, floor).map((hole) => hole.ring));
+  return polygonGrid(floor.ring, cell, { holes: innerFloors(floors, floor).map((hole) => hole.ring) });
 }
 
 /** This function gives the first point of a floor beside an opening. */

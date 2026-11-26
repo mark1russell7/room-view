@@ -12,4 +12,3 @@ export * from "./survey.ts";
 export * from "./level.ts";
 export * from "./routes.ts";
 export * from "./exposure.ts";
-export type { FloorGrid } from "./walk.ts";
