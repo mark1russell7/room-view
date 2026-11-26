@@ -125,6 +125,16 @@ describe("importPlan", () => {
     expect(wide.regions.room).toBe(2);
   });
 
+  it("keeps a long line of the door pen off the grid, as the edge of a floor finish across the corridor", () => {
+    // The sheet has a margin of 6 ft. The line has the pen of the door leaf, and goes across the corridor at x 10 ft from wall to wall: 5 ft.
+    const ft = (x: number, y: number): [number, number] => [(x + 6) * SAMPLE_SCALE, (y + 6) * SAMPLE_SCALE];
+    const finish = { from: ft(10, -0.5), to: ft(10, 4.5), width: 0.25, color: "#000000" };
+    const lined = { ...sheet, lines: [...sheet.lines, finish] };
+    expect(importPlan(lined, { legend }).regions.room).toBe(3);
+    // A leaf limit of 6 ft keeps the line as a barrier, so it cuts the corridor in two.
+    expect(importPlan(lined, { legend, longestLeaf: 6 }).regions.room).toBe(4);
+  });
+
   it("gives no use and no gate without a legend", () => {
     const bare = importPlan(sheet);
     expect(bare.rooms.every((room) => room.use === undefined)).toBe(true);

@@ -18,6 +18,11 @@ export interface ImportOptions {
   readonly wallPens?: readonly string[] | undefined;
   /** The pens of the doors, as barriers of the rooms. The default is the pen with the most curve lines: the pen of the door swings. */
   readonly doorPens?: readonly string[] | undefined;
+  /**
+   * The longest straight line of a door pen that is a barrier, in the unit of the plan. The default is 4.5 ft.
+   * A longer line of the pen is not a door leaf, for example the edge of a floor finish across a corridor. It is not a barrier.
+   */
+  readonly longestLeaf?: number | undefined;
   readonly walls?: WallOptions | undefined;
   readonly bridges?: BridgeOptions | undefined;
   /** The side of a cell of the grid. The default is 0.1 ft. */
@@ -186,7 +191,10 @@ export function importPlan(sheet: Sheet, options: ImportOptions = {}): PlanImpor
   const lineRead = readWallLines(sheet.lines, pens, wallLimits, wallPens);
   const wallLines = lineRead.walls;
   const straight = wallLines.filter((line) => line.curve !== true);
-  const doorLines = sheet.lines.filter((line) => doorSet.has(penOf(line)));
+  const longestLeaf = sheetLength(options.longestLeaf, 4.5);
+  const doorLines = sheet.lines.filter(
+    (line) => doorSet.has(penOf(line)) && (line.curve === true || Math.hypot(line.to[0] - line.from[0], line.to[1] - line.from[1]) <= longestLeaf),
+  );
   const pairs = wallPairs(straight, wallLimits);
   const snaps = snapEnds(straight, sheetLength(wallOptions.snap, 1), touch);
 
