@@ -254,6 +254,9 @@ importers:
 
   packages/room-view:
     dependencies:
+      '@mark1russell7/collections':
+        specifier: ^0.11.4
+        version: 0.11.4(zod@4.6.7)
       '@mark1russell7/layout-contract':
         specifier: ^0.10.2
         version: 0.10.2(zod@4.6.7)
@@ -592,6 +595,10 @@ packages:
 
   '@mark1russell7/collections@0.10.2':
     resolution: {integrity: sha512-uOqrK6ZYqgbG8DLchTU2FO8DcNeeeLbNAqR8E3YTe/HKK3rk4ZpR0M0GlYG/7ApiWfrFkVhW1rCF6opaeiL16g==}
+    engines: {node: '>=22.12'}
+
+  '@mark1russell7/collections@0.11.4':
+    resolution: {integrity: sha512-xIZZJwt13XSpmACJI5meG86vFD3/O/usG7tKd4iRjCe+ZO6e5mcloVlA7UEcsuuSPzZ0EhLytWQTQwLvApHnmA==}
     engines: {node: '>=22.12'}
 
   '@mark1russell7/conventions@0.52.0':
@@ -2012,6 +2019,14 @@ snapshots:
       '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
       '@mark1russell7/optional': 1.2.0
       '@mark1russell7/rigor-statistics': 0.1.29
+    transitivePeerDependencies:
+      - zod
+
+  '@mark1russell7/collections@0.11.4(zod@4.6.7)':
+    dependencies:
+      '@mark1russell7/algebra': 0.8.10(zod@4.6.7)
+      '@mark1russell7/optional': 1.2.0
+      '@mark1russell7/rigor-statistics': 0.2.25
     transitivePeerDependencies:
       - zod
 

@@ -38,6 +38,7 @@ FindingCode: build/layers.chunk.d.ts#FindingCode
 FindingLevel: build/layers.chunk.d.ts#FindingLevel
 Floor: build/room.chunk.d.ts#Floor
 FloorAnchor: build/layers.chunk.d.ts#FloorAnchor
+FloorRoute: build/index.d.ts#FloorRoute
 FormCode: build/index.d.ts#FormCode
 FormCollection: build/index.d.ts#FormCollection
 FormFault: build/index.d.ts#FormFault
@@ -84,6 +85,7 @@ OPENING_KINDS: build/room.chunk.d.ts#OPENING_KINDS
 ObjectAnchor: build/layers.chunk.d.ts#ObjectAnchor
 Opening: build/room.chunk.d.ts#Opening
 OpeningKind: build/room.chunk.d.ts#OpeningKind
+OpeningSides: build/index.d.ts#OpeningSides
 PlacedBox: build/solids.chunk.d.ts#PlacedBox
 PlacedObject: build/room.chunk.d.ts#PlacedObject
 PlanOptions: build/index.d.ts#PlanOptions
@@ -95,6 +97,8 @@ ROOM_PLACES: build/level.chunk.d.ts#ROOM_PLACES
 ROOM_SCHEMA: build/room.chunk.d.ts#ROOM_SCHEMA
 RecordKind: build/layers.chunk.d.ts#RecordKind
 Room: build/room.chunk.d.ts#Room
+RoomGraph: build/index.d.ts#RoomGraph
+RoomGraphOptions: build/index.d.ts#RoomGraphOptions
 RoomLayers: build/layers.chunk.d.ts#RoomLayers
 RoomPlace: build/level.chunk.d.ts#RoomPlace
 SCENE_SCHEMA: build/room.chunk.d.ts#SCENE_SCHEMA
@@ -136,6 +140,7 @@ checkScene: build/layers.chunk.d.ts#checkScene
 convertSurvey: build/level.chunk.d.ts#convertSurvey
 expandLevel: build/level.chunk.d.ts#expandLevel
 expandSurvey: build/level.chunk.d.ts#expandSurvey
+floorRoute: build/index.d.ts#floorRoute
 formLayer: build/index.d.ts#formLayer
 formRecords: build/index.d.ts#formRecords
 isLayerName: build/room.chunk.d.ts#isLayerName
@@ -152,6 +157,7 @@ readFormRecord: build/index.d.ts#readFormRecord
 readLayer: build/layers.chunk.d.ts#readLayer
 recordName: build/layers.chunk.d.ts#recordName
 resultScene: build/level.chunk.d.ts#resultScene
+roomGraph: build/index.d.ts#roomGraph
 roomName: build/layers.chunk.d.ts#roomName
 roomSolids: build/solids.chunk.d.ts#roomSolids
 scaleAnchor: build/layers.chunk.d.ts#scaleAnchor
@@ -262,6 +268,13 @@ export declare const FORM_FIELD_KINDS: readonly ["text", "number", "record", "ob
 
 ### build/index.d.ts#FORM_SYSTEMS
 export declare const FORM_SYSTEMS: readonly ["metric", "imperial"];
+
+### build/index.d.ts#FloorRoute
+export interface FloorRoute {
+  readonly floors: readonly string[];
+  readonly openings: readonly string[];
+  readonly length: number;
+}
 
 ### build/index.d.ts#FormCode
 export type FormCode = (typeof FORM_CODES)[number];
@@ -388,6 +401,13 @@ export interface LayerForm {
   readonly collections: readonly FormCollection[];
 }
 
+### build/index.d.ts#OpeningSides
+export interface OpeningSides {
+  readonly opening: string;
+  readonly at: PlanPoint;
+  readonly floors: readonly string[];
+}
+
 ### build/index.d.ts#PlanOptions
 export interface PlanOptions extends SolidOptions {
   readonly cut?: number | undefined;
@@ -403,8 +423,24 @@ export interface PlanShape {
   readonly top: number;
 }
 
+### build/index.d.ts#RoomGraph
+export interface RoomGraph {
+  readonly sides: readonly OpeningSides[];
+  readonly steps: readonly PathEdge<string>[];
+  readonly stepFloors: readonly string[];
+}
+
+### build/index.d.ts#RoomGraphOptions
+export interface RoomGraphOptions {
+  readonly kinds?: readonly OpeningKind[] | undefined;
+  readonly reach?: number | undefined;
+}
+
 ### build/index.d.ts#checkForm
 export declare function checkForm(form: LayerForm): readonly FormFault[];
+
+### build/index.d.ts#floorRoute
+export declare function floorRoute(graph: RoomGraph, from: string, to: Iterable<string>): FloorRoute | undefined;
 
 ### build/index.d.ts#formLayer
 export declare function formLayer(form: LayerForm, records: FormRecords, options: FormLayerOptions): FormLayer;
@@ -420,6 +456,9 @@ export declare function planShapes(scene: Scene, options?: PlanOptions): readonl
 
 ### build/index.d.ts#readFormRecord
 export declare function readFormRecord(collection: FormCollection, record: FormRecord, system: FormSystem): FormReading;
+
+### build/index.d.ts#roomGraph
+export declare function roomGraph(room: Room, options?: RoomGraphOptions): RoomGraph;
 
 ### build/layers.chunk.d.ts#ANCHOR_CODES
 declare const ANCHOR_CODES: readonly ["anchor-not-finite", "anchor-wall", "anchor-object", "anchor-floor", "anchor-range", "anchor-direction", "anchor-in-opening", "anchor-outside"];
